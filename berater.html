@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>🧠 Dein KI-Berater</title>
+  <style>
+    body { font-family: sans-serif; background: #fff; padding: 2em; max-width: 700px; margin: auto; }
+    h1 { color: #222; font-size: 2em; margin-bottom: 0.5em; }
+    h2 { margin-top: 2em; }
+    input, textarea, button, select {
+      width: 100%;
+      margin: 0.5em 0;
+      padding: 0.75em;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      font-size: 1em;
+      box-sizing: border-box;
+    }
+    button {
+      background: #f1f1f1;
+      cursor: pointer;
+    }
+    .response { background: #f9f9f9; padding: 1em; border-radius: 6px; margin-top: 1em; white-space: pre-line; }
+    .section { margin-bottom: 2em; }
+    .goal { background: #f4f4f4; padding: 0.5em; border-radius: 4px; margin-top: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>🧠 Dein persönlicher KI-Berater</h1>
+
+  <div class="section">
+    <label>Was sind aktuell deine wichtigsten Prioritäten?</label>
+    <input type="text" id="prioritaeten" placeholder="z. B. Fokus, Energie, Klarheit" />
+    <button onclick="updateProfile()">Prioritäten aktualisieren</button>
+  </div>
+
+  <div class="section">
+    <h2>Deine heutigen Routinen:</h2>
+    <div id="routinen">Wird geladen...</div>
+  </div>
+
+  <div class="section">
+    <h2>Dein Chat:</h2>
+    <input type="text" id="chatInput" placeholder="Nachricht eingeben..." onkeydown="if(event.key==='Enter'){sendChat()}" />
+    <div id="chatResponse" class="response"></div>
+  </div>
+
+  <div class="section">
+    <h2>Interview-Frage:</h2>
+    <div id="interviewFrage">Wird geladen...</div>
+    <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." />
+    <button onclick="sendeInterviewAntwort()">Antwort speichern</button>
+  </div>
+
+  <div class="section">
+    <h2>Wichtige Erkenntnisse speichern</h2>
+    <input type="text" id="thema" placeholder="Thema" />
+    <textarea id="inhalt" rows="3" placeholder="Kurze Beschreibung"></textarea>
+    <button onclick="speichereMemory()">Speichern ins Lebensgedächtnis</button>
+  </div>
+
+  <div class="section">
+    <h2>Ziele verwalten</h2>
+    <input type="text" id="zielTitel" placeholder="Neues Ziel eingeben" />
+    <input type="text" id="zielDeadline" placeholder="Deadline (optional)" />
+    <button onclick="neuesZiel()">Ziel speichern</button>
+    <div id="zielListe"></div>
+  </div>
+
+  <script>
+    async function updateProfile() {
+      const prioritaeten = document.getElementById("prioritaeten").value;
+      await fetch("https://okib.onrender.com/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ beruf: "", beziehungsziel: "", prioritaeten })
+      });
+      alert("✅ Prioritäten gespeichert");
+    }
+
+    async function loadRoutines() {
+      const r = await fetch("https://okib.onrender.com/routines");
+      const data = await r.json();
+      document.getElementById("routinen").innerText = data.text;
+    }
+
+    async function sendChat() {
+      const input = document.getElementById("chatInput").value;
+      const resBox = document.getElementById("chatResponse");
+      resBox.innerText = "Antwort wird geladen ...";
+      const res = await fetch("https://okib.onrender.com/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: input })
+      });
+      const data = await res.json();
+      resBox.innerText = data.reply;
+    }
+
+    async function speichereMemory() {
+      const thema = document.getElementById("thema").value;
+      const inhalt = document.getElementById("inhalt").value;
+      await fetch("https://okib.onrender.com/memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thema, inhalt })
+      });
+      alert("✅ Erkenntnis gespeichert");
+    }
+
+    async function ladeInterviewFrage() {
+      const res = await fetch("https://okib.onrender.com/interview");
+      const data = await res.json();
+      document.getElementById("interviewFrage").innerText = data.frage;
+    }
+
+    async function sendeInterviewAntwort() {
+      const antwort = document.getElementById("interviewAntwort").value;
+      await fetch("https://okib.onrender.com/interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ antwort })
+      });
+      alert("✅ Antwort gespeichert");
+    }
+
+    async function neuesZiel() {
+      const titel = document.getElementById("zielTitel").value;
+      const deadline = document.getElementById("zielDeadline").value;
+      await fetch("https://okib.onrender.com/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titel, deadline, status: "offen" })
+      });
+      ladeZiele();
+    }
+
+    async function ladeZiele() {
+      const res = await fetch("https://okib.onrender.com/goals");
+      const data = await res.json();
+      const liste = document.getElementById("zielListe");
+      liste.innerHTML = "";
+      data.goals.forEach(goal => {
+        const div = document.createElement("div");
+        div.className = "goal";
+        div.innerHTML = `<strong>${goal.titel}</strong> [${goal.status}] <br><small>${goal.deadline || ""}</small><br>
+          <select onchange="updateZiel(${goal.id}, this.value)">
+            <option value="offen" ${goal.status === "offen" ? "selected" : ""}>offen</option>
+            <option value="erledigt" ${goal.status === "erledigt" ? "selected" : ""}>erledigt</option>
+            <option value="verschoben" ${goal.status === "verschoben" ? "selected" : ""}>verschoben</option>
+          </select>`;
+        liste.appendChild(div);
+      });
+    }
+
+    async function updateZiel(id, status) {
+      await fetch("https://okib.onrender.com/goals/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status })
+      });
+      ladeZiele();
+    }
+
+    loadRoutines();
+    ladeInterviewFrage();
+    ladeZiele();
+  </script>
+</body>
+</html>
