@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -26,11 +25,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# HTML-Datei ausliefern
-@app.get("/")
-def serve_html():
-    return FileResponse("berater.html")
 
 # Modelle
 class ChatInput(BaseModel):
@@ -139,31 +133,20 @@ def get_interview_question():
     if not row.get("prioritäten"):
         return {"frage": "Was sind deine aktuell wichtigsten Prioritäten im Leben?"}
 
-    return {"frage": "Alle Basisdaten sind vorhanden. Danke!"}
+    # Fallback: zufällige offene Interviewfrage aus Tabelle holen
+    weitere = supabase.table("interview_pool").select("frage").order("id").limit(1).execute().data
+    if weitere:
+        return {"frage": weitere[0]["frage"]}
+    else:
+        return {"frage": "Danke! Ich habe aktuell keine weiteren Fragen."}
 
 @app.post("/interview")
 def speichere_interview(data: InterviewAntwort):
-    profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
-    if not profile:
-        supabase.table("profile").insert({"beruf": data.antwort}).execute()
-        return {"status": "Beruf gespeichert"}
-
-    row = profile[0]
-    beruf = row.get("beruf", "")
-    ziel = row.get("beziehungsziel", "")
-    prios = row.get("prioritäten", "")
-
-    if not beruf:
-        supabase.table("profile").insert({"beruf": data.antwort, "beziehungsziel": ziel, "prioritäten": prios}).execute()
-        return {"status": "Beruf gespeichert"}
-    if not ziel:
-        supabase.table("profile").insert({"beruf": beruf, "beziehungsziel": data.antwort, "prioritäten": prios}).execute()
-        return {"status": "Beziehungsziel gespeichert"}
-    if not prios:
-        supabase.table("profile").insert({"beruf": beruf, "beziehungsziel": ziel, "prioritäten": data.antwort}).execute()
-        return {"status": "Prioritäten gespeichert"}
-
-    return {"status": "Keine Speicherung nötig"}
+    supabase.table("interview_antworten").insert({
+        "antwort": data.antwort,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }).execute()
+    return {"status": "Antwort gespeichert"}
 
 @app.post("/memory")
 def speichere_gedaechtnis(data: MemoryInput):
@@ -193,3 +176,19 @@ def alle_ziele():
 def ziel_aktualisieren(update: GoalUpdate):
     supabase.table("goals").update({"status": update.status}).eq("id", update.id).execute()
     return {"status": f"Ziel {update.id} auf '{update.status}' gesetzt"}
+
+@app.get("/wochenbericht")
+def wochenbericht():
+    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=7)).isoformat()
+    gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
+    ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
+    routine_text = f"{len(gespraeche)} Gespräche geführt. {len(ziele)} neue Ziele gesetzt."
+    return {"bericht": f"📊 Wochenrückblick:\n{routine_text}"}
+
+@app.get("/monatsbericht")
+def monatsbericht():
+    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat()
+    gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
+    ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
+    routine_text = f"{len(gespraeche)} Gespräche geführt. {len(ziele)} neue Ziele gesetzt."
+    return {"bericht": f"📆 Monatsanalyse:\n{routine_text}"}
