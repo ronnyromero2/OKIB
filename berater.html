@@ -6,48 +6,32 @@
   <style>
     body {
       font-family: sans-serif;
-      background: #000;
-      color: #fff;
+      background: #111;
+      color: #eee;
       padding: 2em;
       max-width: 700px;
       margin: auto;
     }
-    h1 { color: #fff; font-size: 2em; margin-bottom: 0.5em; }
+    h1 { font-size: 2em; margin-bottom: 0.5em; }
     h2 { margin-top: 2em; }
     input, textarea, button, select {
       width: 100%;
       margin: 0.5em 0;
       padding: 0.75em;
       border-radius: 6px;
-      border: 1px solid #555;
+      border: 1px solid #444;
       font-size: 1em;
       box-sizing: border-box;
       background: #222;
-      color: #fff;
+      color: #eee;
     }
     button {
-      background: #444;
+      background: #333;
       cursor: pointer;
     }
-    .response {
-      background: #111;
-      padding: 1em;
-      border-radius: 6px;
-      margin-top: 1em;
-      white-space: pre-line;
-    }
+    .response { background: #1a1a1a; padding: 1em; border-radius: 6px; margin-top: 1em; white-space: pre-line; }
     .section { margin-bottom: 2em; }
-    .goal { background: #222; padding: 0.5em; border-radius: 4px; margin-top: 0.5em; }
-    #chatBox .message { margin-bottom: 1em; }
-    #zielSektion.collapsed input,
-    #zielSektion.collapsed button,
-    #zielSektion.collapsed div {
-      display: none;
-    }
-    #zielSektion.collapsed h2::after {
-      content: " (ausgeklappt)";
-      color: #aaa;
-    }
+    .goal { background: #1a1a1a; padding: 0.5em; border-radius: 4px; margin-top: 0.5em; }
   </style>
 </head>
 <body>
@@ -66,14 +50,16 @@
 
   <div class="section">
     <h2>Dein Chat:</h2>
-    <div id="chatBox" class="response"></div>
+    <div id="chatResponse" class="response"></div>
     <input type="text" id="chatInput" placeholder="Nachricht eingeben..." onkeydown="if(event.key==='Enter'){sendChat()}" />
   </div>
 
   <div class="section">
     <h2>Interview-Frage:</h2>
-    <div id="interviewBox" class="response"></div>
-    <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." onkeydown="if(event.key==='Enter'){sendeInterviewAntwort()}" />
+    <div id="interviewFrage">Wird geladen...</div>
+    <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." />
+    <button onclick="sendeInterviewAntwort()">Antwort speichern</button>
+    <div id="interviewHistory" class="response"></div>
   </div>
 
   <div class="section">
@@ -83,25 +69,22 @@
     <button onclick="speichereMemory()">Speichern ins Lebensgedächtnis</button>
   </div>
 
-  <div id="zielSektion" class="section collapsed">
-    <h2 onclick="toggleZiele()" style="cursor:pointer">Ziele verwalten</h2>
-    <input type="text" id="zielTitel" placeholder="Neues Ziel eingeben" />
-    <input type="text" id="zielDeadline" placeholder="Deadline (optional)" />
-    <button onclick="neuesZiel()">Ziel speichern</button>
-    <div id="zielListe"></div>
+  <div class="section">
+    <details>
+      <summary><h2>Ziele verwalten</h2></summary>
+      <input type="text" id="zielTitel" placeholder="Neues Ziel eingeben" />
+      <input type="text" id="zielDeadline" placeholder="Deadline (optional)" />
+      <button onclick="neuesZiel()">Ziel speichern</button>
+      <div id="zielListe"></div>
+    </details>
   </div>
 
   <script>
-    const API_URL = "https://okib.onrender.com";
-
-    function toggleZiele() {
-      const section = document.getElementById("zielSektion");
-      section.classList.toggle("collapsed");
-    }
+    const baseURL = "https://okib.onrender.com";
 
     async function updateProfile() {
       const prioritaeten = document.getElementById("prioritaeten").value;
-      await fetch(`${API_URL}/profile`, {
+      await fetch(`${baseURL}/profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ beruf: "", beziehungsziel: "", prioritaeten })
@@ -110,31 +93,32 @@
     }
 
     async function loadRoutines() {
-      const r = await fetch(`${API_URL}/routines`);
+      const r = await fetch(`${baseURL}/routines`);
       const data = await r.json();
       document.getElementById("routinen").innerText = data.text;
     }
 
     async function sendChat() {
-      const input = document.getElementById("chatInput");
-      const message = input.value;
-      input.value = "";
-      const resBox = document.getElementById("chatBox");
-      resBox.innerHTML += `<div class='message'><strong>Du:</strong> ${message}</div>`;
-      const res = await fetch(`${API_URL}/chat`, {
+      const inputField = document.getElementById("chatInput");
+      const input = inputField.value;
+      if (!input) return;
+      const resBox = document.getElementById("chatResponse");
+      resBox.innerHTML += `🧍‍♂️ ${input}\n`;
+      inputField.value = "";
+      const res = await fetch(`${baseURL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message: input })
       });
       const data = await res.json();
-      resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.reply}</div>`;
+      resBox.innerHTML += `🤖 ${data.reply}\n`;
       resBox.scrollTop = resBox.scrollHeight;
     }
 
     async function speichereMemory() {
       const thema = document.getElementById("thema").value;
       const inhalt = document.getElementById("inhalt").value;
-      await fetch(`${API_URL}/memory`, {
+      await fetch(`${baseURL}/memory`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ thema, inhalt })
@@ -143,29 +127,29 @@
     }
 
     async function ladeInterviewFrage() {
-      const res = await fetch(`${API_URL}/interview`);
+      const res = await fetch(`${baseURL}/interview`);
       const data = await res.json();
-      const box = document.getElementById("interviewBox");
-      box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
+      document.getElementById("interviewFrage").innerText = data.frage;
     }
 
     async function sendeInterviewAntwort() {
       const antwort = document.getElementById("interviewAntwort").value;
-      document.getElementById("interviewAntwort").value = "";
-      const box = document.getElementById("interviewBox");
-      box.innerHTML += `<div class='message'><strong>Du:</strong> ${antwort}</div>`;
-      await fetch(`${API_URL}/interview`, {
+      if (!antwort) return;
+      await fetch(`${baseURL}/interview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ antwort })
       });
+      const history = document.getElementById("interviewHistory");
+      history.innerHTML += `🧍‍♂️ ${antwort}\n`;
+      document.getElementById("interviewAntwort").value = "";
       ladeInterviewFrage();
     }
 
     async function neuesZiel() {
       const titel = document.getElementById("zielTitel").value;
       const deadline = document.getElementById("zielDeadline").value;
-      await fetch(`${API_URL}/goals`, {
+      await fetch(`${baseURL}/goals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ titel, deadline, status: "offen" })
@@ -174,7 +158,7 @@
     }
 
     async function ladeZiele() {
-      const res = await fetch(`${API_URL}/goals`);
+      const res = await fetch(`${baseURL}/goals`);
       const data = await res.json();
       const liste = document.getElementById("zielListe");
       liste.innerHTML = "";
@@ -192,7 +176,7 @@
     }
 
     async function updateZiel(id, status) {
-      await fetch(`${API_URL}/goals/update`, {
+      await fetch(`${baseURL}/goals/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status })
