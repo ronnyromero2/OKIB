@@ -74,7 +74,8 @@
   <div class="section">
     <h2>Interview-Frage:</h2>
     <div id="interviewBox" class="response"></div>
-    <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." onkeydown="if(event.key==='Enter'){sendeInterviewAntwort()}" />
+    <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." onkeydown="if(event.key==='Enter'){event.preventDefault(); sendeInterviewAntwort()}" />
+    <button onclick="sendeInterviewAntwort()">Absenden</button>
   </div>
 
   <div class="section">
@@ -82,6 +83,13 @@
     <input type="text" id="thema" placeholder="Thema" />
     <textarea id="inhalt" rows="3" placeholder="Kurze Beschreibung"></textarea>
     <button onclick="speichereMemory()">Speichern ins Lebensgedächtnis</button>
+  </div>
+
+  <div class="section">
+    <h2>Berichte:</h2>
+    <button onclick="ladeBericht('wochenbericht')">✨ Wochenrückblick</button>
+    <button onclick="ladeBericht('monatsbericht')">📅 Monatsanalyse</button>
+    <div id="berichtBox" class="response"></div>
   </div>
 
   <div id="zielSektion" class="section collapsed">
@@ -199,6 +207,13 @@
         body: JSON.stringify({ id, status })
       });
       ladeZiele();
+    }
+
+    async function ladeBericht(typ) {
+      const res = await fetch(`${API_URL}/${typ}`);
+      const data = await res.json();
+      const box = document.getElementById("berichtBox");
+      box.innerText = data.bericht;
     }
 
     loadRoutines();
