@@ -27,17 +27,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# HTML-Datei ausliefern
 @app.get("/")
 def serve_html():
     return FileResponse("berater.html")
 
+# Modelle
 class ChatInput(BaseModel):
     message: str
 
 class ProfileData(BaseModel):
     beruf: str
     beziehungsziel: str
-    prioritaeten: str
+    prioritäten: str
 
 class InterviewAntwort(BaseModel):
     antwort: str
@@ -55,12 +57,13 @@ class GoalUpdate(BaseModel):
     id: int
     status: str
 
+# Endpunkte
 @app.post("/chat")
 def chat(input: ChatInput):
     profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
     beruf = profile[0]["beruf"] if profile else ""
     beziehungsziel = profile[0]["beziehungsziel"] if profile else ""
-    prioritaeten = profile[0]["prioritaeten"] if profile else ""
+    prioritäten = profile[0]["prioritäten"] if profile else ""
 
     today = datetime.datetime.now().strftime("%A")
     routines = supabase.table("routines").select("*").eq("day", today).execute().data
@@ -76,7 +79,7 @@ def chat(input: ChatInput):
 Du bist ein persönlicher Mentor und Berater.
 Beruf: {beruf}
 Beziehungsziel: {beziehungsziel}
-Prioritäten: {prioritaeten}
+Prioritäten: {prioritäten}
 Routinen heute: {routines_text}
 Langzeitgedächtnis: {memory_text}
 Letzte Gespräche: {history_text}
@@ -108,7 +111,7 @@ def update_profile(data: ProfileData):
         "id": 1,
         "beruf": data.beruf,
         "beziehungsziel": data.beziehungsziel,
-        "prioritaeten": data.prioritaeten
+        "prioritäten": data.prioritäten
     }).execute()
     return {"status": "Profil aktualisiert"}
 
@@ -116,7 +119,10 @@ def update_profile(data: ProfileData):
 def get_routines():
     today = datetime.datetime.now().strftime("%A")
     routines = supabase.table("routines").select("*").eq("day", today).execute().data
-    text = "\n".join([f"{r['time']} - {r['task']}" for r in routines]) if routines else "Heute stehen keine speziellen Aufgaben an."
+    if routines:
+        text = "\n".join([f"{r['time']} - {r['task']}" for r in routines])
+    else:
+        text = "Heute stehen keine speziellen Aufgaben an."
     return {"text": text}
 
 @app.get("/interview")
@@ -130,21 +136,34 @@ def get_interview_question():
         return {"frage": "Welchen Beruf übst du aktuell aus oder was ist deine berufliche Leidenschaft?"}
     if not row.get("beziehungsziel"):
         return {"frage": "Was ist dein wichtigstes Ziel in deiner Beziehung?"}
-    if not row.get("prioritaeten"):
+    if not row.get("prioritäten"):
         return {"frage": "Was sind deine aktuell wichtigsten Prioritäten im Leben?"}
 
-    letzte = supabase.table("interview_antworten").select("*", count="exact").order("timestamp", desc=True).limit(1).execute()
-    count = letzte.count or 0
-    frage = f"Erzähle mir bitte mehr über dich. Was bewegt dich aktuell? (Frage {count + 1})"
-    return {"frage": frage}
+    return {"frage": "Alle Basisdaten sind vorhanden. Danke!"}
 
 @app.post("/interview")
 def speichere_interview(data: InterviewAntwort):
-    supabase.table("interview_antworten").insert({
-        "antwort": data.antwort,
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    }).execute()
-    return {"status": "Antwort gespeichert"}
+    profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
+    if not profile:
+        supabase.table("profile").insert({"beruf": data.antwort}).execute()
+        return {"status": "Beruf gespeichert"}
+
+    row = profile[0]
+    beruf = row.get("beruf", "")
+    ziel = row.get("beziehungsziel", "")
+    prios = row.get("prioritäten", "")
+
+    if not beruf:
+        supabase.table("profile").insert({"beruf": data.antwort, "beziehungsziel": ziel, "prioritäten": prios}).execute()
+        return {"status": "Beruf gespeichert"}
+    if not ziel:
+        supabase.table("profile").insert({"beruf": beruf, "beziehungsziel": data.antwort, "prioritäten": prios}).execute()
+        return {"status": "Beziehungsziel gespeichert"}
+    if not prios:
+        supabase.table("profile").insert({"beruf": beruf, "beziehungsziel": ziel, "prioritäten": data.antwort}).execute()
+        return {"status": "Prioritäten gespeichert"}
+
+    return {"status": "Keine Speicherung nötig"}
 
 @app.post("/memory")
 def speichere_gedaechtnis(data: MemoryInput):
@@ -180,11 +199,55 @@ def wochenbericht():
     seit = (datetime.datetime.utcnow() - datetime.timedelta(days=7)).isoformat()
     gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
     ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
-    return {"bericht": f"📊 Wochenrückblick:\nGespräche: {len(gespraeche)}\nNeue Ziele: {len(ziele)}"}
+
+    gpt_prompt = f"""
+Du bist ein persönlicher KI-Berater. Du erhältst hier die letzten Gesprächseinträge eines Nutzers sowie gesetzte Ziele.
+Bitte fasse zusammen, was die wichtigsten Themen waren, welche Fortschritte es gibt und was du ihm für die kommende Woche empfiehlst.
+
+Gespräche:
+{chr(10).join([f"User: {e['user_input']} | Berater: {e['ai_response']}" for e in gespraeche])}
+
+Ziele:
+{chr(10).join([f"{z['titel']} - {z['status']} (Deadline: {z['deadline']})" for z in ziele])}
+
+Formuliere den Wochenbericht motivierend, aber ehrlich. Maximal 6 Sätze.
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": gpt_prompt},
+            {"role": "user", "content": "Bitte gib mir meinen Wochenbericht."}
+        ]
+    )
+    reply = response.choices[0].message.content
+    return {"bericht": reply}
 
 @app.get("/monatsbericht")
 def monatsbericht():
     seit = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat()
     gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
     ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
-    return {"bericht": f"📆 Monatsrückblick:\nGespräche: {len(gespraeche)}\nNeue Ziele: {len(ziele)}"}
+
+    gpt_prompt = f"""
+Du bist ein persönlicher KI-Berater. Du erhältst hier die Gesprächseinträge und Ziele eines Nutzers aus dem letzten Monat.
+Fasse zusammen, welche Muster, Fortschritte und Herausforderungen zu erkennen sind und gib motivierende Empfehlungen für den neuen Monat.
+
+Gespräche:
+{chr(10).join([f"User: {e['user_input']} | Berater: {e['ai_response']}" for e in gespraeche])}
+
+Ziele:
+{chr(10).join([f"{z['titel']} - {z['status']} (Deadline: {z['deadline']})" for z in ziele])}
+
+Schreibe eine ehrliche, klare und motivierende Monatsanalyse. Maximal 8 Sätze.
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": gpt_prompt},
+            {"role": "user", "content": "Bitte gib mir meine Monatsanalyse."}
+        ]
+    )
+    reply = response.choices[0].message.content
+    return {"bericht": reply}
