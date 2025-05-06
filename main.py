@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -25,6 +26,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# HTML-Datei ausliefern
+@app.get("/")
+def serve_html():
+    return FileResponse("berater.html")
 
 # Modelle
 class ChatInput(BaseModel):
@@ -182,10 +188,6 @@ def ziel_anlegen(goal: Goal):
 def alle_ziele():
     goals = supabase.table("goals").select("*").order("created_at", desc=True).execute().data
     return {"goals": goals}
-  
-@app.get("/")
-def serve_html():
-    return FileResponse("berater.html")
 
 @app.post("/goals/update")
 def ziel_aktualisieren(update: GoalUpdate):
