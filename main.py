@@ -27,19 +27,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# HTML-Datei ausliefern
 @app.get("/")
 def serve_html():
     return FileResponse("berater.html")
 
-# Modelle
 class ChatInput(BaseModel):
     message: str
 
 class ProfileData(BaseModel):
     beruf: str
     beziehungsziel: str
-    prioritäten: str
+    prioritaeten: str
 
 class InterviewAntwort(BaseModel):
     antwort: str
@@ -57,13 +55,12 @@ class GoalUpdate(BaseModel):
     id: int
     status: str
 
-# Endpunkte
 @app.post("/chat")
 def chat(input: ChatInput):
     profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
     beruf = profile[0]["beruf"] if profile else ""
     beziehungsziel = profile[0]["beziehungsziel"] if profile else ""
-    prioritäten = profile[0]["prioritäten"] if profile else ""
+    prioritaeten = profile[0]["prioritaeten"] if profile else ""
 
     today = datetime.datetime.now().strftime("%A")
     routines = supabase.table("routines").select("*").eq("day", today).execute().data
@@ -79,7 +76,7 @@ def chat(input: ChatInput):
 Du bist ein persönlicher Mentor und Berater.
 Beruf: {beruf}
 Beziehungsziel: {beziehungsziel}
-Prioritäten: {prioritäten}
+Prioritäten: {prioritaeten}
 Routinen heute: {routines_text}
 Langzeitgedächtnis: {memory_text}
 Letzte Gespräche: {history_text}
@@ -111,7 +108,7 @@ def update_profile(data: ProfileData):
         "id": 1,
         "beruf": data.beruf,
         "beziehungsziel": data.beziehungsziel,
-        "prioritäten": data.prioritäten
+        "prioritaeten": data.prioritaeten
     }).execute()
     return {"status": "Profil aktualisiert"}
 
@@ -119,10 +116,7 @@ def update_profile(data: ProfileData):
 def get_routines():
     today = datetime.datetime.now().strftime("%A")
     routines = supabase.table("routines").select("*").eq("day", today).execute().data
-    if routines:
-        text = "\n".join([f"{r['time']} - {r['task']}" for r in routines])
-    else:
-        text = "Heute stehen keine speziellen Aufgaben an."
+    text = "\n".join([f"{r['time']} - {r['task']}" for r in routines]) if routines else "Heute stehen keine speziellen Aufgaben an."
     return {"text": text}
 
 @app.get("/interview")
@@ -136,34 +130,21 @@ def get_interview_question():
         return {"frage": "Welchen Beruf übst du aktuell aus oder was ist deine berufliche Leidenschaft?"}
     if not row.get("beziehungsziel"):
         return {"frage": "Was ist dein wichtigstes Ziel in deiner Beziehung?"}
-    if not row.get("prioritäten"):
+    if not row.get("prioritaeten"):
         return {"frage": "Was sind deine aktuell wichtigsten Prioritäten im Leben?"}
 
-    return {"frage": "Alle Basisdaten sind vorhanden. Danke!"}
+    letzte = supabase.table("interview_antworten").select("*", count="exact").order("timestamp", desc=True).limit(1).execute()
+    count = letzte.count or 0
+    frage = f"Erzähle mir bitte mehr über dich. Was bewegt dich aktuell? (Frage {count + 1})"
+    return {"frage": frage}
 
 @app.post("/interview")
 def speichere_interview(data: InterviewAntwort):
-    profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
-    if not profile:
-        supabase.table("profile").insert({"beruf": data.antwort}).execute()
-        return {"status": "Beruf gespeichert"}
-
-    row = profile[0]
-    beruf = row.get("beruf", "")
-    ziel = row.get("beziehungsziel", "")
-    prios = row.get("prioritäten", "")
-
-    if not beruf:
-        supabase.table("profile").insert({"beruf": data.antwort, "beziehungsziel": ziel, "prioritäten": prios}).execute()
-        return {"status": "Beruf gespeichert"}
-    if not ziel:
-        supabase.table("profile").insert({"beruf": beruf, "beziehungsziel": data.antwort, "prioritäten": prios}).execute()
-        return {"status": "Beziehungsziel gespeichert"}
-    if not prios:
-        supabase.table("profile").insert({"beruf": beruf, "beziehungsziel": ziel, "prioritäten": data.antwort}).execute()
-        return {"status": "Prioritäten gespeichert"}
-
-    return {"status": "Keine Speicherung nötig"}
+    supabase.table("interview_antworten").insert({
+        "antwort": data.antwort,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }).execute()
+    return {"status": "Antwort gespeichert"}
 
 @app.post("/memory")
 def speichere_gedaechtnis(data: MemoryInput):
@@ -193,3 +174,17 @@ def alle_ziele():
 def ziel_aktualisieren(update: GoalUpdate):
     supabase.table("goals").update({"status": update.status}).eq("id", update.id).execute()
     return {"status": f"Ziel {update.id} auf '{update.status}' gesetzt"}
+
+@app.get("/wochenbericht")
+def wochenbericht():
+    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=7)).isoformat()
+    gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
+    ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
+    return {"bericht": f"📊 Wochenrückblick:\nGespräche: {len(gespraeche)}\nNeue Ziele: {len(ziele)}"}
+
+@app.get("/monatsbericht")
+def monatsbericht():
+    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat()
+    gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
+    ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
+    return {"bericht": f"📆 Monatsrückblick:\nGespräche: {len(gespraeche)}\nNeue Ziele: {len(ziele)}"}
