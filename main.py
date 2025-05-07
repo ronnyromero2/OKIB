@@ -194,60 +194,55 @@ def ziel_aktualisieren(update: GoalUpdate):
     supabase.table("goals").update({"status": update.status}).eq("id", update.id).execute()
     return {"status": f"Ziel {update.id} auf '{update.status}' gesetzt"}
 
-@app.get("/wochenbericht")
-def wochenbericht():
-    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=7)).isoformat()
+# Neue Berichtslogik
+
+def generiere_rueckblick(zeitraum: str, tage: int):
+    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat()
     gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
     ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
 
-    gpt_prompt = f"""
-Du bist ein persönlicher KI-Berater. Du erhältst hier die letzten Gesprächseinträge eines Nutzers sowie gesetzte Ziele.
-Bitte fasse zusammen, was die wichtigsten Themen waren, welche Fortschritte es gibt und was du ihm für die kommende Woche empfiehlst.
+    gespraeche_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in gespraeche])
+    ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in ziele])
+
+    system = f"""
+Du bist ein persönlicher Assistent. Deine Aufgabe ist es, Rückblicke für den Nutzer zu schreiben, basierend auf den letzten Gesprächen und gesetzten Zielen. Sei konkret, wertschätzend und gib Tipps, wie sich die kommende Woche/der kommende Monat besser gestalten lässt.
+"""
+    user = f"""
+Hier ist der Verlauf der letzten {zeitraum}:
 
 Gespräche:
-{chr(10).join([f"User: {e['user_input']} | Berater: {e['ai_response']}" for e in gespraeche])}
+{gespraeche_text}
 
 Ziele:
-{chr(10).join([f"{z['titel']} - {z['status']} (Deadline: {z['deadline']})" for z in ziele])}
+{ziele_text}
 
-Formuliere den Wochenbericht motivierend, aber ehrlich. Maximal 6 Sätze.
+Bitte gib einen motivierenden Rückblick mit konkreten Vorschlägen.
 """
 
-    response = client.chat.completions.create(
+    completion = client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": gpt_prompt},
-            {"role": "user", "content": "Bitte gib mir meinen Wochenbericht."}
+            {"role": "system", "content": system},
+            {"role": "user", "content": user}
         ]
     )
-    reply = response.choices[0].message.content
-    return {"bericht": reply}
+
+    bericht = completion.choices[0].message.content
+
+    supabase.table("long_term_memory").insert({
+        "thema": f"{zeitraum}srückblick",
+        "inhalt": bericht,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }).execute()
+
+    return bericht
+
+@app.get("/wochenbericht")
+def wochenbericht():
+    bericht = generiere_rueckblick("Wochen", 7)
+    return {"bericht": bericht}
 
 @app.get("/monatsbericht")
 def monatsbericht():
-    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat()
-    gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
-    ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
-
-    gpt_prompt = f"""
-Du bist ein persönlicher KI-Berater. Du erhältst hier die Gesprächseinträge und Ziele eines Nutzers aus dem letzten Monat.
-Fasse zusammen, welche Muster, Fortschritte und Herausforderungen zu erkennen sind und gib motivierende Empfehlungen für den neuen Monat.
-
-Gespräche:
-{chr(10).join([f"User: {e['user_input']} | Berater: {e['ai_response']}" for e in gespraeche])}
-
-Ziele:
-{chr(10).join([f"{z['titel']} - {z['status']} (Deadline: {z['deadline']})" for z in ziele])}
-
-Schreibe eine ehrliche, klare und motivierende Monatsanalyse. Maximal 8 Sätze.
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": gpt_prompt},
-            {"role": "user", "content": "Bitte gib mir meine Monatsanalyse."}
-        ]
-    )
-    reply = response.choices[0].message.content
-    return {"bericht": reply}
+    bericht = generiere_rueckblick("Monats", 30)
+    return {"bericht": bericht}
