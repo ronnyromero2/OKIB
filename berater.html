@@ -100,125 +100,143 @@
     <div id="zielListe"></div>
   </div>
 
-  <script>
-    const API_URL = "https://okib.onrender.com";
+<script>
+  const API_URL = "https://okib.onrender.com";
 
-    function toggleZiele() {
-      const section = document.getElementById("zielSektion");
-      section.classList.toggle("collapsed");
-    }
+  function toggleZiele() {
+    const section = document.getElementById("zielSektion");
+    section.classList.toggle("collapsed");
+  }
 
-    async function updateProfile() {
-      const prioritaeten = document.getElementById("prioritaeten").value;
-      await fetch(`${API_URL}/profile`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ beruf: "", beziehungsziel: "", prioritaeten })
-      });
-      alert("✅ Prioritäten gespeichert");
-    }
+  async function updateProfile() {
+    const prioritaeten = document.getElementById("prioritaeten").value;
+    await fetch(`${API_URL}/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ beruf: "", beziehungsziel: "", prioritaeten })
+    });
+    alert("✅ Prioritäten gespeichert");
+  }
 
-    async function loadRoutines() {
-      const r = await fetch(`${API_URL}/routines`);
-      const data = await r.json();
-      document.getElementById("routinen").innerText = data.text;
-    }
+  async function loadRoutines() {
+    const r = await fetch(`${API_URL}/routines`);
+    const data = await r.json();
+    document.getElementById("routinen").innerText = data.text;
+  }
 
-    async function sendChat() {
-      const input = document.getElementById("chatInput");
-      const message = input.value;
-      input.value = "";
-      const resBox = document.getElementById("chatBox");
-      resBox.innerHTML += `<div class='message'><strong>Du:</strong> ${message}</div>`;
-      const res = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message })
-      });
-      const data = await res.json();
-      resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.reply}</div>`;
-      resBox.scrollTop = resBox.scrollHeight;
-    }
+  async function sendChat() {
+    const input = document.getElementById("chatInput");
+    const message = input.value;
+    input.value = "";
+    const resBox = document.getElementById("chatBox");
+    resBox.innerHTML += `<div class='message'><strong>Du:</strong> ${message}</div>`;
+    const res = await fetch(`${API_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message })
+    });
+    const data = await res.json();
+    resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.reply}</div>`;
+    resBox.scrollTop = resBox.scrollHeight;
+  }
 
-    async function speichereMemory() {
-      const thema = document.getElementById("thema").value;
-      const inhalt = document.getElementById("inhalt").value;
-      await fetch(`${API_URL}/memory`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ thema, inhalt })
-      });
-      alert("✅ Erkenntnis gespeichert");
-    }
+  async function speichereMemory() {
+    const thema = document.getElementById("thema").value;
+    const inhalt = document.getElementById("inhalt").value;
+    await fetch(`${API_URL}/memory`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thema, inhalt })
+    });
+    alert("✅ Erkenntnis gespeichert");
+  }
 
-    async function ladeInterviewFrage() {
-      const res = await fetch(`${API_URL}/interview`);
-      const data = await res.json();
-      const box = document.getElementById("interviewBox");
-      box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
-    }
+  async function ladeInterviewFrage() {
+    const res = await fetch(`${API_URL}/interview`);
+    const data = await res.json();
+    const box = document.getElementById("interviewBox");
+    box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
+  }
 
-    async function sendeInterviewAntwort() {
-      const antwort = document.getElementById("interviewAntwort").value;
-      document.getElementById("interviewAntwort").value = "";
-      const box = document.getElementById("interviewBox");
-      box.innerHTML += `<div class='message'><strong>Du:</strong> ${antwort}</div>`;
-      await fetch(`${API_URL}/interview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ antwort })
-      });
-      ladeInterviewFrage();
-    }
+  async function sendeInterviewAntwort() {
+    const antwort = document.getElementById("interviewAntwort").value;
+    document.getElementById("interviewAntwort").value = "";
+    const box = document.getElementById("interviewBox");
+    box.innerHTML += `<div class='message'><strong>Du:</strong> ${antwort}</div>`;
+    await fetch(`${API_URL}/interview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ antwort })
+    });
+    ladeInterviewFrage();
+  }
 
-    async function neuesZiel() {
-      const titel = document.getElementById("zielTitel").value;
-      const deadline = document.getElementById("zielDeadline").value;
-      await fetch(`${API_URL}/goals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titel, deadline, status: "offen" })
-      });
-      ladeZiele();
-    }
+  async function neuesZiel() {
+    const titel = document.getElementById("zielTitel").value;
+    const deadline = document.getElementById("zielDeadline").value;
+    await fetch(`${API_URL}/goals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titel, deadline, status: "offen" })
+    });
+    ladeZiele();
+  }
 
-    async function ladeZiele() {
-      const res = await fetch(`${API_URL}/goals`);
-      const data = await res.json();
-      const liste = document.getElementById("zielListe");
-      liste.innerHTML = "";
-      data.goals.forEach(goal => {
-        const div = document.createElement("div");
-        div.className = "goal";
-        div.innerHTML = `<strong>${goal.titel}</strong> [${goal.status}] <br><small>${goal.deadline || ""}</small><br>
-          <select onchange="updateZiel(${goal.id}, this.value)">
-            <option value="offen" ${goal.status === "offen" ? "selected" : ""}>offen</option>
-            <option value="erledigt" ${goal.status === "erledigt" ? "selected" : ""}>erledigt</option>
-            <option value="verschoben" ${goal.status === "verschoben" ? "selected" : ""}>verschoben</option>
-          </select>`;
-        liste.appendChild(div);
-      });
-    }
+  async function ladeZiele() {
+    const res = await fetch(`${API_URL}/goals`);
+    const data = await res.json();
+    const liste = document.getElementById("zielListe");
+    liste.innerHTML = "";
+    data.goals.forEach(goal => {
+      const div = document.createElement("div");
+      div.className = "goal";
+      div.innerHTML = `<strong>${goal.titel}</strong> [${goal.status}] <br><small>${goal.deadline || ""}</small><br>
+        <select onchange="updateZiel(${goal.id}, this.value)">
+          <option value="offen" ${goal.status === "offen" ? "selected" : ""}>offen</option>
+          <option value="erledigt" ${goal.status === "erledigt" ? "selected" : ""}>erledigt</option>
+          <option value="verschoben" ${goal.status === "verschoben" ? "selected" : ""}>verschoben</option>
+        </select>`;
+      liste.appendChild(div);
+    });
+  }
 
-    async function updateZiel(id, status) {
-      await fetch(`${API_URL}/goals/update`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status })
-      });
-      ladeZiele();
-    }
+  async function updateZiel(id, status) {
+    await fetch(`${API_URL}/goals/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status })
+    });
+    ladeZiele();
+  }
 
-    async function ladeBericht(typ) {
-      const res = await fetch(`${API_URL}/${typ}`);
-      const data = await res.json();
-      const box = document.getElementById("berichtBox");
-      box.innerText = data.bericht;
-    }
+  async function ladeBericht(typ) {
+    const res = await fetch(`${API_URL}/${typ}`);
+    const data = await res.json();
+    const box = document.getElementById("berichtBox");
+    box.innerText = data.bericht;
+  }
 
+  // Neue Funktion: Einstiegsfrage beim Laden der Seite
+  async function stelleEinstiegsfrage() {
+    const resBox = document.getElementById("chatBox");
+    const res = await fetch(`${API_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Starte ein Gespräch" })
+    });
+    const data = await res.json();
+    resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.reply}</div>`;
+    resBox.scrollTop = resBox.scrollHeight;
+  }
+
+  // Initialisierung beim Laden der Seite
+  window.addEventListener('DOMContentLoaded', () => {
     loadRoutines();
     ladeInterviewFrage();
     ladeZiele();
-  </script>
+    stelleEinstiegsfrage(); // Einstiegsfrage stellen
+  });
+</script>
+
 </body>
 </html>
