@@ -217,17 +217,17 @@
   }
 
   // Neue Funktion: Einstiegsfrage beim Laden der Seite
-  async function stelleEinstiegsfrage() {
-    const resBox = document.getElementById("chatBox");
-    const res = await fetch(`${API_URL}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "Starte ein Gespräch" })
-    });
-    const data = await res.json();
-    resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.reply}</div>`;
+async function stelleEinstiegsfrage() {
+  const resBox = document.getElementById("chatBox");
+  const res = await fetch(`${API_URL}/start_interaction/1`);
+  const data = await res.json();
+
+  if (data.frage) {
+    resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.frage}</div>`;
     resBox.scrollTop = resBox.scrollHeight;
   }
+}
+
 
   // Initialisierung beim Laden der Seite
   window.addEventListener('DOMContentLoaded', () => {
