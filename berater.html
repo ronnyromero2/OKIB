@@ -236,6 +236,24 @@
     ladeZiele();
     stelleEinstiegsfrage(); // Einstiegsfrage stellen
   });
+  async function zeigeAutomatischenBericht() {
+  const res = await fetch(`${API_URL}/bericht/automatisch`);
+  const data = await res.json();
+  if (data.typ && data.inhalt) {
+    const resBox = document.getElementById("chatBox");
+    resBox.innerHTML += `<div class='message'><strong>${data.typ}:</strong> ${data.inhalt}</div>`;
+    resBox.scrollTop = resBox.scrollHeight;
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadRoutines();
+  ladeInterviewFrage();
+  ladeZiele();
+  stelleEinstiegsfrage();
+  zeigeAutomatischenBericht(); // Automatischen Bericht anzeigen
+});
+
 </script>
 
 </body>
