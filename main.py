@@ -159,6 +159,32 @@ def generiere_rueckblick(zeitraum: str, tage: int):
     }).execute()
 
     return bericht
+    
+# Routinen abrufen
+@app.get("/routines")
+def get_routines():
+    day_map = {
+        "Monday": "Montag",
+        "Tuesday": "Dienstag",
+        "Wednesday": "Mittwoch",
+        "Thursday": "Donnerstag",
+        "Friday": "Freitag",
+        "Saturday": "Samstag",
+        "Sunday": "Sonntag"
+    }
+
+    today = datetime.datetime.now().strftime("%A")
+    today_de = day_map.get(today, today)
+
+    # Routines abrufen
+    routines = supabase.table("routines").select("*").eq("day", today_de).execute().data
+
+    if routines:
+        text = "\n".join([f"{r['time']} - {r['task']}" for r in routines])
+    else:
+        text = "Heute stehen keine speziellen Aufgaben an."
+
+    return {"text": text}
 
 # Chat-Funktion
 @app.post("/chat")
