@@ -124,21 +124,29 @@
     document.getElementById("routinen").innerText = data.text;
   }
 
-  async function sendChat() {
-    const input = document.getElementById("chatInput");
-    const message = input.value;
-    input.value = "";
-    const resBox = document.getElementById("chatBox");
-    resBox.innerHTML += `<div class='message'><strong>Du:</strong> ${message}</div>`;
+async function sendChat() {
+  const input = document.getElementById("chatInput");
+  const message = input.value;
+  input.value = "";
+  const resBox = document.getElementById("chatBox");
+  
+  resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${message}</div>`;
+  
+  try {
     const res = await fetch(`${API_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message })
     });
+
     const data = await res.json();
-    resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.reply}</div>`;
+    resBox.innerHTML += `<div class='message'><strong>🤖:</strong> ${data.reply}</div>`;
     resBox.scrollTop = resBox.scrollHeight;
+  } catch (error) {
+    console.error("Fehler beim Senden der Nachricht:", error);
+    resBox.innerHTML += `<div class='message'><strong>🤖:</strong> Es gab ein Problem beim Senden deiner Nachricht.</div>`;
   }
+}
 
   async function speichereMemory() {
     const thema = document.getElementById("thema").value;
@@ -221,14 +229,14 @@ async function stelleEinstiegsfrage() {
   const resBox = document.getElementById("chatBox");
 
   // Überprüfen, ob bereits eine Einleitungsfrage vorhanden ist
-  if (resBox.innerHTML.includes("Einstiegsfrage:")) return;
+  if (resBox.innerHTML.includes("🤖")) return;
 
   try {
     const res = await fetch(`${API_URL}/start_interaction/1`);
     const data = await res.json();
 
     if (data.frage) {
-      resBox.innerHTML += `<div class='message'><strong>Einstiegsfrage:</strong> ${data.frage}</div>`;
+      resBox.innerHTML += `<div class='message'><strong>🤖:</strong> ${data.frage}</div>`;
       resBox.scrollTop = resBox.scrollHeight;
     }
   } catch (error) {
