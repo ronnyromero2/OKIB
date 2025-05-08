@@ -60,21 +60,46 @@ class GoalUpdate(BaseModel):
 # Startfrage bei neuer Interaktion
 @app.get("/start_interaction/{user_id}")
 def start_interaction(user_id: str):
+    # Letzte 5 Nachrichten des Benutzers abrufen
     recent_interactions = supabase.table("conversation_history") \
         .select("user_input") \
         .eq("user_id", user_id) \
         .order("timestamp", desc=True) \
-        .limit(1) \
+        .limit(5) \
         .execute()
 
-    if recent_interactions.data:
-        last_message = recent_interactions.data[0]["user_input"]
-        # Freiere Formulierung der Einleitungsfrage
-        frage = f"Hast du noch Gedanken zu '{last_message}'? Oder möchtest du über etwas anderes sprechen?"
-    else:
-        frage = "Hey, was beschäftigt dich heute? Gibt es etwas, das du loswerden möchtest?"
+    # Nachrichten extrahieren
+    messages = [msg["user_input"] for msg in recent_interactions.data if msg["user_input"] != "Starte ein Gespräch"]
+
+    # Falls keine Nachrichten vorhanden sind, eine allgemeine Frage stellen
+    if not messages:
+        return {"frage": "Hey, was beschäftigt dich heute? Gibt es etwas, das du loswerden möchtest?"}
+
+    # GPT-Anfrage vorbereiten
+    context = "\n".join(messages)
+    prompt = f"""
+    Du bist ein persönlicher Mentor und Coach. Basierend auf den letzten Nachrichten des Nutzers, formuliere eine motivierende, offene Frage, die ihn dazu einlädt, weiterzumachen oder ein vorheriges Thema zu vertiefen. Hier sind die letzten Nachrichten:
+
+    {context}
+
+    Beispiel für motivierende Fragen:
+    - Hast du eine Lösung für XYZ gefunden?
+    - Wie lief die Vorbereitung für ABC?
+    - Möchtest du etwas über DEF erzählen?
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        frage = response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Fehler bei der GPT-Anfrage: {e}")
+        frage = "Was möchtest du heute erreichen oder klären?"
 
     return {"frage": frage}
+
 
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
