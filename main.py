@@ -60,13 +60,20 @@ class GoalUpdate(BaseModel):
 # Startfrage bei neuer Interaktion
 @app.get("/start_interaction/{user_id}")
 def start_interaction(user_id: str):
-    recent_interactions = supabase.table("conversation_history").select("user_input").eq("user_id", user_id).order("timestamp", desc=True).limit(5).execute()
-    messages = [msg["user_input"] for msg in recent_interactions.data]
+    # Letzte Nachricht des Benutzers abrufen
+    recent_interactions = supabase.table("conversation_history") \
+        .select("user_input") \
+        .eq("user_id", user_id) \
+        .order("timestamp", desc=True) \
+        .limit(1) \
+        .execute()
 
-    if messages:
-        return {"frage": f"Ich habe gesehen, dass du zuletzt über {messages[0]} gesprochen hast. Möchtest du mir mehr darüber erzählen?"}
+    if recent_interactions.data:
+        last_message = recent_interactions.data[0]["user_input"]
+        return {"frage": f"Du hast zuletzt über '{last_message}' gesprochen. Möchtest du daran anknüpfen?"}
     else:
-        return {"frage": "Willkommen zurück! Woran arbeitest du gerade oder worüber möchtest du sprechen?"}
+        return {"frage": "Willkommen zurück! Woran möchtest du heute arbeiten?"}
+
 
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
