@@ -235,6 +235,7 @@
     ladeInterviewFrage();
     ladeZiele();
     stelleEinstiegsfrage(); // Einstiegsfrage stellen
+    zeigeAutomatischenBericht(); // Automatischen Bericht anzeigen
   });
   async function zeigeAutomatischenBericht() {
   const res = await fetch(`${API_URL}/bericht/automatisch`);
