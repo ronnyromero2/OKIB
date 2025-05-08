@@ -59,10 +59,17 @@
     <button onclick="updateProfile()">Prioritäten aktualisieren</button>
   </div>
 
-  <div class="section">
-    <h2>Deine heutigen Routinen:</h2>
-    <div id="routinen">Wird geladen...</div>
-  </div>
+<div class="section">
+  <h2>Deine heutigen Routinen:</h2>
+  <div id="routinen">Wird geladen...</div>
+</div>
+
+<style>
+  .routine.done {
+    text-decoration: line-through;
+    color: #888;
+  }
+</style>
 
   <div class="section">
     <h2>Dein Chat:</h2>
@@ -118,11 +125,43 @@
     alert("✅ Prioritäten gespeichert");
   }
 
-  async function loadRoutines() {
-    const r = await fetch(`${API_URL}/routines`);
-    const data = await r.json();
-    document.getElementById("routinen").innerText = data.text;
+async function loadRoutines() {
+  const res = await fetch(`${API_URL}/routines`);
+  const data = await res.json();
+  const routinenBox = document.getElementById("routinen");
+
+  if (data.text) {
+    const routinesArray = data.text.split("\n");
+    routinenBox.innerHTML = "";
+
+    routinesArray.forEach((routine, index) => {
+      const routineDiv = document.createElement("div");
+      routineDiv.classList.add("routine");
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = `routine_${index}`;
+      checkbox.addEventListener("change", function() {
+        if (checkbox.checked) {
+          routineDiv.classList.add("done");
+        } else {
+          routineDiv.classList.remove("done");
+        }
+      });
+
+      const label = document.createElement("label");
+      label.htmlFor = `routine_${index}`;
+      label.textContent = routine.replace(/^\d{2}:\d{2} - /, ""); // Uhrzeit entfernen
+
+      routineDiv.appendChild(checkbox);
+      routineDiv.appendChild(label);
+      routinenBox.appendChild(routineDiv);
+    });
+  } else {
+    routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
   }
+}
+
 
 async function sendChat() {
   const input = document.getElementById("chatInput");
