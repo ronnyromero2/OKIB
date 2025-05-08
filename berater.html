@@ -219,14 +219,23 @@
   // Neue Funktion: Einstiegsfrage beim Laden der Seite
 async function stelleEinstiegsfrage() {
   const resBox = document.getElementById("chatBox");
-  const res = await fetch(`${API_URL}/start_interaction/1`);
-  const data = await res.json();
 
-  if (data.frage) {
-    resBox.innerHTML += `<div class='message'><strong>Berater:</strong> ${data.frage}</div>`;
-    resBox.scrollTop = resBox.scrollHeight;
+  // Überprüfen, ob bereits eine Einleitungsfrage vorhanden ist
+  if (resBox.innerHTML.includes("Einstiegsfrage:")) return;
+
+  try {
+    const res = await fetch(`${API_URL}/start_interaction/1`);
+    const data = await res.json();
+
+    if (data.frage) {
+      resBox.innerHTML += `<div class='message'><strong>Einstiegsfrage:</strong> ${data.frage}</div>`;
+      resBox.scrollTop = resBox.scrollHeight;
+    }
+  } catch (error) {
+    console.error("Fehler beim Abrufen der Einleitungsfrage:", error);
   }
 }
+
 
 
   // Initialisierung beim Laden der Seite
