@@ -49,18 +49,15 @@
       color: #aaa;
     }
 .routine {
-  display: flex;
-  align-items: center;    /* Vertikal zentrieren */
-  justify-content: flex-start;  /* Links ausrichten */
-  gap: 5px;               /* Abstand zwischen Checkbox und Text */
-  padding-left: 0;        /* Kein zusätzlicher Abstand links */
-  margin-bottom: 5px;     /* Abstand zwischen den Routinen */
+  display: flex !important;  /* Erzwingt Flexbox */
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 5px !important;
+  padding-left: 0 !important;
+  margin-bottom: 5px !important;
+  background-color: #222;  /* Temporäre Hintergrundfarbe zum Debuggen */
 }
 
-.routine.done label {
-  text-decoration: line-through;
-  color: #888;
-}
 
   </style>
 </head>
