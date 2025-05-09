@@ -50,12 +50,14 @@
     }
 .routine {
   display: flex;
-  align-items: center;   /* Vertikal zentriert */
-  justify-content: flex-start;  /* Horizontal linksbündig */
-  gap: 5px;  /* Abstand zwischen Checkbox und Text */
+  align-items: center;    /* Vertikal zentrieren */
+  justify-content: flex-start;  /* Links ausrichten */
+  gap: 5px;               /* Abstand zwischen Checkbox und Text */
+  padding-left: 0;        /* Kein zusätzlicher Abstand links */
+  margin-bottom: 5px;     /* Abstand zwischen den Routinen */
 }
 
-.routine.done {
+.routine.done label {
   text-decoration: line-through;
   color: #888;
 }
@@ -138,6 +140,7 @@ async function loadRoutines() {
 
   if (data.routines && data.routines.length > 0) {
     data.routines.forEach((routine) => {
+      // Routine-Container erstellen
       const routineDiv = document.createElement("div");
       routineDiv.classList.add("routine");
 
@@ -147,23 +150,17 @@ async function loadRoutines() {
       checkbox.checked = routine.checked;
       checkbox.id = `routine_${routine.id}`;
 
-      // Checkbox-Event-Listener
       checkbox.addEventListener("change", function () {
-        const isChecked = checkbox.checked;
-
-        // Status aktualisieren
-        updateRoutineStatus(routine.id, isChecked);
-
-        // Durchstreichen
-        routineDiv.classList.toggle("done", isChecked);
+        updateRoutineStatus(routine.id, checkbox.checked);
+        routineDiv.classList.toggle("done", checkbox.checked);
       });
 
       // Label erstellen
       const label = document.createElement("label");
       label.htmlFor = `routine_${routine.id}`;
-      label.textContent = routine.task ? routine.task : "Keine Aufgabe definiert";
+      label.textContent = routine.task;
 
-      // Struktur aufbauen
+      // Struktur aufbauen: Checkbox links, Text rechts
       routineDiv.appendChild(checkbox);
       routineDiv.appendChild(label);
       routinenBox.appendChild(routineDiv);
