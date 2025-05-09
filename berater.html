@@ -51,13 +51,14 @@
 .routine {
   display: flex;
   align-items: center;
-  gap: 5px;   /* Abstand verringert */
-  justify-content: flex-start;  /* Links ausrichten */
+  gap: 5px;  /* Abstand zwischen Checkbox und Text */
+  justify-content: flex-start;
+  margin-bottom: 8px;
 }
 
-.routine label {
-  margin-left: 5px;  /* Kleiner Abstand zwischen Checkbox und Text */
-  flex-grow: 1;      /* Label bleibt linksbündig */
+.routine.done {
+  text-decoration: line-through;
+  color: #888;
 }
 
   </style>
@@ -75,19 +76,6 @@
   <h2>Deine heutigen Routinen:</h2>
   <div id="routinen">Wird geladen...</div>
 </div>
-
-<style>
-  .routine.done {
-    text-decoration: line-through;
-    color: #888;
-  }
-  .routine {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-</style>
 
   <div class="section">
     <h2>Dein Chat:</h2>
