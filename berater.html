@@ -141,6 +141,7 @@ async function loadRoutines() {
       const routineDiv = document.createElement("div");
       routineDiv.classList.add("routine");
 
+      // Checkbox erstellen
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = routine.checked;
@@ -148,25 +149,21 @@ async function loadRoutines() {
 
       // Checkbox-Event-Listener
       checkbox.addEventListener("change", function () {
-        updateRoutineStatus(routine.id, checkbox.checked);
+        const isChecked = checkbox.checked;
 
-        if (checkbox.checked) {
-          routineDiv.classList.add("done");
-        } else {
-          routineDiv.classList.remove("done");
-        }
+        // Status aktualisieren
+        updateRoutineStatus(routine.id, isChecked);
+
+        // Durchstreichen
+        routineDiv.classList.toggle("done", isChecked);
       });
 
+      // Label erstellen
       const label = document.createElement("label");
       label.htmlFor = `routine_${routine.id}`;
-      label.textContent = routine.task;
+      label.textContent = routine.task ? routine.task : "Keine Aufgabe definiert";
 
-      // Initialer Status (durchgestrichen oder nicht)
-      if (routine.checked) {
-        routineDiv.classList.add("done");
-      }
-
-      // Checkbox links neben dem Text
+      // Struktur aufbauen
       routineDiv.appendChild(checkbox);
       routineDiv.appendChild(label);
       routinenBox.appendChild(routineDiv);
@@ -175,6 +172,7 @@ async function loadRoutines() {
     routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
   }
 }
+
 
 async function updateRoutineStatus(routineId, isChecked) {
   try {
