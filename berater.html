@@ -185,8 +185,6 @@ async function updateRoutineStatus(routineId, isChecked) {
   }
 }
 
-      }
-
       const label = document.createElement("label");
       label.htmlFor = `routine_${index}`;
       label.textContent = routine.replace(/^\d{2}:\d{2} - /, ""); // Uhrzeit entfernen
