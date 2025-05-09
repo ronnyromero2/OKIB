@@ -160,21 +160,33 @@ def generiere_rueckblick(zeitraum: str, tage: int):
 
     return bericht
     
+from pydantic import BaseModel
+
+class RoutineUpdate(BaseModel):
+    id: int
+    checked: bool
+
 # Routinen abrufen
 @app.get("/routines")
 def get_routines():
-    # Wochentag in Englisch
     today = datetime.datetime.now().strftime("%A")
 
     # Routines abrufen
     routines = supabase.table("routines").select("*").eq("day", today).execute().data
 
-    if routines:
-        text = "\n".join([f"{r['time']} - {r['task']}" for r in routines])
-    else:
-        text = "Heute stehen keine speziellen Aufgaben an."
+    # Übergebe `checked`-Status für jede Routine
+    return {"routines": routines}
 
-    return {"text": text}
+# Routinenstatus aktualisieren
+@app.post("/routines/update")
+def update_routine_status(update: RoutineUpdate):
+    try:
+        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Fehler beim Aktualisieren der Routine: {e}")
+        return {"status": "error", "message": str(e)}
+
 
 # Chat-Funktion
 @app.post("/chat")
