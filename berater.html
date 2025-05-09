@@ -141,9 +141,6 @@ async function loadRoutines() {
     data.routines.forEach((routine) => {
       const routineDiv = document.createElement("div");
       routineDiv.classList.add("routine");
-      routineDiv.style.display = "flex";
-      routineDiv.style.alignItems = "center";
-      routineDiv.style.gap = "10px";
 
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
