@@ -69,6 +69,12 @@
     text-decoration: line-through;
     color: #888;
   }
+  .routine {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
 </style>
 
   <div class="section">
@@ -130,23 +136,55 @@ async function loadRoutines() {
   const data = await res.json();
   const routinenBox = document.getElementById("routinen");
 
-  if (data.text) {
-    const routinesArray = data.text.split("\n");
+  if (data.routines && data.routines.length > 0) {
     routinenBox.innerHTML = "";
 
-    routinesArray.forEach((routine, index) => {
+    data.routines.forEach((routine) => {
       const routineDiv = document.createElement("div");
       routineDiv.classList.add("routine");
 
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
-      checkbox.id = `routine_${index}`;
-      checkbox.addEventListener("change", function() {
+      checkbox.checked = routine.checked;
+      checkbox.id = `routine_${routine.id}`;
+      checkbox.addEventListener("change", function () {
+        updateRoutineStatus(routine.id, checkbox.checked);
         if (checkbox.checked) {
           routineDiv.classList.add("done");
         } else {
           routineDiv.classList.remove("done");
         }
+      });
+
+      const label = document.createElement("label");
+      label.htmlFor = `routine_${routine.id}`;
+      label.textContent = routine.task;
+
+      if (routine.checked) {
+        routineDiv.classList.add("done");
+      }
+
+      routineDiv.appendChild(checkbox);
+      routineDiv.appendChild(label);
+      routinenBox.appendChild(routineDiv);
+    });
+  } else {
+    routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
+  }
+}
+
+async function updateRoutineStatus(routineId, isChecked) {
+  try {
+    await fetch(`${API_URL}/routines/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: routineId, checked: isChecked })
+    });
+  } catch (error) {
+    console.error("Fehler beim Aktualisieren des Routine-Status:", error);
+  }
+}
+
       });
 
       const label = document.createElement("label");
