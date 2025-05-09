@@ -187,6 +187,39 @@ def update_routine_status(update: RoutineUpdate):
         print(f"Fehler beim Aktualisieren der Routine: {e}")
         return {"status": "error", "message": str(e)}
 
+# Ziele abrufen
+@app.get("/goals")
+def get_goals():
+    try:
+        goals = supabase.table("goals").select("*").execute().data
+        return {"goals": goals}
+    except Exception as e:
+        print(f"Fehler beim Abrufen der Ziele: {e}")
+        return {"goals": []}
+
+# Interviewfrage abrufen
+@app.get("/interview")
+def get_interview_question():
+    try:
+        profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
+
+        if profile:
+            user_profile = profile[0]
+
+            if not user_profile.get("beruf"):
+                return {"frage": "Was machst du beruflich oder was interessiert dich beruflich?"}
+            elif not user_profile.get("beziehungsziel"):
+                return {"frage": "Hast du ein bestimmtes Ziel in deinen Beziehungen, das du verfolgen möchtest?"}
+            elif not user_profile.get("prioritäten"):
+                return {"frage": "Was sind aktuell deine wichtigsten Prioritäten?"}
+            else:
+                return {"frage": "Danke, dass du deine Daten geteilt hast. Lass uns weiterarbeiten!"}
+
+        return {"frage": "Welche Themen beschäftigen dich derzeit?"}
+
+    except Exception as e:
+        print(f"Fehler bei der Interviewfrage: {e}")
+        return {"frage": "Es gab ein Problem beim Abrufen der Interviewfrage."}
 
 # Chat-Funktion
 @app.post("/chat")
