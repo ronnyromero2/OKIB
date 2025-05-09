@@ -135,20 +135,25 @@ async function loadRoutines() {
   const res = await fetch(`${API_URL}/routines`);
   const data = await res.json();
   const routinenBox = document.getElementById("routinen");
+  routinenBox.innerHTML = ""; // Vorher leeren
 
   if (data.routines && data.routines.length > 0) {
-    routinenBox.innerHTML = "";
-
     data.routines.forEach((routine) => {
       const routineDiv = document.createElement("div");
       routineDiv.classList.add("routine");
+      routineDiv.style.display = "flex";
+      routineDiv.style.alignItems = "center";
+      routineDiv.style.gap = "10px";
 
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = routine.checked;
       checkbox.id = `routine_${routine.id}`;
+
+      // Checkbox-Event-Listener
       checkbox.addEventListener("change", function () {
         updateRoutineStatus(routine.id, checkbox.checked);
+
         if (checkbox.checked) {
           routineDiv.classList.add("done");
         } else {
@@ -160,10 +165,12 @@ async function loadRoutines() {
       label.htmlFor = `routine_${routine.id}`;
       label.textContent = routine.task;
 
+      // Initialer Status (durchgestrichen oder nicht)
       if (routine.checked) {
         routineDiv.classList.add("done");
       }
 
+      // Checkbox links neben dem Text
       routineDiv.appendChild(checkbox);
       routineDiv.appendChild(label);
       routinenBox.appendChild(routineDiv);
@@ -184,20 +191,6 @@ async function updateRoutineStatus(routineId, isChecked) {
     console.error("Fehler beim Aktualisieren des Routine-Status:", error);
   }
 }
-
-      const label = document.createElement("label");
-      label.htmlFor = `routine_${index}`;
-      label.textContent = routine.replace(/^\d{2}:\d{2} - /, ""); // Uhrzeit entfernen
-
-      routineDiv.appendChild(checkbox);
-      routineDiv.appendChild(label);
-      routinenBox.appendChild(routineDiv);
-    });
-  } else {
-    routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
-  }
-}
-
 
 async function sendChat() {
   const input = document.getElementById("chatInput");
