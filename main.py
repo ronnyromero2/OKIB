@@ -57,32 +57,52 @@ class GoalUpdate(BaseModel):
     id: int
     status: str
 
+def get_recent_entry_questions(user_id: str):
+    """
+    Hol die letzten 4 Einstiegsfragen des Nutzers.
+    """
+    recent_questions = supabase.table("conversation_history") \
+        .select("user_input") \
+        .eq("user_id", user_id) \
+        .ilike("user_input", "Einstiegsfrage:%") \
+        .order("timestamp", desc=True) \
+        .limit(4) \
+        .execute()
+
+    questions = [q["user_input"].replace("Einstiegsfrage: ", "") for q in recent_questions.data]
+    
+    print("Letzte 4 Einstiegsfragen:", questions)
+    return questions
+
 # Startfrage bei neuer Interaktion
 import random
 
 @app.get("/start_interaction/{user_id}")
 def start_interaction(user_id: str):
-    # Letzte 15 Nachrichten abrufen
+    # Letzte 30 Nachrichten abrufen
     recent_interactions = supabase.table("conversation_history") \
         .select("user_input") \
         .eq("user_id", user_id) \
         .order("timestamp", desc=True) \
-        .limit(15) \
+        .limit(30) \
         .execute()
 
     # Nachrichten extrahieren
     messages = [msg["user_input"] for msg in recent_interactions.data if msg["user_input"] != "Starte ein Gespräch"]
 
     # Konsolen-Log zur Überprüfung der Nachrichten
-    print("Letzte 15 Nachrichten:", messages)
+    print("Letzte 30 Nachrichten:", messages)
 
     # Wenn keine Nachrichten vorhanden sind
     if not messages:
         return {"frage": "Was möchtest du heute angehen? Gibt es ein neues Thema, über das du sprechen möchtest?"}
 
-    # Die letzten beiden Themen isolieren
-    recent_topics = messages[:2]
-    remaining_messages = messages[2:]
+    # Letzte 4 Einstiegsfragen abrufen
+    recent_entry_questions = get_recent_entry_questions(user_id)
+
+    # Die letzten 5 Nachrichten ignorieren
+    recent_topics = messages[:5]
+    remaining_messages = messages[5:]
 
     # Routinen überprüfen
     today = datetime.datetime.now().strftime("%A")
@@ -107,27 +127,31 @@ def start_interaction(user_id: str):
         prompt = f"""
         Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
         Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
-        Vermeide die letzten beiden Themen, die kürzlich besprochen wurden:
+        Vermeide die letzten vier Einstiegsfragen:
 
-        {", ".join(recent_topics)}
+        {", ".join(recent_entry_questions)}
 
         Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
         """
     else:
+        # Themen, die nicht in den letzten 4 Einstiegsfragen vorkommen
+        filtered_messages = [msg for msg in remaining_messages if msg not in recent_entry_questions]
+
+        # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
+        if not filtered_messages:
+            filtered_messages = ["Langfristige Ziele", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung"]
+
+        # Zufälliges Thema auswählen
+        selected_topic = random.choice(filtered_messages)
+
         prompt = f"""
-        Du bist ein persönlicher Coach. Formuliere eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. 
-        Vermeide die letzten beiden Themen, die kürzlich besprochen wurden:
+        Du bist ein persönlicher Coach. Formuliere eine motivierende Frage basierend auf einem Thema, 
+        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde. 
+        Vermeide die letzten vier Einstiegsfragen:
 
-        {", ".join(recent_topics)}
+        {", ".join(recent_entry_questions)}
 
-        Fokussiere dich auf andere Themenbereiche, die länger nicht angesprochen wurden oder bisher kaum behandelt wurden.
-        Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin.
-        
-        Letzte Nachrichten (ohne die letzten beiden):
-        {", ".join(remaining_messages)}
-
-        Wiederholt unerfüllte Routinen:
-        {routine_context}
+        Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
 
         Beispiel für motivierende Fragen:
         - Hast du eine Lösung für XYZ gefunden?
@@ -143,7 +167,7 @@ def start_interaction(user_id: str):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=80  # Kürzere Antwort
+            max_tokens=80
         )
 
         frage = response.choices[0].message.content.strip()
@@ -151,6 +175,12 @@ def start_interaction(user_id: str):
         # Fallback, falls GPT keine sinnvolle Frage liefert
         if not frage:
             frage = "Was möchtest du heute erreichen oder klären?"
+
+        # Einstiegsfrage als solche markieren und speichern
+        supabase.table("conversation_history").insert({
+            "user_input": f"Einstiegsfrage: {frage}",
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
 
         return {"frage": frage}
 
