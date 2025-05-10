@@ -255,7 +255,7 @@ def chat(input: ChatInput):
 
     today = datetime.datetime.now().strftime("%A")
     routines = supabase.table("routines").select("*").eq("day", today).execute().data
-    routines_text = "\n".join([f"{r['time']} - {r['task']}" for r in routines]) if routines else "Heute keine speziellen Aufgaben."
+    routines_text = "\n".join([f"{r['task']}" for r in routines]) if routines else "Heute stehen keine speziellen Aufgaben an."
 
     history = supabase.table("conversation_history").select("*").order("timestamp", desc=True).limit(10).execute().data
     history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else ""
@@ -263,6 +263,7 @@ def chat(input: ChatInput):
     memory = supabase.table("long_term_memory").select("*").order("timestamp").execute().data
     memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else ""
 
+    # System- und Benutzerkontext für GPT
     system_message = f"""
     Du bist ein persönlicher Mentor.
     Beruf: {beruf}
@@ -271,23 +272,30 @@ def chat(input: ChatInput):
     Routinen heute: {routines_text}
     Langzeitgedächtnis: {memory_text}
     Letzte Gespräche: {history_text}
+    Antworte kurz, prägnant und motivierend. Maximal 3 Sätze.
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": input.message}
-        ]
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": input.message}
+            ],
+            max_tokens=100,  # Begrenze die Antwort auf maximal 100 Tokens
+        )
 
-    ai_response = response.choices[0].message.content
+        ai_response = response.choices[0].message.content.strip()
 
-    # Speichern in der Datenbank
-    supabase.table("conversation_history").insert({
-        "user_input": input.message,
-        "ai_response": ai_response,
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    }).execute()
+        # Speichern in der Datenbank
+        supabase.table("conversation_history").insert({
+            "user_input": input.message,
+            "ai_response": ai_response,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
 
-    return {"reply": ai_response}
+        return {"reply": ai_response}
+
+    except Exception as e:
+        print(f"Fehler in der Chat-Funktion: {e}")
+        return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage."}
