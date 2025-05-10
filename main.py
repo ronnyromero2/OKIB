@@ -278,8 +278,8 @@ def get_interview_question():
         Du hast bereits folgende Fragen gestellt:
         {", ".join(covered_topics)}
 
-        Formuliere eine neue, motivierende Frage, die sich auf Themen wie Ziele, Herausforderungen, Wünsche oder langfristige Pläne bezieht. Frage auch zu Themenbereichen, zu denen du noch gar nichts weißt.
-        Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
+        Formuliere eine neue, motivierende Frage, die sich auf Themen wie Ziele, Herausforderungen, Wünsche, Einstellungen aus den verschiedensten Lebensbereichen bezieht. Frage auch zu Themenbereichen, zu denen du noch gar nichts weißt.
+        Vermeide zu allgemeine Fragen und Fragen zu Themen, die du bereits gestellt hast. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
         """
 
         # GPT-Anfrage
