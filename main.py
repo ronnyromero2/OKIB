@@ -94,7 +94,7 @@ def start_interaction(user_id: str):
 
     # GPT-Anfrage vorbereiten
     prompt = f"""
-    Du bist ein persönlicher Coach. Erstelle eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin. 
+    Du bist ein persönlicher Coach. Erstelle eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin. 1 oder 2 Sätze. 
 
     Letzte Nachrichten:
     {context}
