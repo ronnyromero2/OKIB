@@ -49,14 +49,19 @@
       color: #aaa;
     }
 .routine {
-  display: flex !important;  /* Erzwingt Flexbox */
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 5px !important;
-  padding-left: 0 !important;
-  margin-bottom: 5px !important;
-  background-color: #222;  /* Temporäre Hintergrundfarbe zum Debuggen */
+  display: flex;          /* Flexbox aktivieren */
+  align-items: center;    /* Vertikal zentrieren */
+  justify-content: flex-start;  /* Links ausrichten */
+  gap: 5px;               /* Abstand zwischen Checkbox und Text */
+  padding-left: 0;
+  margin-bottom: 5px;
 }
+
+.routine {
+  background-color: #444;  /* Debug-Farbe */
+  padding: 5px;
+}
+
 
 input[type="checkbox"] {
   width: auto;   /* Standardbreite verwenden */
