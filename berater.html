@@ -57,16 +57,16 @@
   margin-bottom: 5px;
 }
 
-.routine {
-  background-color: #444;  /* Debug-Farbe */
-  padding: 5px;
-}
-
-
 input[type="checkbox"] {
   width: auto;   /* Standardbreite verwenden */
   margin-right: 5px;  /* Abstand zum Label */
 }
+
+.routine.done label {
+  text-decoration: line-through;
+  color: #888;
+}
+
 
   </style>
 </head>
@@ -147,16 +147,32 @@ async function loadRoutines() {
   if (data.routines && data.routines.length > 0) {
     data.routines.forEach((routine) => {
       const routineDiv = document.createElement("div");
-      routineDiv.classList.add("routine");  // Klasse hinzufügen
+      routineDiv.classList.add("routine");
 
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = routine.checked;
       checkbox.id = `routine_${routine.id}`;
 
+      // Event-Listener für Checkbox
+      checkbox.addEventListener("change", function () {
+        const isChecked = checkbox.checked;
+
+        // Zustand in der Datenbank speichern
+        updateRoutineStatus(routine.id, isChecked);
+
+        // Klasse "done" hinzufügen/entfernen
+        routineDiv.classList.toggle("done", isChecked);
+      });
+
       const label = document.createElement("label");
       label.htmlFor = `routine_${routine.id}`;
       label.textContent = routine.task;
+
+      // Initialer Zustand – durchstreichen, falls gecheckt
+      if (routine.checked) {
+        routineDiv.classList.add("done");
+      }
 
       routineDiv.appendChild(checkbox);
       routineDiv.appendChild(label);
@@ -165,6 +181,7 @@ async function loadRoutines() {
   } else {
     routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
   }
+}
 
   console.log("Struktur nach dem Rendern der Routinen:", routinenBox.innerHTML);
 }
@@ -300,8 +317,6 @@ async function stelleEinstiegsfrage() {
     console.error("Fehler beim Abrufen der Einleitungsfrage:", error);
   }
 }
-
-
 
   // Initialisierung beim Laden der Seite
   window.addEventListener('DOMContentLoaded', () => {
