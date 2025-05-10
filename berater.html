@@ -137,27 +137,18 @@ async function loadRoutines() {
 
   if (data.routines && data.routines.length > 0) {
     data.routines.forEach((routine) => {
-      // Routine-Container erstellen
       const routineDiv = document.createElement("div");
-      routineDiv.classList.add("routine");
+      routineDiv.classList.add("routine");  // Klasse hinzufügen
 
-      // Checkbox erstellen
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = routine.checked;
       checkbox.id = `routine_${routine.id}`;
 
-      checkbox.addEventListener("change", function () {
-        updateRoutineStatus(routine.id, checkbox.checked);
-        routineDiv.classList.toggle("done", checkbox.checked);
-      });
-
-      // Label erstellen
       const label = document.createElement("label");
       label.htmlFor = `routine_${routine.id}`;
       label.textContent = routine.task;
 
-      // Struktur aufbauen: Checkbox links, Text rechts
       routineDiv.appendChild(checkbox);
       routineDiv.appendChild(label);
       routinenBox.appendChild(routineDiv);
@@ -165,9 +156,9 @@ async function loadRoutines() {
   } else {
     routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
   }
-  console.log(document.getElementById("routinen").innerHTML);
-}
 
+  console.log("Struktur nach dem Rendern der Routinen:", routinenBox.innerHTML);
+}
 
 async function updateRoutineStatus(routineId, isChecked) {
   try {
