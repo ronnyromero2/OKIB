@@ -225,25 +225,69 @@ def get_goals():
 @app.get("/interview")
 def get_interview_question():
     try:
+        # Profil abrufen
         profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
 
-        if profile:
-            user_profile = profile[0]
+        # Falls kein Profil vorhanden ist, allgemeine Frage stellen
+        if not profile:
+            return {"frage": "Welche Themen beschäftigen dich derzeit?"}
 
-            if not user_profile.get("beruf"):
-                return {"frage": "Was machst du beruflich oder was interessiert dich beruflich?"}
-            elif not user_profile.get("beziehungsziel"):
-                return {"frage": "Hast du ein bestimmtes Ziel in deinen Beziehungen, das du verfolgen möchtest?"}
-            elif not user_profile.get("prioritäten"):
-                return {"frage": "Was sind aktuell deine wichtigsten Prioritäten?"}
-            else:
-                return {"frage": "Danke, dass du deine Daten geteilt hast. Lass uns weiterarbeiten!"}
+        user_profile = profile[0]
 
-        return {"frage": "Welche Themen beschäftigen dich derzeit?"}
+        # Basisdaten-Abfrage
+        if not user_profile.get("beruf"):
+            return {"frage": "Was machst du beruflich oder was interessiert dich beruflich?"}
+        elif not user_profile.get("beziehungsziel"):
+            return {"frage": "Hast du ein bestimmtes Ziel in deinen Beziehungen, das du verfolgen möchtest?"}
+        elif not user_profile.get("prioritäten"):
+            return {"frage": "Was sind aktuell deine wichtigsten Prioritäten?"}
+
+        # Dynamische Interviewfragen nach Erfassung der Basisdaten
+        # Letzte 5 Interviewfragen abrufen
+        recent_questions = supabase.table("conversation_history") \
+            .select("user_input") \
+            .ilike("user_input", "Interviewfrage:%") \
+            .order("timestamp", desc=True) \
+            .limit(5) \
+            .execute().data
+
+        # Themen, die bereits abgedeckt wurden
+        covered_topics = [q["user_input"].replace("Interviewfrage: ", "") for q in recent_questions]
+
+        # GPT-Kontext erstellen
+        prompt = f"""
+        Du bist ein persönlicher Coach und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. 
+        Du hast bereits folgende Fragen gestellt:
+        {", ".join(covered_topics)}
+
+        Formuliere eine neue, motivierende Frage, die sich auf Themen wie Ziele, Herausforderungen, Wünsche oder langfristige Pläne bezieht.
+        Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
+        """
+
+        # GPT-Anfrage
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=50  # Kurze, prägnante Frage
+            )
+
+            frage = response.choices[0].message.content.strip()
+
+            # Fallback, falls GPT keine sinnvolle Frage liefert
+            if not frage:
+                frage = "Welche Ziele möchtest du in den nächsten Monaten erreichen?"
+
+            return {"frage": frage}
+
+        except Exception as e:
+            print(f"Fehler bei der dynamischen Interviewfrage: {e}")
+            return {"frage": "Es gab ein Problem beim Generieren der nächsten Interviewfrage."}
 
     except Exception as e:
         print(f"Fehler bei der Interviewfrage: {e}")
         return {"frage": "Es gab ein Problem beim Abrufen der Interviewfrage."}
+
 
 # Chat-Funktion
 @app.post("/chat")
