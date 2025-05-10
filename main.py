@@ -74,10 +74,15 @@ def start_interaction(user_id: str):
     # Konsolen-Log zur Überprüfung der Nachrichten
     print("Letzte 15 Nachrichten:", messages)
 
-    # GPT-Kontext erstellen
-    context = "\n".join(messages)
+    # Wenn keine Nachrichten vorhanden sind
+    if not messages:
+        return {"frage": "Was möchtest du heute angehen? Gibt es ein neues Thema, über das du sprechen möchtest?"}
 
-    # Unerfüllte Routinen abfragen (nur, wenn sie mehrfach nicht erfüllt wurden)
+    # Die letzten beiden Themen isolieren
+    recent_topics = messages[:2]
+    remaining_messages = messages[2:]
+
+    # Routinen überprüfen
     today = datetime.datetime.now().strftime("%A")
     unfulfilled_routines = supabase.table("routines") \
         .select("*") \
@@ -85,7 +90,7 @@ def start_interaction(user_id: str):
         .eq("checked", False) \
         .execute().data
 
-    # Routinen, die **mindestens 3-mal** nicht erfüllt wurden
+    # Routinen, die mindestens 3-mal nicht erfüllt wurden
     routine_texts = [r["task"] for r in unfulfilled_routines if r.get("missed_count", 0) >= 3]
     routine_context = ", ".join(routine_texts)
 
@@ -94,19 +99,25 @@ def start_interaction(user_id: str):
 
     # GPT-Anfrage vorbereiten
     prompt = f"""
-    Du bist ein persönlicher Coach. Erstelle eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin. 1 oder 2 Sätze. 
+    Du bist ein persönlicher Coach. Formuliere eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. 
+    Vermeide die letzten beiden Themen, die kürzlich besprochen wurden:
 
-    Letzte Nachrichten:
-    {context}
+    {", ".join(recent_topics)}
+
+    Fokussiere dich auf andere Themenbereiche, die länger nicht angesprochen wurden oder bisher kaum behandelt wurden.
+    Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin.
+    
+    Letzte Nachrichten (ohne die letzten beiden):
+    {", ".join(remaining_messages)}
 
     Wiederholt unerfüllte Routinen:
     {routine_context}
 
     Beispiel für motivierende Fragen:
     - Hast du eine Lösung für XYZ gefunden?
-    - Möchtest du heute an deiner Routine arbeiten?
-    - Wie lief die Vorbereitung für ABC?
-    - Was steht heute für dich im Vordergrund?
+    - Was möchtest du heute neu angehen?
+    - Gibt es ein Thema, das du bisher vermieden hast?
+    - Wie sieht es mit deiner Routine aus: {routine_context}?
     """
 
     # Konsolen-Log zur Überprüfung des Prompts
@@ -116,14 +127,21 @@ def start_interaction(user_id: str):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=100  # Kürzere Antwort
+            max_tokens=80  # Kürzere Antwort
         )
+
         frage = response.choices[0].message.content.strip()
+
+        # Fallback, falls GPT keine sinnvolle Frage liefert
+        if not frage:
+            frage = "Was möchtest du heute erreichen oder klären?"
+
+        return {"frage": frage}
+
     except Exception as e:
         print(f"Fehler bei der GPT-Anfrage: {e}")
-        frage = "Fehler bei der GPT-Anfrage. Was möchtest du heute erreichen oder klären?"
+        return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
-    return {"frage": frage}
 
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
