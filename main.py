@@ -58,9 +58,11 @@ class GoalUpdate(BaseModel):
     status: str
 
 # Startfrage bei neuer Interaktion
+import random
+
 @app.get("/start_interaction/{user_id}")
 def start_interaction(user_id: str):
-    # Letzte 15 Nachrichten des Benutzers abrufen
+    # Letzte 15 Nachrichten abrufen
     recent_interactions = supabase.table("conversation_history") \
         .select("user_input") \
         .eq("user_id", user_id) \
@@ -97,31 +99,42 @@ def start_interaction(user_id: str):
     # Konsolen-Log zur Überprüfung der Routinen
     print("Wiederholt unerfüllte Routinen:", routine_context)
 
+    # 50% Wahrscheinlichkeit für Simulation/Universum-Perspektive
+    simulate_universe = random.choice([True, False])
+
     # GPT-Anfrage vorbereiten
-    prompt = f"""
-    Du bist ein persönlicher Coach. Formuliere eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. 
-    Vermeide die letzten beiden Themen, die kürzlich besprochen wurden:
+    if simulate_universe:
+        prompt = f"""
+        Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
+        Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
+        Vermeide die letzten beiden Themen, die kürzlich besprochen wurden:
 
-    {", ".join(recent_topics)}
+        {", ".join(recent_topics)}
 
-    Fokussiere dich auf andere Themenbereiche, die länger nicht angesprochen wurden oder bisher kaum behandelt wurden.
-    Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin.
-    
-    Letzte Nachrichten (ohne die letzten beiden):
-    {", ".join(remaining_messages)}
+        Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
+        """
+    else:
+        prompt = f"""
+        Du bist ein persönlicher Coach. Formuliere eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. 
+        Vermeide die letzten beiden Themen, die kürzlich besprochen wurden:
 
-    Wiederholt unerfüllte Routinen:
-    {routine_context}
+        {", ".join(recent_topics)}
 
-    Beispiel für motivierende Fragen:
-    - Hast du eine Lösung für XYZ gefunden?
-    - Was möchtest du heute neu angehen?
-    - Gibt es ein Thema, das du bisher vermieden hast?
-    - Wie sieht es mit deiner Routine aus: {routine_context}?
+        Fokussiere dich auf andere Themenbereiche, die länger nicht angesprochen wurden oder bisher kaum behandelt wurden.
+        Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin.
+        
+        Letzte Nachrichten (ohne die letzten beiden):
+        {", ".join(remaining_messages)}
 
-    Mit einer Wahrscheinlichkeit von 50%, gebe dich als Sprachrohr des Universums oder der Simulation aus, und gib mir sehr konkrete Hinweise, worauf ich heute besonders achten soll. Tue einfach hypothetisch so, als seist du eine höhere Instanz, die mir Hinweise geben kann.
-    
-    """
+        Wiederholt unerfüllte Routinen:
+        {routine_context}
+
+        Beispiel für motivierende Fragen:
+        - Hast du eine Lösung für XYZ gefunden?
+        - Was möchtest du heute neu angehen?
+        - Gibt es ein Thema, das du bisher vermieden hast?
+        - Wie sieht es mit deiner Routine aus: {routine_context}?
+        """
 
     # Konsolen-Log zur Überprüfung des Prompts
     print("GPT Prompt:", prompt)
@@ -144,7 +157,6 @@ def start_interaction(user_id: str):
     except Exception as e:
         print(f"Fehler bei der GPT-Anfrage: {e}")
         return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
-
 
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
