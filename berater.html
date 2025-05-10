@@ -183,9 +183,6 @@ async function loadRoutines() {
   }
 }
 
-  console.log("Struktur nach dem Rendern der Routinen:", routinenBox.innerHTML);
-}
-
 async function updateRoutineStatus(routineId, isChecked) {
   try {
     await fetch(`${API_URL}/routines/update`, {
