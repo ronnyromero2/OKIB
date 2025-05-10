@@ -306,6 +306,8 @@ async function stelleEinstiegsfrage() {
     const res = await fetch(`${API_URL}/start_interaction/1`);
     const data = await res.json();
 
+    console.log("Einstiegsfrage:", data.frage);
+
     if (data.frage) {
       resBox.innerHTML += `<div class='message'><strong>🤖:</strong> ${data.frage}</div>`;
       resBox.scrollTop = resBox.scrollHeight;
