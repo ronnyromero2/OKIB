@@ -237,18 +237,35 @@ async function sendChat() {
     box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
   }
 
-  async function sendeInterviewAntwort() {
-    const antwort = document.getElementById("interviewAntwort").value;
-    document.getElementById("interviewAntwort").value = "";
-    const box = document.getElementById("interviewBox");
-    box.innerHTML += `<div class='message'><strong>Du:</strong> ${antwort}</div>`;
-    await fetch(`${API_URL}/interview`, {
+async function sendeInterviewAntwort() {
+  const antwort = document.getElementById("interviewAntwort").value.trim();
+  const frage = document.getElementById("interviewBox").innerText.trim();
+  const resBox = document.getElementById("interviewBox");
+
+  // Keine Antwort gegeben? Nichts speichern.
+  if (!antwort) {
+    console.log("Keine Antwort gegeben. Nichts wird gespeichert.");
+    return;
+  }
+
+  try {
+    // Speichere die Antwort im conversation_history
+    await fetch(`${API_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ antwort })
+      body: JSON.stringify({ message: `Interviewfrage: ${frage} | Antwort: ${antwort}` })
     });
+
+    resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${antwort}</div>`;
+    resBox.scrollTop = resBox.scrollHeight;
+
+    // Lade die nächste Interviewfrage
     ladeInterviewFrage();
+
+  } catch (error) {
+    console.error("Fehler beim Senden der Interviewantwort:", error);
   }
+}
 
   async function neuesZiel() {
     const titel = document.getElementById("zielTitel").value;
