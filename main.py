@@ -71,27 +71,48 @@ def start_interaction(user_id: str):
     # Nachrichten extrahieren
     messages = [msg["user_input"] for msg in recent_interactions.data if msg["user_input"] != "Starte ein Gespräch"]
 
-    # Falls keine Nachrichten vorhanden sind, eine allgemeine Frage stellen
-    if not messages:
-        return {"frage": "Hey, was beschäftigt dich heute? Gibt es etwas, das du loswerden möchtest?"}
+    # Unerfüllte Routinen abfragen
+    today = datetime.datetime.now().strftime("%A")
+    unfulfilled_routines = supabase.table("routines") \
+        .select("*") \
+        .eq("day", today) \
+        .eq("checked", False) \
+        .execute().data
 
+    # Routinen, die mehrmals nicht erfüllt wurden
+    routine_texts = [r["task"] for r in unfulfilled_routines]
+    routine_context = ", ".join(routine_texts)
+
+    # Konsolen-Log zur Überprüfung
+    print("Letzte Nachrichten:", messages)
+    print("Unerfüllte Routinen:", routine_context)
+    
     # GPT-Anfrage vorbereiten
     context = "\n".join(messages)
-    prompt = f"""
-    Du bist ein persönlicher Mentor und Coach. Basierend auf den letzten Nachrichten des Nutzers, formuliere eine motivierende, offene Frage, die ihn dazu einlädt, weiterzumachen oder ein vorheriges Thema zu vertiefen. Hier sind die letzten Nachrichten:
 
+    prompt = f"""
+    Du bist ein persönlicher Coach. Erstelle eine kurze, motivierende Frage. Berücksichtige dabei die letzten Nachrichten und Routinen, die mehrfach nicht erfüllt wurden. 
+
+    Letzte Nachrichten:
     {context}
+
+    Nicht erfüllte Routinen:
+    {routine_context}
 
     Beispiel für motivierende Fragen:
     - Hast du eine Lösung für XYZ gefunden?
+    - Möchtest du heute an deiner Routine arbeiten?
     - Wie lief die Vorbereitung für ABC?
-    - Möchtest du etwas über DEF erzählen?
+    - Was steht heute für dich im Vordergrund?
     """
 
+    print("GPT Prompt:", prompt)  # Konsolen-Log für die GPT-Anfrage
+    
     try:
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100  # Kürzere Antwort
         )
         frage = response.choices[0].message.content.strip()
     except Exception as e:
@@ -99,6 +120,7 @@ def start_interaction(user_id: str):
         frage = "Was möchtest du heute erreichen oder klären?"
 
     return {"frage": frage}
+
 
 
 # Automatischer Wochen- und Monatsbericht
