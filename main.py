@@ -94,7 +94,7 @@ def start_interaction(user_id: str):
 
     # GPT-Anfrage vorbereiten
     prompt = f"""
-    Du bist ein persönlicher Coach. Erstelle eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. Falls es Routinen gibt, die mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin. 
+    Du bist ein persönlicher Coach. Erstelle eine kurze, motivierende Frage basierend auf den letzten 15 Nachrichten. Falls es Routinen gibt, die in den letzten 8 Wochen mindestens 3-mal nicht erfüllt wurden, weise motivierend darauf hin. 
 
     Letzte Nachrichten:
     {context}
@@ -121,7 +121,7 @@ def start_interaction(user_id: str):
         frage = response.choices[0].message.content.strip()
     except Exception as e:
         print(f"Fehler bei der GPT-Anfrage: {e}")
-        frage = "Was möchtest du heute erreichen oder klären?"
+        frage = "Fehler bei der GPT-Anfrage. Was möchtest du heute erreichen oder klären?"
 
     return {"frage": frage}
 
@@ -265,14 +265,14 @@ def chat(input: ChatInput):
 
     # System- und Benutzerkontext für GPT
     system_message = f"""
-    Du bist ein persönlicher Mentor.
+    Du bist ein persönlicher Mentor und Therapeut.
     Beruf: {beruf}
     Beziehungsziel: {beziehungsziel}
     Prioritäten: {prioritäten}
     Routinen heute: {routines_text}
     Langzeitgedächtnis: {memory_text}
     Letzte Gespräche: {history_text}
-    Antworte kurz, prägnant und motivierend. Maximal 3 Sätze.
+    Antworte kurz und prägnant. Analysiere die Aussagen auch im Kontext der vergangenen Gespräche, Routinen etc. und gebe Handlungsempfehlungen. Maximal 4 Sätze.
     """
 
     try:
