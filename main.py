@@ -260,7 +260,7 @@ def get_interview_question():
         Du hast bereits folgende Fragen gestellt:
         {", ".join(covered_topics)}
 
-        Formuliere eine neue, motivierende Frage, die sich auf Themen wie Ziele, Herausforderungen, Wünsche oder langfristige Pläne bezieht.
+        Formuliere eine neue, motivierende Frage, die sich auf Themen wie Ziele, Herausforderungen, Wünsche oder langfristige Pläne bezieht. Frage auch zu Themenbereichen, zu denen du noch gar nichts weißt.
         Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
         """
 
@@ -276,7 +276,7 @@ def get_interview_question():
 
             # Fallback, falls GPT keine sinnvolle Frage liefert
             if not frage:
-                frage = "Welche Ziele möchtest du in den nächsten Monaten erreichen?"
+                frage = "Welche Ziele möchtest du in den nächsten Monaten erreichen? GPT hat keine sinnvolle Frage geliefert"
 
             return {"frage": frage}
 
