@@ -73,12 +73,6 @@ input[type="checkbox"] {
 <body>
   <h1>🧠 Dein persönlicher KI-Berater</h1>
 
-  <div class="section">
-    <label>Was sind aktuell deine wichtigsten Prioritäten?</label>
-    <input type="text" id="prioritaeten" placeholder="z. B. Fokus, Energie, Klarheit" />
-    <button onclick="updateProfile()">Prioritäten aktualisieren</button>
-  </div>
-
 <div class="section" style="text-align: left;">
   <h2>Deine heutigen Routinen:</h2>
   <div id="routinen" style="text-align: left;">Wird geladen...</div>
@@ -98,13 +92,12 @@ input[type="checkbox"] {
     <button onclick="sendeInterviewAntwort()">Absenden</button>
   </div>
 
-  <div class="section">
-    <h2>Wichtige Erkenntnisse speichern</h2>
-    <input type="text" id="thema" placeholder="Thema" />
-    <textarea id="inhalt" rows="3" placeholder="Kurze Beschreibung"></textarea>
-    <button onclick="speichereMemory()">Speichern ins Lebensgedächtnis</button>
+    <div class="section">
+    <label>Was sind aktuell deine wichtigsten Prioritäten?</label>
+    <input type="text" id="prioritaeten" placeholder="z. B. Fokus, Energie, Klarheit" />
+    <button onclick="updateProfile()">Prioritäten aktualisieren</button>
   </div>
-
+  
   <div class="section">
     <h2>Berichte:</h2>
     <button onclick="ladeBericht('wochenbericht')">✨ Wochenrückblick</button>
@@ -112,6 +105,13 @@ input[type="checkbox"] {
     <div id="berichtBox" class="response"></div>
   </div>
 
+  <div class="section">
+    <h2>Wichtige Erkenntnisse speichern</h2>
+    <input type="text" id="thema" placeholder="Thema" />
+    <textarea id="inhalt" rows="3" placeholder="Kurze Beschreibung"></textarea>
+    <button onclick="speichereMemory()">Speichern ins Lebensgedächtnis</button>
+  </div>
+  
   <div id="zielSektion" class="section collapsed">
     <h2 onclick="toggleZiele()" style="cursor:pointer">Ziele verwalten</h2>
     <input type="text" id="zielTitel" placeholder="Neues Ziel eingeben" />
