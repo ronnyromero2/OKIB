@@ -123,6 +123,15 @@ input[type="checkbox"] {
 <script>
   const API_URL = "https://okib.onrender.com";
 
+function togglePrios() {
+  document.getElementById("priosSektion").classList.toggle("collapsed");
+}
+function toggleBerichte() {
+  document.getElementById("berichteSektion").classList.toggle("collapsed");
+}
+function toggleErkenntnisse() {
+  document.getElementById("erkenntnisseSektion").classList.toggle("collapsed");
+} 
   function toggleZiele() {
     const section = document.getElementById("zielSektion");
     section.classList.toggle("collapsed");
