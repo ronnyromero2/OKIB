@@ -184,7 +184,7 @@ try:
 
     return {"frage": frage}
 
-    except Exception as e:
+except Exception as e:
     print(f"Fehler bei der GPT-Anfrage: {e}")
     return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
