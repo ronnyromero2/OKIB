@@ -80,6 +80,27 @@ input[type="checkbox"] {
   color: #888;
 }
 
+/* Einheitliche Ausblendung */
+#priosSektion.collapsed input,
+#priosSektion.collapsed button {
+  display: none;
+}
+#berichteSektion.collapsed button,
+#berichteSektion.collapsed div {
+  display: none;
+}
+#erkenntnisseSektion.collapsed input,
+#erkenntnisseSektion.collapsed textarea,
+#erkenntnisseSektion.collapsed button {
+  display: none;
+}
+#zielSektion.collapsed input,
+#zielSektion.collapsed button,
+#zielSektion.collapsed div {
+  display: none;
+}
+
+
   </style>
 </head>
 <body>
@@ -105,27 +126,27 @@ input[type="checkbox"] {
   </div>
 
 <div id="priosSektion" class="section collapsed">
-  <h2 onclick="togglePrios()" style="cursor:pointer">Wichtigste Prioritäten</h2>
+  <h2 onclick="toggleSection('priosSektion')" style="cursor:pointer">▶ Wichtigste Prioritäten</h2>
   <input type="text" id="prioritaeten" placeholder="z. B. Fokus, Energie, Klarheit" />
   <button onclick="updateProfile()">Prioritäten aktualisieren</button>
 </div>
   
 <div id="berichteSektion" class="section collapsed">
-  <h2 onclick="toggleBerichte()" style="cursor:pointer">Berichte</h2>
+  <h2 onclick="toggleSection('berichteSektion')" style="cursor:pointer">▶ Berichte</h2>
   <button onclick="ladeBericht('wochenbericht')">✨ Wochenrückblick</button>
   <button onclick="ladeBericht('monatsbericht')">📅 Monatsanalyse</button>
   <div id="berichtBox" class="response"></div>
 </div>
 
 <div id="erkenntnisseSektion" class="section collapsed">
-  <h2 onclick="toggleErkenntnisse()" style="cursor:pointer">Wichtige Erkenntnisse speichern</h2>
+  <h2 onclick="toggleSection('erkenntnisseSektion')" style="cursor:pointer">▶ Wichtige Erkenntnisse speichern</h2>
   <input type="text" id="thema" placeholder="Thema" />
   <textarea id="inhalt" rows="3" placeholder="Kurze Beschreibung"></textarea>
   <button onclick="speichereMemory()">Speichern ins Lebensgedächtnis</button>
 </div>
   
   <div id="zielSektion" class="section collapsed">
-    <h2 onclick="toggleZiele()" style="cursor:pointer">Ziele verwalten</h2>
+    <h2 onclick="toggleSection('zielSektion')" style="cursor:pointer">▶ Ziele verwalten</h2>
     <input type="text" id="zielTitel" placeholder="Neues Ziel eingeben" />
     <input type="text" id="zielDeadline" placeholder="Deadline (optional)" />
     <button onclick="neuesZiel()">Ziel speichern</button>
@@ -373,6 +394,20 @@ async function stelleEinstiegsfrage() {
   }
 
 }
+
+function toggleSection(id) {
+  const section = document.getElementById(id);
+  section.classList.toggle("collapsed");
+
+  // Optional: Pfeil aktualisieren
+  const header = section.querySelector("h2");
+  if (section.classList.contains("collapsed")) {
+    header.innerHTML = header.innerHTML.replace("▼", "▶");
+  } else {
+    header.innerHTML = header.innerHTML.replace("▶", "▼");
+  }
+}
+
 
 </script>
 
