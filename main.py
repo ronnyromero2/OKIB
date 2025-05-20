@@ -167,7 +167,7 @@ def start_interaction(user_id: str):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
-            max_tokens=60
+            max_tokens=60,
             temperature=0.7
         )
 
