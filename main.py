@@ -162,31 +162,31 @@ def start_interaction(user_id: str):
 
     # Konsolen-Log zur Überprüfung des Prompts
     print("GPT Prompt:", prompt)
+try:
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
+        max_tokens=60,
+        temperature=0.7
+    )
 
-    try:
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
-    max_tokens=60,
-    temperature=0.7
-)
-        frage = response.choices[0].message.content.strip()
+    frage = response.choices[0].message.content.strip()
 
-        # Fallback, falls GPT keine sinnvolle Frage liefert
-        if not frage:
-            frage = "Was möchtest du heute erreichen oder klären?"
+    # Fallback, falls GPT keine sinnvolle Frage liefert
+    if not frage:
+        frage = "Was möchtest du heute erreichen oder klären?"
 
-        # Einstiegsfrage als solche markieren und speichern
-        supabase.table("conversation_history").insert({
-            "user_input": f"Einstiegsfrage: {frage}",
-            "timestamp": datetime.datetime.utcnow().isoformat()
-        }).execute()
+    # Einstiegsfrage speichern
+    supabase.table("conversation_history").insert({
+        "user_input": f"Einstiegsfrage: {frage}",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }).execute()
 
-        return {"frage": frage}
+    return {"frage": frage}
 
-    except Exception as e:
-        print(f"Fehler bei der GPT-Anfrage: {e}")
-        return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
+except Exception as e:
+    print(f"Fehler bei der GPT-Anfrage: {e}")
+    return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
