@@ -87,24 +87,16 @@ def start_interaction(user_id: str):
         .limit(30) \
         .execute()
 
-    # Nachrichten extrahieren
     messages = [msg["user_input"] for msg in recent_interactions.data if msg["user_input"] != "Starte ein Gespräch"]
-
-    # Konsolen-Log zur Überprüfung der Nachrichten
     print("Letzte 30 Nachrichten:", messages)
 
-    # Wenn keine Nachrichten vorhanden sind
     if not messages:
         return {"frage": "Was möchtest du heute angehen? Gibt es ein neues Thema, über das du sprechen möchtest?"}
 
-    # Letzte 4 Einstiegsfragen abrufen
     recent_entry_questions = get_recent_entry_questions(user_id)
-
-    # Die letzten 5 Nachrichten ignorieren
     recent_topics = messages[:5]
     remaining_messages = messages[5:]
 
-    # Routinen überprüfen
     today = datetime.datetime.now().strftime("%A")
     unfulfilled_routines = supabase.table("routines") \
         .select("*") \
@@ -112,17 +104,12 @@ def start_interaction(user_id: str):
         .eq("checked", False) \
         .execute().data
 
-    # Routinen, die mindestens 3-mal nicht erfüllt wurden
     routine_texts = [r["task"] for r in unfulfilled_routines if r.get("missed_count", 0) >= 3]
     routine_context = ", ".join(routine_texts)
-
-    # Konsolen-Log zur Überprüfung der Routinen
     print("Wiederholt unerfüllte Routinen:", routine_context)
 
-    # 50% Wahrscheinlichkeit für Simulation/Universum-Perspektive
     simulate_universe = random.choice([True, False])
 
-    # GPT-Anfrage vorbereiten
     if simulate_universe:
         prompt = f"""
         Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
@@ -134,14 +121,9 @@ def start_interaction(user_id: str):
         Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
         """
     else:
-        # Themen, die nicht in den letzten 4 Einstiegsfragen vorkommen
         filtered_messages = [msg for msg in remaining_messages if msg not in recent_entry_questions]
-
-        # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
         if not filtered_messages:
             filtered_messages = ["Langfristige Ziele", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung"]
-
-        # Zufälliges Thema auswählen
         selected_topic = random.choice(filtered_messages)
 
         prompt = f"""
@@ -160,33 +142,31 @@ def start_interaction(user_id: str):
         - Wie sieht es mit deiner Routine aus: {routine_context}?
         """
 
-    # Konsolen-Log zur Überprüfung des Prompts
     print("GPT Prompt:", prompt)
-try:
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
-        max_tokens=60,
-        temperature=0.7
-    )
 
-    frage = response.choices[0].message.content.strip()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
+            max_tokens=60,
+            temperature=0.7
+        )
 
-    # Fallback, falls GPT keine sinnvolle Frage liefert
-    if not frage:
-        frage = "Was möchtest du heute erreichen oder klären?"
+        frage = response.choices[0].message.content.strip()
 
-    # Einstiegsfrage speichern
-    supabase.table("conversation_history").insert({
-        "user_input": f"Einstiegsfrage: {frage}",
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    }).execute()
+        if not frage:
+            frage = "Was möchtest du heute erreichen oder klären?"
 
-    return {"frage": frage}
+        supabase.table("conversation_history").insert({
+            "user_input": f"Einstiegsfrage: {frage}",
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
 
-except Exception as e:
-    print(f"Fehler bei der GPT-Anfrage: {e}")
-    return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
+        return {"frage": frage}
+
+    except Exception as e:
+        print(f"Fehler bei der GPT-Anfrage: {e}")
+        return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
