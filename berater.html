@@ -92,20 +92,20 @@ input[type="checkbox"] {
     <button onclick="sendeInterviewAntwort()">Absenden</button>
   </div>
 
-<div class="section collapsed" id="priosSektion">
+<div id="priosSektion" class="section collapsed">
   <h2 onclick="togglePrios()" style="cursor:pointer">Wichtigste Prioritäten</h2>
   <input type="text" id="prioritaeten" placeholder="z. B. Fokus, Energie, Klarheit" />
   <button onclick="updateProfile()">Prioritäten aktualisieren</button>
 </div>
   
-<div class="section collapsed" id="berichteSektion">
+<div id="berichteSektion" class="section collapsed">
   <h2 onclick="toggleBerichte()" style="cursor:pointer">Berichte</h2>
   <button onclick="ladeBericht('wochenbericht')">✨ Wochenrückblick</button>
   <button onclick="ladeBericht('monatsbericht')">📅 Monatsanalyse</button>
   <div id="berichtBox" class="response"></div>
 </div>
 
-<div class="section collapsed" id="erkenntnisseSektion">
+<div id="erkenntnisseSektion" class="section collapsed">
   <h2 onclick="toggleErkenntnisse()" style="cursor:pointer">Wichtige Erkenntnisse speichern</h2>
   <input type="text" id="thema" placeholder="Thema" />
   <textarea id="inhalt" rows="3" placeholder="Kurze Beschreibung"></textarea>
