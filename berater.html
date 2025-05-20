@@ -36,6 +36,19 @@
       margin-top: 1em;
       white-space: pre-line;
     }
+    #priosSektion.collapsed input,
+#priosSektion.collapsed button {
+  display: none;
+}
+#berichteSektion.collapsed button,
+#berichteSektion.collapsed div {
+  display: none;
+}
+#erkenntnisseSektion.collapsed input,
+#erkenntnisseSektion.collapsed textarea,
+#erkenntnisseSektion.collapsed button {
+  display: none;
+}
     .section { margin-bottom: 2em; }
     .goal { background: #222; padding: 0.5em; border-radius: 4px; margin-top: 0.5em; }
     #chatBox .message { margin-bottom: 1em; }
@@ -66,7 +79,6 @@ input[type="checkbox"] {
   text-decoration: line-through;
   color: #888;
 }
-
 
   </style>
 </head>
