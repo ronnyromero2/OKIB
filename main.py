@@ -164,12 +164,12 @@ def start_interaction(user_id: str):
     print("GPT Prompt:", prompt)
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=80
-        )
-
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
+    max_tokens=60,
+    temperature=0.7
+)
         frage = response.choices[0].message.content.strip()
 
         # Fallback, falls GPT keine sinnvolle Frage liefert
