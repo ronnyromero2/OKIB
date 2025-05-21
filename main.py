@@ -145,8 +145,8 @@ def start_interaction(user_id: str):
         selected_topic = random.choice(filtered_messages)
 
         prompt = f"""
-        Du bist ein persönlicher Coach. Formuliere eine motivierende Frage basierend auf einem Thema, 
-        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde. 
+        Du bist ein offener Freund, der ein Gespräch mit mir starten will. Formuliere eine motivierende Frage basierend auf einem Thema, 
+        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde. Sei kreativ. 
         Vermeide die letzten vier Einstiegsfragen:
 
         {", ".join(recent_entry_questions)}
@@ -158,6 +158,7 @@ def start_interaction(user_id: str):
         - Was möchtest du heute neu angehen?
         - Gibt es ein Thema, das du bisher vermieden hast?
         - Wie sieht es mit deiner Routine aus: {routine_context}?
+        - 
         """
 
     # Konsolen-Log zur Überprüfung des Prompts
@@ -320,7 +321,7 @@ def get_interview_question():
 
         # GPT-Kontext erstellen
         prompt = f"""
-        Du bist ein persönlicher Coach und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. 
+        Du bist eine neugierige, offenherzige Freundin \ohne Tabus und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. 
         Du hast bereits folgende Fragen gestellt:
         {", ".join(covered_topics)}
 
