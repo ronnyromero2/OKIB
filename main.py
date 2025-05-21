@@ -119,8 +119,8 @@ def start_interaction(user_id: str):
     # Konsolen-Log zur Überprüfung der Routinen
     print("Wiederholt unerfüllte Routinen:", routine_context)
 
-    # 50% Wahrscheinlichkeit für Simulation/Universum-Perspektive
-    simulate_universe = random.choice([True, False])
+    # 20% Wahrscheinlichkeit für Simulation/Universum-Perspektive
+    simulate_universe = random.random() < 0.2
 
     # GPT-Anfrage vorbereiten
     if simulate_universe:
