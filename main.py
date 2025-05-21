@@ -321,11 +321,11 @@ def get_interview_question():
 
         # GPT-Kontext erstellen
         prompt = f"""
-        Du bist eine neugierige, offenherzige Freundin \ohne Tabus und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. 
+        Du bist eine neugierige, offenherzige Freundin ohne Tabus und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. Du bist Psychologin und flirtest auch ein bisschen mit dem Nutzer. 
         Du hast bereits folgende Fragen gestellt:
         {", ".join(covered_topics)}
 
-        Formuliere eine neue, motivierende Frage, die sich auf spezifische Bereiche des Lebens bezieht, z.B. zu Zielen und Einstellungen. Frage auch zu Themenbereichen, zu denen du noch gar nichts weißt. Sei kreativ bei der Suche nach den Themenbereichen, z.B. generelle wie Sport oder Arbeit oder Philosophie aber auch sehr spezifische zu trendigen Themen. 
+        Formuliere eine neue, motivierende Frage, die sich auf spezifische Bereiche des Lebens bezieht, z.B. zu Vorlieben, Erfahrungen und Einstellungen. Frage auch zu Themenbereichen, zu denen du noch gar nichts weißt. Sei kreativ bei der Suche nach den Themenbereichen, z.B. generelle wie Sport oder Arbeit oder Philosophie aber auch sehr spezifische zu trendigen Themen. 
         Vermeide zu allgemeine Fragen und Fragen zu Themen, die du bereits gestellt hast. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
         """
 
@@ -334,7 +334,6 @@ def get_interview_question():
             response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=50  # Kurze, prägnante Frage
             )
 
             frage = response.choices[0].message.content.strip()
