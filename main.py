@@ -333,9 +333,25 @@ def get_interview_question():
         Du hast bereits folgende Fragen gestellt:
         {", ".join(covered_topics)}
 
-        Formuliere eine neue, motivierende Frage, die sich auf spezifische Bereiche des Lebens bezieht, z.B. zu Vorlieben, Erfahrungen und Einstellungen. Frage auch zu Themenbereichen, zu denen du noch gar nichts weißt. Sei kreativ bei der Suche nach den Themenbereichen, z.B. generelle wie Sport oder Arbeit oder Philosophie aber auch sehr spezifische zu trendigen Themen. 
-        Vermeide zu allgemeine Fragen und Fragen zu Themen, die du bereits gestellt hast. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
-        """
+        **Wähle eine neue, motivierende Frage, die sich auf UNBEKANNTE und SPEZIFISCHE Bereiche des Lebens des Nutzers bezieht.**
+        **Konzentriere dich dabei auf tiefere Vorlieben, Erfahrungen, Einstellungen, persönliche Herausforderungen, Wünsche oder Visionen.**
+        **Frage NICHT nach berühmten Personen, oberflächlichen Hobbys oder allgemeinen "Was wäre wenn"-Szenarien.**
+
+        **Beispiele für Themenkategorien, die du berücksichtigen kannst:**
+        - Persönliches Wachstum und Selbstreflexion
+        - Vergangene Erfolge oder Misserfolge und deren Lehren
+        - Umgang mit Stress oder schwierigen Emotionen
+        - Kreativität und Selbstausdruck
+        - Zukünftige Ängste oder Hoffnungen
+        - Entscheidungsfindung und Risikobereitschaft
+        - Rolle von Spiritualität oder Sinnhaftigkeit im Leben
+        - Beziehungen (außerhalb des Beziehungsziels)
+        - Umgang mit Geld und Finanzen
+        - sexuelle Vorlieben
+        - Umfeld und Lebensgestaltung
+
+        Sei kreativ bei der Suche nach den Themenbereichen. Vermeide zu allgemeine Fragen und Fragen zu Themen, die du bereits gestellt hast. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
+        """
 
         # GPT-Anfrage
         try:
