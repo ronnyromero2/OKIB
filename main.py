@@ -401,7 +401,7 @@ system_message = f"""
     Antworte **maximal 4 Sätze**. Deine Antworten sollen **knapp, direkt, motivierend und auf konkrete nächste Schritte** ausgerichtet sein.
     """
 
-    try:
+        try:
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
