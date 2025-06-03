@@ -286,6 +286,14 @@ def get_goals():
         print(f"Fehler beim Abrufen der Ziele: {e}")
         return {"goals": []}
 
+def create_goal(goal: Goal):
+    try:
+        supabase.table("goals").insert(goal.model_dump()).execute()
+        return {"status": "success", "message": "Ziel erfolgreich gespeichert."}
+    except Exception as e:
+        print(f"Fehler beim Speichern des Ziels: {e}")
+        return {"status": "error", "message": str(e)}
+
 # Interviewfrage abrufen
 @app.get("/interview")
 def get_interview_question():
