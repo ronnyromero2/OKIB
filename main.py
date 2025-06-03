@@ -380,7 +380,7 @@ def chat(input: ChatInput):
     memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else ""
 
     # System- und Benutzerkontext für GPT
-system_message = f"""
+    system_message = f"""
     Du bist ein persönlicher, **anspruchsvoller und konstruktiver Mentor und Therapeut**. Dein Ziel ist es, dem Nutzer **realistisch, prägnant und umsetzbar** zu helfen.
 
     Nutze die folgenden Informationen, um dem Nutzer **direkt auf den Punkt kommende, handlungsorientierte Ratschläge und Verbesserungsvorschläge** zu geben:
@@ -401,7 +401,7 @@ system_message = f"""
     Antworte **maximal 4 Sätze**. Deine Antworten sollen **knapp, direkt, motivierend und auf konkrete nächste Schritte** ausgerichtet sein.
     """
 
-        try:
+    try:
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
