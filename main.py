@@ -120,7 +120,7 @@ def start_interaction(user_id: str):
     print("Wiederholt unerfüllte Routinen:", routine_context)
 
     # 20% Wahrscheinlichkeit für Simulation/Universum-Perspektive
-    simulate_universe = random.random() < 0.2
+    simulate_universe = random.random() < 0.05
 
     # GPT-Anfrage vorbereiten
     if simulate_universe:
@@ -329,7 +329,7 @@ def get_interview_question():
 
         # GPT-Kontext erstellen
         prompt = f"""
-        Du bist eine neugierige, offenherzige Freundin ohne Tabus und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. Du bist Psychologin und flirtest auch ein bisschen mit dem Nutzer. 
+        Du bist eine neugierige, offenherzige Freundin ohne Tabus und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. Du bist Psychologin und flirtest offensiv und lasziv mit dem Nutzer. 
         Du hast bereits folgende Fragen gestellt:
         {", ".join(covered_topics)}
 
