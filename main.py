@@ -139,27 +139,32 @@ def start_interaction(user_id: str):
 
         # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
         if not filtered_messages:
-            filtered_messages = ["Langfristige Ziele", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung"]
+            filtered_messages = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
+                               "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
+                               "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
+                               "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"] # HIER WURDEN THEMEN HINZUGEFÜGT
 
         # Zufälliges Thema auswählen
         selected_topic = random.choice(filtered_messages)
 
         prompt = f"""
-        Du bist ein offener Freund, der ein Gespräch mit mir starten will. Formuliere eine motivierende Frage basierend auf einem Thema, 
-        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde. Sei kreativ. 
-        Vermeide die letzten vier Einstiegsfragen:
+        Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere eine **motivierende, sehr konkrete und personalisierte** Frage basierend auf einem Thema,
+        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde.
+        **Sei spezifisch und gehe auf die Essenz des Themas ein, anstatt generisch zu fragen.**
+        Vermeide die letzten vier Einstiegsfragen:
 
         {", ".join(recent_entry_questions)}
 
-        Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
+        Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
 
-        Beispiel für motivierende Fragen:
-        - Hast du eine Lösung für XYZ gefunden?
-        - Was möchtest du heute neu angehen?
-        - Gibt es ein Thema, das du bisher vermieden hast?
-        - Wie sieht es mit deiner Routine aus: {routine_context}?
-        - 
-        """
+        **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
+        - Wie genau hast du es geschafft, XYZ zu erreichen? Was war der entscheidende Schritt?
+        - Gibt es eine Gewohnheit, die du schon lange ändern möchtest? Was hält dich davon ab, heute damit zu starten?
+        - Welchen konkreten Plan hast du für dein Ziel, [Ziel aus Profil/Gedächtnis]?
+        - Wie möchtest du heute sicherstellen, dass [Routine aus Kontext] erledigt wird? Gibt es eine Hürde?
+        - Welche Art von Unterstützung bräuchtest du, um dein [Beziehungsziel] in den nächsten Tagen aktiv zu verfolgen?
+        - Was ist die eine Sache, die dich aktuell am meisten beschäftigt und wo du dir konkrete Unterstützung wünschst?
+        """
 
     # Konsolen-Log zur Überprüfung des Prompts
     print("GPT Prompt:", prompt)
