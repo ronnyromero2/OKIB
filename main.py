@@ -446,3 +446,19 @@ def chat(input: ChatInput):
     except Exception as e:
         print(f"Fehler in der Chat-Funktion: {e}")
         return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage."}
+
+@app.get("/bericht/woche")
+def generiere_wochenbericht_manuell():
+    """
+    Generiert einen Wochenbericht auf manuelle Anfrage (für den Frontend-Button).
+    """
+    bericht_inhalt = generiere_rueckblick("Wochen", 7)
+    return {"typ": "Wochenbericht", "inhalt": bericht_inhalt}
+
+@app.get("/bericht/monat")
+def generiere_monatsbericht_manuell():
+    """
+    Generiert einen Monatsbericht auf manuelle Anfrage.
+    """
+    bericht_inhalt = generiere_rueckblick("Monats", 30)
+    return {"typ": "Monatsbericht", "inhalt": bericht_inhalt}
