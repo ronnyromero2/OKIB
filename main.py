@@ -1,3 +1,4 @@
+import datetime
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -255,31 +256,55 @@ def generiere_rueckblick(zeitraum: str, tage: int):
     
 from pydantic import BaseModel
 
-class RoutineUpdate(BaseModel):
+class RoutineUpdate(BaseModel): # Falls noch nicht definiert, sollte sie so aussehen
     id: int
     checked: bool
 
 # Routinen abrufen
 @app.get("/routines")
 def get_routines():
-    today = datetime.datetime.now().strftime("%A")
+    today = datetime.datetime.now().date() # Nur das Datum, nicht die Uhrzeit
 
-    # Routines abrufen
-    routines = supabase.table("routines").select("*").eq("day", today).execute().data
+    # Routines abrufen für den heutigen Tag (OHNE user_id Filter)
+    routines = supabase.table("routines").select("*").eq("day", today.strftime("%A")).execute().data
 
-    # Übergebe `checked`-Status für jede Routine
+    # Angepasste Logik für den 'checked'-Status für die Ausgabe
+    for r in routines:
+        # Konvertiere 'last_checked_date' zu einem date-Objekt, falls es nicht None ist
+        db_last_checked_date = None
+        if r['last_checked_date']:
+            try:
+                # 'date.fromisoformat' erwartet einen String im Format YYYY-MM-DD
+                db_last_checked_date = datetime.date.fromisoformat(r['last_checked_date'])
+            except ValueError:
+                # Fallback, falls das Format nicht passt (z.B. wenn es schon ein datetime Objekt wäre)
+                db_last_checked_date = r['last_checked_date'].date() if isinstance(r['last_checked_date'], datetime.datetime) else None
+
+        # Setze 'checked' auf False, wenn die Routine als erledigt markiert ist, aber das Datum ein vergangener Tag ist
+        if r['checked'] and (db_last_checked_date is None or db_last_checked_date != today):
+            r['checked'] = False
+            # WICHTIG: Wir ändern hier NICHT die Datenbank! Nur die zurückgegebene Repräsentation.
+
     return {"routines": routines}
 
 # Routinenstatus aktualisieren
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
     try:
-        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).execute()
+        checked_status = update.checked
+        # Das aktuelle Datum im ISO-Format (YYYY-MM-DD) oder None, je nach checked_status
+        current_date = datetime.datetime.now().date().isoformat() if checked_status else None
+
+        # Update in der Datenbank (OHNE user_id Filter)
+        supabase.table("routines").update({
+            "checked": checked_status,
+            "last_checked_date": current_date # Setze das Datum
+        }).eq("id", update.id).execute()
+
         return {"status": "success"}
     except Exception as e:
         print(f"Fehler beim Aktualisieren der Routine: {e}")
         return {"status": "error", "message": str(e)}
-
 # Ziele abrufen
 @app.get("/goals")
 def get_goals():
