@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import os
 import datetime
+import random # Hinzugefügt für random.choice
 
 load_dotenv()
 
@@ -39,7 +40,7 @@ class ChatInput(BaseModel):
 class ProfileData(BaseModel):
     beruf: str
     beziehungsziel: str
-    prioritäten: str
+    prioritäten: str # Beibehalten, da dies die Modell-Definition ist
 
 class InterviewAntwort(BaseModel):
     antwort: str
@@ -56,6 +57,38 @@ class Goal(BaseModel):
 class GoalUpdate(BaseModel):
     id: int
     status: str
+
+# Neue Hilfsfunktion zum Summarisieren
+def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, prompt_context: str = "wichtige Punkte und Muster"):
+    """
+    Fasst einen langen Text mit GPT zusammen, um Token zu sparen.
+    Verwendet gpt-3.5-turbo für Kosten- und Geschwindigkeitseffizienz bei der Summarisierung.
+    """
+    if not text_to_summarize.strip():
+        return "" # Nichts zusammenfassen, wenn der Text leer ist
+
+    summary_prompt = f"""
+    Fasse den folgenden Text prägnant zusammen und konzentriere dich auf die {prompt_context}.
+    Beschränke die Zusammenfassung auf maximal {summary_length} Wörter.
+
+    Text:
+    {text_to_summarize}
+    """
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Du bist ein hilfreicher Assistent, der lange Texte zusammenfassen kann."},
+                {"role": "user", "content": summary_prompt}
+            ],
+            max_tokens=summary_length * 2, # Erlaube mehr Tokens für die Ausgabe
+            temperature=0.3 # Eher faktenbasiert
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Fehler beim Zusammenfassen mit GPT: {e}")
+        return "Eine Zusammenfassung konnte nicht erstellt werden." # Fallback
+
 
 def get_recent_entry_questions(user_id: str):
     """
@@ -75,10 +108,8 @@ def get_recent_entry_questions(user_id: str):
     return questions
 
 # Startfrage bei neuer Interaktion
-import random
-
 @app.get("/start_interaction/{user_id}")
-def start_interaction(user_id: str):
+async def start_interaction(user_id: str): # Auch hier async, falls nicht geschehen
     # Letzte 30 Nachrichten abrufen
     recent_interactions = supabase.table("conversation_history") \
         .select("user_input") \
@@ -100,7 +131,7 @@ def start_interaction(user_id: str):
     # Letzte 4 Einstiegsfragen abrufen
     recent_entry_questions = get_recent_entry_questions(user_id)
 
-    # Die letzten 5 Nachrichten ignorieren
+    # Die letzten 5 Nachrichten ignorieren (für die Themenauswahl, nicht für GPT-Ausschluss)
     recent_topics = messages[:5]
     remaining_messages = messages[5:]
 
@@ -110,6 +141,7 @@ def start_interaction(user_id: str):
         .select("*") \
         .eq("day", today) \
         .eq("checked", False) \
+        .eq("user_id", user_id) \
         .execute().data
 
     # Routinen, die mindestens 3-mal nicht erfüllt wurden
@@ -119,7 +151,7 @@ def start_interaction(user_id: str):
     # Konsolen-Log zur Überprüfung der Routinen
     print("Wiederholt unerfüllte Routinen:", routine_context)
 
-    # 20% Wahrscheinlichkeit für Simulation/Universum-Perspektive
+    # 5% Wahrscheinlichkeit für Simulation/Universum-Perspektive
     simulate_universe = random.random() < 0.05
 
     # GPT-Anfrage vorbereiten
@@ -149,22 +181,22 @@ def start_interaction(user_id: str):
 
         prompt = f"""
         Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere eine **motivierende, sehr konkrete und personalisierte** Frage basierend auf einem Thema,
-        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde.
-        **Sei spezifisch und gehe auf die Essenz des Themas ein, anstatt generisch zu fragen.**
-        Vermeide die letzten vier Einstiegsfragen:
+        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde.
+        **Sei spezifisch und gehe auf die Essenz des Themas ein, anstatt generisch zu fragen.**
+        Vermeide die letzten vier Einstiegsfragen:
 
         {", ".join(recent_entry_questions)}
 
-        Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
+        Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
 
-        **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
-        - Wie genau hast du es geschafft, XYZ zu erreichen? Was war der entscheidende Schritt?
-        - Gibt es eine Gewohnheit, die du schon lange ändern möchtest? Was hält dich davon ab, heute damit zu starten?
-        - Welchen konkreten Plan hast du für dein Ziel, [Ziel aus Profil/Gedächtnis]?
-        - Wie möchtest du heute sicherstellen, dass [Routine aus Kontext] erledigt wird? Gibt es eine Hürde?
-        - Welche Art von Unterstützung bräuchtest du, um dein [Beziehungsziel] in den nächsten Tagen aktiv zu verfolgen?
-        - Was ist die eine Sache, die dich aktuell am meisten beschäftigt und wo du dir konkrete Unterstützung wünschst?
-        """
+        **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
+        - Wie genau hast du es geschafft, XYZ zu erreichen? Was war der entscheidende Schritt?
+        - Gibt es eine Gewohnheit, die du schon lange ändern möchtest? Was hält dich davon ab, heute damit zu starten?
+        - Welchen konkreten Plan hast du für dein Ziel, [Ziel aus Profil/Gedächtnis]?
+        - Wie möchtest du heute sicherstellen, dass [Routine aus Kontext] erledigt wird? Gibt es eine Hürde?
+        - Welche Art von Unterstützung bräuchtest du, um dein [Beziehungsziel] in den nächsten Tagen aktiv zu verfolgen?
+        - Was ist die eine Sache, die dich aktuell am meisten beschäftigt und wo du dir konkrete Unterstützung wünschst?
+        """
 
     # Konsolen-Log zur Überprüfung des Prompts
     print("GPT Prompt:", prompt)
@@ -186,7 +218,8 @@ def start_interaction(user_id: str):
         # Einstiegsfrage als solche markieren und speichern
         supabase.table("conversation_history").insert({
             "user_input": f"Einstiegsfrage: {frage}",
-            "timestamp": datetime.datetime.utcnow().isoformat()
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "user_id": user_id # user_id auch hier speichern!
         }).execute()
 
         return {"frage": frage}
@@ -195,51 +228,172 @@ def start_interaction(user_id: str):
         print(f"Fehler bei der GPT-Anfrage: {e}")
         return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
+
+# Chat-Funktion
+@app.post("/chat")
+async def chat(input: ChatInput):
+    try:
+        # 1. Benutzerprofil laden
+        user_id = 1 # Hier wird eine feste user_id verwendet, wie besprochen
+
+        # KORREKTUR: "profile" statt "user_profile" verwenden!
+        profile_data = supabase.table("profile").select("*").eq("id", user_id).execute().data
+
+        # Sicherstellen, dass 'profile' ein Dictionary ist, auch wenn keine Daten gefunden wurden
+        profile = profile_data[0] if profile_data else {}
+
+        # Variablen sicher definieren: Verwende .get() um KeyError zu vermeiden und stelle sicher,
+        # dass die Variablennamen konsistent sind (hier alle ohne Umlaut, passend zum Prompt)
+        beruf = profile.get("beruf", "")
+        beziehungsziel = profile.get("beziehungsziel", "")
+        prioritaeten = profile.get("prioritaeten", "") # <-- Hier ist die Variable ohne Umlaut 'ä'
+
+        # 2. Routinen laden
+        today = datetime.datetime.now().strftime("%A")
+        routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data
+        routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
+
+        # 3. Konversationshistorie laden (reduziert für Chat)
+        history = supabase.table("conversation_history").select("user_input, ai_response").order("timestamp", desc=True).limit(5).execute().data
+        history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else "Bisher keine frühere Konversationshistorie."
+
+        # 4. Langzeitgedächtnis laden (reduziert für Chat)
+        memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
+        memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else "Keine spezifischen Langzeit-Erkenntnisse gespeichert."
+
+        # 5. Systemnachricht zusammenstellen (GPT-4)
+        system_message = f"""
+        Du bist ein persönlicher, **anspruchsvoller und konstruktiver Mentor und Therapeut**. Dein Ziel ist es, dem Nutzer **realistisch, prägnant und umsetzbar** zu helfen.
+
+        Nutze die folgenden Informationen, um dem Nutzer **direkt auf den Punkt kommende, handlungsorientierte Ratschläge und Verbesserungsvorschläge** zu geben:
+
+        Nutzerprofil:
+        Beruf: {beruf}
+        Beziehungsziel: {beziehungsziel}
+        Prioritäten: {prioritaeten}
+        
+        Deine heutigen Routinen:
+        {routines_text}
+
+        Langzeitgedächtnis / Wichtige Erkenntnisse:
+        {memory_text}
+
+        Aktuelle Konversationshistorie (letzte 5 Nachrichten):
+        {history_text}
+
+        **Analysiere die aktuelle Nachricht des Nutzers IMMER im Kontext ALLER verfügbaren Informationen.**
+        **Erkenne dabei auch mögliche Inkonsistenzen (z.B. wenn Routinen nicht eingehalten werden, aber Ziele hochgesteckt sind) oder mangelnden Fortschritt.**
+        **Gebe KEIN allgemeines Lob oder oberflächliche Bestätigungen.**
+        **Fokussiere dich darauf, WO der Nutzer WIRKLICH ansetzen kann, um voranzukommen.**
+        **Stelle konkrete Fragen, schlage spezifische Aktionen vor oder weise auf notwendige Reflexionen hin.**
+
+        Antworte **maximal 4 Sätze**. Deine Antworten sollen **knapp, direkt, motivierend und auf konkrete nächste Schritte** ausgerichtet sein.
+        """
+
+        # 6. Chat-Interaktion mit OpenAI
+        response = client.chat.completions.create(
+            model="gpt-4", # Oder "gpt-3.5-turbo", falls gpt-4 Rate-Limits zu aggressiv sind
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": input.message}
+            ],
+            max_tokens=100, # Begrenze die Länge der Antwort
+            temperature=0.7
+        )
+        reply = response.choices[0].message.content.strip()
+
+        # 7. Nachricht in Historie speichern
+        supabase.table("conversation_history").insert({
+            "user_id": user_id, # user_id hier auch hinzufügen!
+            "user_input": input.message,
+            "ai_response": reply,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
+
+        return {"reply": reply}
+
+    except Exception as e:
+        print(f"Fehler in der Chat-Funktion: {e}")
+        # Gib eine Fehlermeldung zurück, die auch dem Frontend hilft
+        return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal."}
+
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
 def automatischer_bericht():
     heute = datetime.datetime.now()
     wochentag = heute.weekday()  # Montag = 0, Sonntag = 6
-    letzter_tag_des_monats = (heute.replace(day=28) + datetime.timedelta(days=4)).replace(day=1) - datetime.timedelta(days=1)
+    # Korrektur des letzten Tages des Monats (robustere Berechnung)
+    letzter_tag_des_monats = (heute.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
+
 
     if heute.date() == letzter_tag_des_monats.date():
         bericht = generiere_rueckblick("Monats", 30)
         return {"typ": "Monatsbericht", "inhalt": bericht}
-    elif wochentag == 6:
+    elif wochentag == 6: # Sonntag
         bericht = generiere_rueckblick("Wochen", 7)
         return {"typ": "Wochenbericht", "inhalt": bericht}
     else:
         return {"typ": None, "inhalt": None}
 
-# Wochen- und Monatsberichte generieren
+# Wochen- und Monatsberichte generieren (mit Summarisierung)
 def generiere_rueckblick(zeitraum: str, tage: int):
+    user_id = 1 # Annahme einer festen User ID für Berichte
     seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat()
-    gespraeche = supabase.table("conversation_history").select("user_input, ai_response").gte("timestamp", seit).order("timestamp", desc=True).limit(30).execute().data
-    gespraeche_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in gespraeche])
-    ziele = supabase.table("goals").select("titel, status").gte("created_at", seit).order("created_at", desc=True).limit(10).execute().data # Z.B. nur die letzten 10 Ziele
-    ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in ziele])
+
+    # Rufe die gesamte Konversationshistorie für den Zeitraum ab
+    all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", asc=True).execute().data
+    all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", asc=True).execute().data # user_id hier hinzufügen!
+
+
+    # Trenne jüngste Gespräche (z.B. die letzten 10) vom Rest für detaillierte Darstellung
+    recent_gespraeche = all_gespraeche[-10:] if len(all_gespraeche) > 10 else all_gespraeche[:]
+    older_gespraeche = all_gespraeche[:-10] if len(all_gespraeche) > 10 else []
+
+    recent_gespraeche_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in recent_gespraeche])
+
+    summarized_older_history = ""
+    if older_gespraeche:
+        older_history_raw_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in older_gespraeche])
+        summarized_older_history = summarize_text_with_gpt(older_history_raw_text, summary_length=200, prompt_context="die wichtigsten Trends, Herausforderungen und Entscheidungen")
+
+    gespraeche_text_for_prompt = ""
+    if recent_gespraeche_text:
+        gespraeche_text_for_prompt += f"Jüngste Gespräche (letzte {len(recent_gespraeche)}):\n{recent_gespraeche_text}\n"
+    if summarized_older_history:
+        gespraeche_text_for_prompt += f"\nZusammenfassung älterer Gespräche im {zeitraum}:\n{summarized_older_history}\n"
+    if not gespraeche_text_for_prompt:
+        gespraeche_text_for_prompt = "Es gab keine relevanten Gespräche in diesem Zeitraum."
+
+    # Ziele können oft kompakter sein. Wenn sie aber auch zu lang werden, hier auch summarisieren.
+    ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
 
     system = f"""
-    Du bist ein persönlicher Assistent. Schreibe einen Rückblick basierend auf den letzten {zeitraum}, einschließlich Gesprächen und Zielen. Sei konkret und motivierend.
+    Du bist ein persönlicher Assistent. Schreibe einen detaillierten und motivierenden Rückblick basierend auf den letzten {zeitraum}, einschließlich der wichtigsten Punkte aus Gesprächen und dem Status von Zielen.
+    Analysiere Trends, erkenne Fortschritte oder Herausforderungen und gebe konkrete, umsetzbare Vorschläge für die Zukunft.
+    Berücksichtige sowohl die jüngsten detaillierten Gespräche als auch die zusammengefassten älteren Kontexte.
     """
     user = f"""
-    Hier sind die letzten {zeitraum}:
-    
+    Hier sind die Informationen für den {zeitraum}-Rückblick:
+
     Gespräche:
-    {gespraeche_text}
-    
-    Ziele:
+    {gespraeche_text_for_prompt}
+
+    Ziele (Status):
     {ziele_text}
-    
-    Bitte gib einen motivierenden Rückblick.
+
+    Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
+    ```
+    ```
     """
 
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4", # Für den Hauptbericht bleiben wir bei GPT-4
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user}
-        ]
+        ],
+        max_tokens=500, # Begrenze die Ausgabe des Berichts auf z.B. 500 Tokens
+        temperature=0.7
     )
 
     bericht = response.choices[0].message.content
@@ -248,24 +402,23 @@ def generiere_rueckblick(zeitraum: str, tage: int):
     supabase.table("long_term_memory").insert({
         "thema": f"{zeitraum}srückblick",
         "inhalt": bericht,
-        "timestamp": datetime.datetime.utcnow().isoformat()
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "user_id": user_id # user_id auch hier speichern!
     }).execute()
 
     return bericht
     
-from pydantic import BaseModel
-
 class RoutineUpdate(BaseModel):
     id: int
     checked: bool
 
 # Routinen abrufen
-@app.get("/routines")
-def get_routines():
+@app.get("/routines/{user_id}") # user_id im Pfad hinzufügen
+def get_routines(user_id: str):
     today = datetime.datetime.now().strftime("%A")
 
-    # Routines abrufen
-    routines = supabase.table("routines").select("*").eq("day", today).execute().data
+    # Routines abrufen für den spezifischen user_id
+    routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data
 
     # Übergebe `checked`-Status für jede Routine
     return {"routines": routines}
@@ -274,6 +427,9 @@ def get_routines():
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
     try:
+        # Hier sollte der user_id auch berücksichtigt werden, wenn Routinen pro Nutzer sind
+        # Annahme: user_id ist in der Routine selbst gespeichert oder über den Request Header kommt
+        # Für diesen Code hier nehmen wir an, die id reicht für das Update
         supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).execute()
         return {"status": "success"}
     except Exception as e:
@@ -281,29 +437,43 @@ def update_routine_status(update: RoutineUpdate):
         return {"status": "error", "message": str(e)}
 
 # Ziele abrufen
-@app.get("/goals")
-def get_goals():
+@app.get("/goals/{user_id}") # user_id im Pfad hinzufügen
+def get_goals(user_id: str):
     try:
-        goals = supabase.table("goals").select("*").execute().data
+        goals = supabase.table("goals").select("*").eq("user_id", user_id).execute().data
         return {"goals": goals}
     except Exception as e:
         print(f"Fehler beim Abrufen der Ziele: {e}")
         return {"goals": []}
 
-def create_goal(goal: Goal):
+@app.post("/goals")
+def create_goal(goal: Goal, user_id: str = "1"): # Default user_id für Testzwecke
     try:
-        supabase.table("goals").insert(goal.model_dump()).execute()
+        # Füge user_id zum Goal-Objekt hinzu, bevor es eingefügt wird
+        goal_data = goal.model_dump()
+        goal_data["user_id"] = user_id 
+        supabase.table("goals").insert(goal_data).execute()
         return {"status": "success", "message": "Ziel erfolgreich gespeichert."}
     except Exception as e:
         print(f"Fehler beim Speichern des Ziels: {e}")
         return {"status": "error", "message": str(e)}
 
-# Interviewfrage abrufen
-@app.get("/interview")
-def get_interview_question():
+@app.post("/goals/update")
+def update_goal_status(update: GoalUpdate, user_id: str = "1"): # Default user_id für Testzwecke
     try:
-        # Profil abrufen
-        profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
+        # Stelle sicher, dass nur Ziele des spezifischen Nutzers aktualisiert werden können
+        supabase.table("goals").update({"status": update.status}).eq("id", update.id).eq("user_id", user_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Fehler beim Aktualisieren des Ziels: {e}")
+        return {"status": "error", "message": str(e)}
+
+# Interviewfrage abrufen
+@app.get("/interview/{user_id}") # user_id im Pfad hinzufügen
+async def get_interview_question(user_id: str): # Auch hier async, falls nicht geschehen
+    try:
+        # Profil abrufen (nutzt "profile" Tabelle korrekt)
+        profile = supabase.table("profile").select("*").eq("id", user_id).execute().data
 
         # Falls kein Profil vorhanden ist, allgemeine Frage stellen
         if not profile:
@@ -316,13 +486,14 @@ def get_interview_question():
             return {"frage": "Was machst du beruflich oder was interessiert dich beruflich?"}
         elif not user_profile.get("beziehungsziel"):
             return {"frage": "Hast du ein bestimmtes Ziel in deinen Beziehungen, das du verfolgen möchtest?"}
-        elif not user_profile.get("prioritäten"):
+        elif not user_profile.get("prioritaeten"): # Auch hier den Schlüssel ohne Umlaut verwenden
             return {"frage": "Was sind aktuell deine wichtigsten Prioritäten?"}
 
         # Dynamische Interviewfragen nach Erfassung der Basisdaten
         # Letzte 5 Interviewfragen abrufen
         recent_questions = supabase.table("conversation_history") \
             .select("user_input") \
+            .eq("user_id", user_id) \
             .ilike("user_input", "Interviewfrage:%") \
             .order("timestamp", desc=True) \
             .limit(5) \
@@ -337,25 +508,25 @@ def get_interview_question():
         Du hast bereits folgende Fragen gestellt:
         {", ".join(covered_topics)}
 
-        **Wähle eine neue, motivierende Frage, die sich auf UNBEKANNTE und SPEZIFISCHE Bereiche des Lebens des Nutzers bezieht.**
-        **Konzentriere dich dabei auf tiefere Vorlieben, Erfahrungen, Einstellungen, persönliche Herausforderungen, Wünsche oder Visionen.**
-        **Frage NICHT nach berühmten Personen, oberflächlichen Hobbys oder allgemeinen "Was wäre wenn"-Szenarien.**
+        **Wähle eine neue, motivierende Frage, die sich auf UNBEKANNTE und SPEZIFISCHE Bereiche des Lebens des Nutzers bezieht.**
+        **Konzentriere dich dabei auf tiefere Vorlieben, Erfahrungen, Einstellungen, persönliche Herausforderungen, Wünsche oder Visionen.**
+        **Frage NICHT nach berühmten Personen, oberflächlichen Hobbys oder allgemeinen "Was wäre wenn"-Szenarien.**
 
-        **Beispiele für Themenkategorien, die du berücksichtigen kannst:**
-        - Persönliches Wachstum und Selbstreflexion
-        - Vergangene Erfolge oder Misserfolge und deren Lehren
-        - Umgang mit Stress oder schwierigen Emotionen
-        - Kreativität und Selbstausdruck
-        - Zukünftige Ängste oder Hoffnungen
-        - Entscheidungsfindung und Risikobereitschaft
-        - Rolle von Spiritualität oder Sinnhaftigkeit im Leben
-        - Beziehungen (außerhalb des Beziehungsziels)
-        - Umgang mit Geld und Finanzen
+        **Beispiele für Themenkategorien, die du berücksichtigen kannst:**
+        - Persönliches Wachstum und Selbstreflexion
+        - Vergangene Erfolge oder Misserfolge und deren Lehren
+        - Umgang mit Stress oder schwierigen Emotionen
+        - Kreativität und Selbstausdruck
+        - Zukünftige Ängste oder Hoffnungen
+        - Entscheidungsfindung und Risikobereitschaft
+        - Rolle von Spiritualität oder Sinnhaftigkeit im Leben
+        - Beziehungen (außerhalb des Beziehungsziels)
+        - Umgang mit Geld und Finanzen
         - sexuelle Vorlieben
-        - Umfeld und Lebensgestaltung
+        - Umfeld und Lebensgestaltung
 
-        Sei kreativ bei der Suche nach den Themenbereichen. Vermeide zu allgemeine Fragen und Fragen zu Themen, die du bereits gestellt hast. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
-        """
+        Sei kreativ bei der Suche nach den Themenbereichen. Vermeide zu allgemeine Fragen und Fragen zu Themen, die du bereits gestellt hast. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
+        """
 
         # GPT-Anfrage
         try:
@@ -380,98 +551,39 @@ def get_interview_question():
         print(f"Fehler bei der Interviewfrage: {e}")
         return {"frage": "Es gab ein Problem beim Abrufen der Interviewfrage."}
 
-
-# Chat-Funktion
-@app.post("/chat")
-async def chat(input: ChatInput): # Auch hier 'async' hinzufügen, falls nicht geschehen
+# Memory-Endpoint
+@app.post("/memory")
+def create_memory(memory_input: MemoryInput, user_id: str = "1"):
     try:
-        # 1. Benutzerprofil laden
-        user_id = 1 # Hier wird eine feste user_id verwendet, wie besprochen
-
-        # Beachte: Ich habe hier "user_profile" verwendet, falls das der tatsächliche Tabellenname ist.
-        # Wenn dein Tabellenname wirklich "profile" ist, behalte "profile" bei.
-        profile_data = supabase.table("user_profile").select("*").eq("id", user_id).execute().data
-
-        # Sicherstellen, dass 'profile' ein Dictionary ist, auch wenn keine Daten gefunden wurden
-        profile = profile_data[0] if profile_data else {}
-
-        # Variablen sicher definieren: Verwende .get() um KeyError zu vermeiden und stelle sicher,
-        # dass die Variablennamen konsistent sind (z.B. alle ohne Umlaut, wenn sie im Prompt so genutzt werden)
-        beruf = profile.get("beruf", "")
-        beziehungsziel = profile.get("beziehungsziel", "")
-        # KORREKTUR: Variable hier OHNE Umlaut 'ä' definieren, passend zur Nutzung im Prompt
-        prioritaeten = profile.get("prioritaeten", "") # <-- HIER IST DIE WICHTIGE ÄNDERUNG UND FEHLERBEHEBUNG
-
-        # 2. Routinen laden
-        today = datetime.datetime.now().strftime("%A")
-        routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data # user_id hier hinzufügen!
-        routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
-
-        # 3. Konversationshistorie laden (reduziert)
-        history = supabase.table("conversation_history").select("user_input, ai_response").order("timestamp", desc=True).limit(5).execute().data
-        history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else "Bisher keine frühere Konversationshistorie."
-
-        # 4. Langzeitgedächtnis laden (reduziert)
-        memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
-        memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else "Keine spezifischen Langzeit-Erkenntnisse gespeichert."
-
-        # 5. Systemnachricht zusammenstellen (GPT-4)
-        system_message = f"""
-        Du bist ein persönlicher, **anspruchsvoller und konstruktiver Mentor und Therapeut**. Dein Ziel ist es, dem Nutzer **realistisch, prägnant und umsetzbar** zu helfen.
-
-        Nutze die folgenden Informationen, um dem Nutzer **direkt auf den Punkt kommende, handlungsorientierte Ratschläge und Verbesserungsvorschläge** zu geben:
-
-        Beruf: {beruf}
-        Beziehungsziel: {beziehungsziel}
-        Prioritäten: {prioritaeten}
-        Routinen heute: {routines_text}
-        Langzeitgedächtnis: {memory_text}
-        Letzte Gespräche: {history_text}
-
-        **Analysiere die aktuelle Nachricht des Nutzers IMMER im Kontext ALLER verfügbaren Informationen.**
-        **Erkenne dabei auch mögliche Inkonsistenzen (z.B. wenn Routinen nicht eingehalten werden, aber Ziele hochgesteckt sind) oder mangelnden Fortschritt.**
-        **Gebe KEIN allgemeines Lob oder oberflächliche Bestätigungen.**
-        **Fokussiere dich darauf, WO der Nutzer WIRKLICH ansetzen kann, um voranzukommen.**
-        **Stelle konkrete Fragen, schlage spezifische Aktionen vor oder weise auf notwendige Reflexionen hin.**
-
-        Antworte **maximal 4 Sätze**. Deine Antworten sollen **knapp, direkt, motivierend und auf konkrete nächste Schritte** ausgerichtet sein.
-        """
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": input.message}
-            ],
-            max_tokens=100,
-        )
-
-        ai_response = response.choices[0].message.content.strip()
-
-        supabase.table("conversation_history").insert({
-            "user_id": user_id, # user_id hier auch hinzufügen!
-            "user_input": input.message,
-            "ai_response": ai_response,
+        supabase.table("long_term_memory").insert({
+            "user_id": user_id,
+            "thema": memory_input.thema,
+            "inhalt": memory_input.inhalt,
             "timestamp": datetime.datetime.utcnow().isoformat()
         }).execute()
-
-        return {"reply": ai_response}
-
+        return {"status": "success", "message": "Erinnerung erfolgreich gespeichert."}
     except Exception as e:
-        print(f"Fehler in der Chat-Funktion: {e}")
-        return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal."}
+        print(f"Fehler beim Speichern der Erinnerung: {e}")
+        return {"status": "error", "message": str(e)}
 
-@app.get("/bericht/woche")
-def generiere_wochenbericht_manuell():
-    """
-    Generiert einen Wochenbericht auf manuelle Anfrage (für den Frontend-Button).
-    """
-    bericht_inhalt = generiere_rueckblick("Wochen", 7)
-    return {"typ": "Wochenbericht", "inhalt": bericht_inhalt}
+# Profil-Endpoint
+@app.post("/profile")
+def create_profile(profile_data: ProfileData, user_id: str = "1"):
+    try:
+        # Überprüfen, ob bereits ein Profil für diesen user_id existiert
+        existing_profile = supabase.table("profile").select("id").eq("id", user_id).execute().data
+        
+        profile_dict = profile_data.model_dump()
+        profile_dict["id"] = user_id # Stelle sicher, dass die user_id mitgespeichert wird
 
-@app.get("/bericht/monat")
-def generiere_monatsbericht_manuell():
-    """
-    Generiert einen Monatsbericht auf manuelle Anfrage.
-    """
-    bericht_inhalt = generiere_rueckblick("Monats", 30)
-    return {"typ": "Monatsbericht", "inhalt": bericht_inhalt}
+        if existing_profile:
+            # Aktualisieren des bestehenden Profils
+            supabase.table("profile").update(profile_dict).eq("id", user_id).execute()
+            return {"status": "success", "message": "Profil erfolgreich aktualisiert."}
+        else:
+            # Neues Profil anlegen
+            supabase.table("profile").insert(profile_dict).execute()
+            return {"status": "success", "message": "Profil erfolgreich erstellt."}
+    except Exception as e:
+        print(f"Fehler beim Speichern des Profils: {e}")
+        return {"status": "error", "message": str(e)}
