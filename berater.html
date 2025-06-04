@@ -155,6 +155,7 @@ input[type="checkbox"] {
 
 <script>
   const API_URL = "https://okib.onrender.com";
+  const USER_ID = 1;
 
 function togglePrios() {
   document.getElementById("priosSektion").classList.toggle("collapsed");
@@ -291,8 +292,18 @@ async function sendeInterviewAntwort() {
   }
 
   try {
-    // Speichere die Antwort im conversation_history
-    await fetch(`${API_URL}/chat`, {
+    // Speichere die Antwort im conversation_historyconst USER_ID = 1; 
+
+async function ladeInterviewFrage() {
+  // Hier wird die user_id in den URL-Pfad eingefügt
+  const res = await fetch(`${API_URL}/interview/${USER_ID}`); 
+  const data = await res.json();
+  const box = document.getElementById("interviewBox");
+  // Optional: Vorherige Frage leeren, damit nicht immer "Frage: undefined" bleibt
+  box.innerHTML = ''; 
+  box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
+}
+  
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: `Interviewfrage: ${frage} | Antwort: ${antwort}` })
