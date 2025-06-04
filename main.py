@@ -139,10 +139,10 @@ def start_interaction(user_id: str):
 
         # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
         if not filtered_messages:
-            filtered_messages = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
-                               "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
-                               "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
-                               "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"] # HIER WURDEN THEMEN HINZUGEFÜGT
+            filtered_messages = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
+                                 "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
+                                 "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
+                                 "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"] # HIER WURDEN THEMEN HINZUGEFÜGT
 
         # Zufälliges Thema auswählen
         selected_topic = random.choice(filtered_messages)
