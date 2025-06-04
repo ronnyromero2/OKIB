@@ -182,60 +182,66 @@ function toggleErkenntnisse() {
   }
 
 async function loadRoutines() {
-  const res = await fetch(`${API_URL}/routines`);
-  const data = await res.json();
-  const routinenBox = document.getElementById("routinen");
-  routinenBox.innerHTML = ""; // Vorher leeren
+  const routinenBox = document.getElementById("routinen");
+  routinenBox.innerHTML = "Lade Routinen...";
 
-  if (data.routines && data.routines.length > 0) {
-    data.routines.forEach((routine) => {
-      const routineDiv = document.createElement("div");
-      routineDiv.classList.add("routine");
+  try {
+    // HIER wird USER_ID zur URL hinzugefügt!
+    const res = await fetch(`${API_URL}/routines/${USER_ID}`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    const data = await res.json();
+    routinenBox.innerHTML = "";
 
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = routine.checked;
-      checkbox.id = `routine_${routine.id}`;
+    if (data.routines && data.routines.length > 0) {
+      data.routines.forEach((routine) => {
+        const routineDiv = document.createElement("div");
+        routineDiv.classList.add("routine");
 
-      // Event-Listener für Checkbox
-      checkbox.addEventListener("change", function () {
-        const isChecked = checkbox.checked;
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = routine.checked;
+        checkbox.id = `routine_${routine.id}`;
 
-        // Zustand in der Datenbank speichern
-        updateRoutineStatus(routine.id, isChecked);
+        checkbox.addEventListener("change", function () {
+          const isChecked = checkbox.checked;
+          updateRoutineStatus(routine.id, isChecked);
+          routineDiv.classList.toggle("done", isChecked);
+        });
 
-        // Klasse "done" hinzufügen/entfernen
-        routineDiv.classList.toggle("done", isChecked);
-      });
+        const label = document.createElement("label");
+        label.htmlFor = `routine_${routine.id}`;
+        label.textContent = routine.task;
 
-      const label = document.createElement("label");
-      label.htmlFor = `routine_${routine.id}`;
-      label.textContent = routine.task;
+        if (routine.checked) {
+          routineDiv.classList.add("done");
+        }
 
-      // Initialer Zustand – durchstreichen, falls gecheckt
-      if (routine.checked) {
-        routineDiv.classList.add("done");
-      }
-
-      routineDiv.appendChild(checkbox);
-      routineDiv.appendChild(label);
-      routinenBox.appendChild(routineDiv);
-    });
-  } else {
-    routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
-  }
+        routineDiv.appendChild(checkbox);
+        routineDiv.appendChild(label);
+        routinenBox.appendChild(routineDiv);
+      });
+    } else {
+      routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
+    }
+  } catch (error) {
+    console.error("Fehler beim Laden der Routinen:", error);
+    routinenBox.innerText = "Fehler beim Laden der Routinen. Bitte versuche es später noch einmal.";
+  }
 }
 
 async function updateRoutineStatus(routineId, isChecked) {
-  try {
-    await fetch(`${API_URL}/routines/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: routineId, checked: isChecked })
-    });
-  } catch (error) {
-    console.error("Fehler beim Aktualisieren des Routine-Status:", error);
-  }
+  try {
+    // Hier ist der POST-Endpunkt für Routinen, dieser hatte keine user_id im Pfad
+    await fetch(`${API_URL}/routines/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: routineId, checked: isChecked })
+    });
+  } catch (error) {
+    console.error("Fehler beim Aktualisieren des Routine-Status:", error);
+  }
 }
 
 async function sendChat() {
@@ -323,32 +329,52 @@ async function sendChat() {
     ladeZiele();
   }
 
-  async function ladeZiele() {
-    const res = await fetch(`${API_URL}/goals`);
-    const data = await res.json();
-    const liste = document.getElementById("zielListe");
-    liste.innerHTML = "";
-    data.goals.forEach(goal => {
-      const div = document.createElement("div");
-      div.className = "goal";
-      div.innerHTML = `<strong>${goal.titel}</strong> [${goal.status}] <br><small>${goal.deadline || ""}</small><br>
-        <select onchange="updateZiel(${goal.id}, this.value)">
-          <option value="offen" ${goal.status === "offen" ? "selected" : ""}>offen</option>
-          <option value="erledigt" ${goal.status === "erledigt" ? "selected" : ""}>erledigt</option>
-          <option value="verschoben" ${goal.status === "verschoben" ? "selected" : ""}>verschoben</option>
-        </select>`;
-      liste.appendChild(div);
-    });
-  }
+  async function ladeZiele() {
+    const liste = document.getElementById("zielListe");
+    liste.innerHTML = "Lade Ziele...";
 
-  async function updateZiel(id, status) {
-    await fetch(`${API_URL}/goals/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status })
-    });
-    ladeZiele();
-  }
+    try {
+      // HIER wird USER_ID zur URL hinzugefügt!
+      const res = await fetch(`${API_URL}/goals/${USER_ID}`);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      const data = await res.json();
+      liste.innerHTML = "";
+
+      if (data.goals && data.goals.length > 0) {
+        data.goals.forEach(goal => {
+          const div = document.createElement("div");
+          div.className = "goal";
+          div.innerHTML = `<strong>${goal.titel}</strong> [${goal.status}] <br><small>${goal.deadline || ""}</small><br>
+            <select onchange="updateZiel(${goal.id}, this.value)">
+              <option value="offen" ${goal.status === "offen" ? "selected" : ""}>offen</option>
+              <option value="erledigt" ${goal.status === "erledigt" ? "selected" : ""}>erledigt</option>
+              <option value="verschoben" ${goal.status === "verschoben" ? "selected" : ""}>verschoben</option>
+            </select>`;
+          liste.appendChild(div);
+        });
+      } else {
+        liste.innerText = "Noch keine Ziele vorhanden.";
+      }
+    } catch (error) {
+      console.error("Fehler beim Laden der Ziele:", error);
+      liste.innerText = "Fehler beim Laden der Ziele. Bitte versuche es später noch einmal.";
+    }
+  }
+
+  async function updateZiel(id, status) {
+    try {
+      await fetch(`${API_URL}/goals/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status })
+      });
+      ladeZiele();
+    } catch (error) {
+      console.error("Fehler beim Aktualisieren des Ziels:", error);
+    }
+  }
 
 async function ladeBericht(typ) {
     let endpoint = "";
@@ -400,14 +426,6 @@ async function stelleEinstiegsfrage() {
     console.error("Fehler beim Abrufen der Einleitungsfrage:", error);
   }
 }
-
-  // Initialisierung beim Laden der Seite
-  window.addEventListener('DOMContentLoaded', () => {
-    loadRoutines();
-    ladeInterviewFrage();
-    ladeZiele();
-    stelleEinstiegsfrage(); // Einstiegsfrage stellen
-    zeigeAutomatischenBericht(); // Automatischen Bericht anzeigen
   });
   async function zeigeAutomatischenBericht() {
   const res = await fetch(`${API_URL}/bericht/automatisch`);
@@ -433,7 +451,13 @@ function toggleSection(id) {
   }
 }
 
-
+  window.addEventListener('DOMContentLoaded', () => {
+    loadRoutines();
+    ladeInterviewFrage(); // Diese Funktion wurde bereits mit USER_ID aufgerufen, ist OK
+    ladeZiele();
+    stelleEinstiegsfrage();
+    zeigeAutomatischenBericht();
+  });
 </script>
 
 </body>
