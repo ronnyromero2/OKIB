@@ -214,10 +214,9 @@ def automatischer_bericht():
 # Wochen- und Monatsberichte generieren
 def generiere_rueckblick(zeitraum: str, tage: int):
     seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat()
-    gespraeche = supabase.table("conversation_history").select("*").gte("timestamp", seit).execute().data
-    ziele = supabase.table("goals").select("*").gte("created_at", seit).execute().data
-
+    gespraeche = supabase.table("conversation_history").select("user_input, ai_response").gte("timestamp", seit).order("timestamp", desc=True).limit(30).execute().data
     gespraeche_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in gespraeche])
+    ziele = supabase.table("goals").select("titel, status").gte("created_at", seit).order("created_at", desc=True).limit(10).execute().data # Z.B. nur die letzten 10 Ziele
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in ziele])
 
     system = f"""
@@ -394,10 +393,10 @@ def chat(input: ChatInput):
     routines = supabase.table("routines").select("*").eq("day", today).execute().data
     routines_text = "\n".join([f"{r['task']}" for r in routines]) if routines else "Heute stehen keine speziellen Aufgaben an."
 
-    history = supabase.table("conversation_history").select("*").order("timestamp", desc=True).limit(10).execute().data
+    history = supabase.table("conversation_history").select("*").order("timestamp", desc=True).limit(5).execute().data
     history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else ""
 
-    memory = supabase.table("long_term_memory").select("*").order("timestamp").execute().data
+    memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data # limit(10) oder weniger, je nach Länge der Einträge
     memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else ""
 
     # System- und Benutzerkontext für GPT
