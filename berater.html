@@ -426,7 +426,7 @@ async function stelleEinstiegsfrage() {
     console.error("Fehler beim Abrufen der Einleitungsfrage:", error);
   }
 }
-  });
+  
   async function zeigeAutomatischenBericht() {
   const res = await fetch(`${API_URL}/bericht/automatisch`);
   const data = await res.json();
