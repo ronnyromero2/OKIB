@@ -383,58 +383,72 @@ def get_interview_question():
 
 # Chat-Funktion
 @app.post("/chat")
-def chat(input: ChatInput):
-    profile = supabase.table("profile").select("*").order("id", desc=True).limit(1).execute().data
-    beruf = profile[0]["beruf"] if profile else ""
-    beziehungsziel = profile[0]["beziehungsziel"] if profile else ""
-    prioritäten = profile[0]["prioritäten"] if profile else ""
-
-    today = datetime.datetime.now().strftime("%A")
-    routines = supabase.table("routines").select("*").eq("day", today).execute().data
-    routines_text = "\n".join([f"{r['task']}" for r in routines]) if routines else "Heute stehen keine speziellen Aufgaben an."
-
-    history = supabase.table("conversation_history").select("*").order("timestamp", desc=True).limit(5).execute().data
-    history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else ""
-
-    memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data # limit(10) oder weniger, je nach Länge der Einträge
-    memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else ""
-
-    # System- und Benutzerkontext für GPT
-    system_message = f"""
-    Du bist ein persönlicher, **anspruchsvoller und konstruktiver Mentor und Therapeut**. Dein Ziel ist es, dem Nutzer **realistisch, prägnant und umsetzbar** zu helfen.
-
-    Nutze die folgenden Informationen, um dem Nutzer **direkt auf den Punkt kommende, handlungsorientierte Ratschläge und Verbesserungsvorschläge** zu geben:
-
-    Beruf: {beruf}
-    Beziehungsziel: {beziehungsziel}
-    Prioritäten: {prioritaeten}
-    Routinen heute: {routines_text}
-    Langzeitgedächtnis: {memory_text}
-    Letzte Gespräche: {history_text}
-
-    **Analysiere die aktuelle Nachricht des Nutzers IMMER im Kontext ALLER verfügbaren Informationen.**
-    **Erkenne dabei auch mögliche Inkonsistenzen (z.B. wenn Routinen nicht eingehalten werden, aber Ziele hochgesteckt sind) oder mangelnden Fortschritt.**
-    **Gebe KEIN allgemeines Lob oder oberflächliche Bestätigungen.**
-    **Fokussiere dich darauf, WO der Nutzer WIRKLICH ansetzen kann, um voranzukommen.**
-    **Stelle konkrete Fragen, schlage spezifische Aktionen vor oder weise auf notwendige Reflexionen hin.**
-
-    Antworte **maximal 4 Sätze**. Deine Antworten sollen **knapp, direkt, motivierend und auf konkrete nächste Schritte** ausgerichtet sein.
-    """
-
+async def chat(input: ChatInput): # Auch hier 'async' hinzufügen, falls nicht geschehen
     try:
+        # 1. Benutzerprofil laden
+        user_id = 1 # Hier wird eine feste user_id verwendet, wie besprochen
+
+        # Beachte: Ich habe hier "user_profile" verwendet, falls das der tatsächliche Tabellenname ist.
+        # Wenn dein Tabellenname wirklich "profile" ist, behalte "profile" bei.
+        profile_data = supabase.table("user_profile").select("*").eq("id", user_id).execute().data
+
+        # Sicherstellen, dass 'profile' ein Dictionary ist, auch wenn keine Daten gefunden wurden
+        profile = profile_data[0] if profile_data else {}
+
+        # Variablen sicher definieren: Verwende .get() um KeyError zu vermeiden und stelle sicher,
+        # dass die Variablennamen konsistent sind (z.B. alle ohne Umlaut, wenn sie im Prompt so genutzt werden)
+        beruf = profile.get("beruf", "")
+        beziehungsziel = profile.get("beziehungsziel", "")
+        # KORREKTUR: Variable hier OHNE Umlaut 'ä' definieren, passend zur Nutzung im Prompt
+        prioritaeten = profile.get("prioritaeten", "") # <-- HIER IST DIE WICHTIGE ÄNDERUNG UND FEHLERBEHEBUNG
+
+        # 2. Routinen laden
+        today = datetime.datetime.now().strftime("%A")
+        routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data # user_id hier hinzufügen!
+        routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
+
+        # 3. Konversationshistorie laden (reduziert)
+        history = supabase.table("conversation_history").select("user_input, ai_response").order("timestamp", desc=True).limit(5).execute().data
+        history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else "Bisher keine frühere Konversationshistorie."
+
+        # 4. Langzeitgedächtnis laden (reduziert)
+        memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
+        memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else "Keine spezifischen Langzeit-Erkenntnisse gespeichert."
+
+        # 5. Systemnachricht zusammenstellen (GPT-4)
+        system_message = f"""
+        Du bist ein persönlicher, **anspruchsvoller und konstruktiver Mentor und Therapeut**. Dein Ziel ist es, dem Nutzer **realistisch, prägnant und umsetzbar** zu helfen.
+
+        Nutze die folgenden Informationen, um dem Nutzer **direkt auf den Punkt kommende, handlungsorientierte Ratschläge und Verbesserungsvorschläge** zu geben:
+
+        Beruf: {beruf}
+        Beziehungsziel: {beziehungsziel}
+        Prioritäten: {prioritaeten}
+        Routinen heute: {routines_text}
+        Langzeitgedächtnis: {memory_text}
+        Letzte Gespräche: {history_text}
+
+        **Analysiere die aktuelle Nachricht des Nutzers IMMER im Kontext ALLER verfügbaren Informationen.**
+        **Erkenne dabei auch mögliche Inkonsistenzen (z.B. wenn Routinen nicht eingehalten werden, aber Ziele hochgesteckt sind) oder mangelnden Fortschritt.**
+        **Gebe KEIN allgemeines Lob oder oberflächliche Bestätigungen.**
+        **Fokussiere dich darauf, WO der Nutzer WIRKLICH ansetzen kann, um voranzukommen.**
+        **Stelle konkrete Fragen, schlage spezifische Aktionen vor oder weise auf notwendige Reflexionen hin.**
+
+        Antworte **maximal 4 Sätze**. Deine Antworten sollen **knapp, direkt, motivierend und auf konkrete nächste Schritte** ausgerichtet sein.
+        """
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": input.message}
             ],
-            max_tokens=100,  # Begrenze die Antwort auf maximal 100 Tokens
+            max_tokens=100,
         )
 
         ai_response = response.choices[0].message.content.strip()
 
-        # Speichern in der Datenbank
         supabase.table("conversation_history").insert({
+            "user_id": user_id, # user_id hier auch hinzufügen!
             "user_input": input.message,
             "ai_response": ai_response,
             "timestamp": datetime.datetime.utcnow().isoformat()
@@ -444,7 +458,7 @@ def chat(input: ChatInput):
 
     except Exception as e:
         print(f"Fehler in der Chat-Funktion: {e}")
-        return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage."}
+        return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal."}
 
 @app.get("/bericht/woche")
 def generiere_wochenbericht_manuell():
