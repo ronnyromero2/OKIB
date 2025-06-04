@@ -402,7 +402,7 @@ async def chat(input: ChatInput): # Auch hier 'async' hinzufügen, falls nicht g
 
         # 2. Routinen laden
         today = datetime.datetime.now().strftime("%A")
-        routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data # user_id hier hinzufügen!
+        routines = supabase.table("routines").select("*").eq("day", today).execute().data
         routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
 
         # 3. Konversationshistorie laden (reduziert)
