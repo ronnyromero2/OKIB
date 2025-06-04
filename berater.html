@@ -118,12 +118,12 @@ input[type="checkbox"] {
     <button onclick="sendChat()">Absenden</button>
   </div>
 
-  <div class="section">
-    <h2>Interview-Frage:</h2>
-    <div id="interviewBox" class="response"></div>
-    <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." onkeydown="if(event.key==='Enter'){event.preventDefault(); sendeInterviewAntwort()}" />
-    <button onclick="sendeInterviewAntwort()">Absenden</button>
-  </div>
+  <div class="section">
+    <h2>Interview-Frage:</h2>
+    <div id="interviewBox" class="response"></div>
+    <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." onkeydown="if(event.key==='Enter'){event.preventDefault(); sendeInterviewAntwort()}" />
+    <button onclick="sendeInterviewAntwort()">Absenden</button>
+  </div>
 
 <div id="priosSektion" class="section collapsed">
   <h2 onclick="toggleSection('priosSektion')" style="cursor:pointer">▶ Wichtigste Prioritäten</h2>
@@ -273,53 +273,45 @@ async function sendChat() {
     alert("✅ Erkenntnis gespeichert");
   }
 
-  async function ladeInterviewFrage() {
-    const res = await fetch(`${API_URL}/interview`);
-    const data = await res.json();
-    const box = document.getElementById("interviewBox");
-    box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
-  }
+  // Korrigierte ladeInterviewFrage Funktion
+  async function ladeInterviewFrage() {
+    const res = await fetch(`${API_URL}/interview/${USER_ID}`); // HIER IST DIE KORREKTE ÄNDERUNG MIT USER_ID
+    const data = await res.json();
+    const box = document.getElementById("interviewBox");
+    box.innerHTML = ''; // Box vor dem Hinzufügen der neuen Frage leeren
+    box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
+  }
 
-async function sendeInterviewAntwort() {
-  const antwort = document.getElementById("interviewAntwort").value.trim();
-  const frage = document.getElementById("interviewBox").innerText.trim();
-  const resBox = document.getElementById("interviewBox");
+  // Korrigierte sendeInterviewAntwort Funktion
+  async function sendeInterviewAntwort() {
+    const antwort = document.getElementById("interviewAntwort").value.trim();
+    const frage = document.getElementById("interviewBox").innerText.trim();
+    const resBox = document.getElementById("interviewBox");
 
-  // Keine Antwort gegeben? Nichts speichern.
-  if (!antwort) {
-    console.log("Keine Antwort gegeben. Nichts wird gespeichert.");
-    return;
-  }
+    // Keine Antwort gegeben? Nichts speichern.
+    if (!antwort) {
+      console.log("Keine Antwort gegeben. Nichts wird gespeichert.");
+      return;
+    }
 
-  try {
-    // Speichere die Antwort im conversation_historyconst USER_ID = 1; 
+    try {
+      // Speichere die Antwort im conversation_history
+      await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `Interviewfrage: ${frage} | Antwort: ${antwort}` })
+      });
 
-async function ladeInterviewFrage() {
-  // Hier wird die user_id in den URL-Pfad eingefügt
-  const res = await fetch(`${API_URL}/interview/${USER_ID}`); 
-  const data = await res.json();
-  const box = document.getElementById("interviewBox");
-  // Optional: Vorherige Frage leeren, damit nicht immer "Frage: undefined" bleibt
-  box.innerHTML = ''; 
-  box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
-}
-  
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: `Interviewfrage: ${frage} | Antwort: ${antwort}` })
-    });
+      resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${antwort}</div>`;
+      resBox.scrollTop = resBox.scrollHeight;
 
-    resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${antwort}</div>`;
-    resBox.scrollTop = resBox.scrollHeight;
+      // Lade die nächste Interviewfrage
+      ladeInterviewFrage();
 
-    // Lade die nächste Interviewfrage
-    ladeInterviewFrage();
-
-  } catch (error) {
-    console.error("Fehler beim Senden der Interviewantwort:", error);
-  }
-}
-
+    } catch (error) {
+      console.error("Fehler beim Senden der Interviewantwort:", error);
+    }
+  }
   async function neuesZiel() {
     const titel = document.getElementById("zielTitel").value;
     const deadline = document.getElementById("zielDeadline").value;
