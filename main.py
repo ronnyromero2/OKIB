@@ -8,6 +8,7 @@ from supabase import create_client, Client
 import os
 import datetime
 import random # Hinzugefügt für random.choice
+import json
 
 load_dotenv()
 
@@ -248,7 +249,78 @@ async def chat(input: ChatInput):
         beziehungsziel = profile.get("beziehungsziel", "")
         prioritaeten = profile.get("prioritaeten", "") # <-- Hier ist die Variable ohne Umlaut 'ä'
 
-        # 2. Routinen laden
+        # NEUE LOGIK START: Versuche, Profilinformationen zu extrahieren und zu aktualisieren
+        # Erkennen, ob die Nachricht eine Interview-Antwort ist
+        if input.message.startswith("Interviewfrage:"):
+            # Der Prompt für GPT, um die Information zu extrahieren
+            extraction_prompt = f"""
+            Der Benutzer hat auf eine Interviewfrage geantwortet. Extrahiere die relevanten Profilinformationen (beruf, beziehungsziel, prioritaeten) aus der Antwort.
+            Falls eine Information nicht klar ist oder nicht gegeben wurde, lass sie leer.
+            Antworte NUR im JSON-Format:
+            {{
+              "beruf": "...",
+              "beziehungsziel": "...",
+              "prioritaeten": "..."
+            }}
+
+            Benutzerantwort: {input.message}
+            """
+            try:
+                extraction_response = client.chat.completions.create(
+                    model="gpt-3.5-turbo", # Kann auch gpt-4 sein, aber 3.5 ist schneller/günstiger für Extraktion
+                    messages=[
+                        {"role": "system", "content": "Du bist ein JSON-Extraktor. Extrahiere nur die angefragten Informationen und antworte ausschließlich im JSON-Format."},
+                        {"role": "user", "content": extraction_prompt}
+                    ],
+                    max_tokens=150,
+                    temperature=0.1
+                )
+                extracted_json_str = extraction_response.choices[0].message.content.strip()
+                print(f"Extrahierter JSON-String aus Interview-Antwort: {extracted_json_str}") # Debug-Ausgabe
+
+                # Stellen Sie sicher, dass nur der JSON-Teil geparst wird (falls GPT zusätzlichen Text sendet)
+                # Finde den ersten { und letzten }
+                json_start = extracted_json_str.find('{')
+                json_end = extracted_json_str.rfind('}') + 1
+
+                if json_start != -1 and json_end != -1:
+                    clean_json_str = extracted_json_str[json_start:json_end]
+                    extracted_data = json.loads(clean_json_str)
+                else:
+                    print("Fehler: Kein gültiges JSON in der extrahierten Antwort gefunden.")
+                    extracted_data = {}
+
+                # Nur aktualisieren, wenn Daten extrahiert wurden
+                if extracted_data.get("beruf") or extracted_data.get("beziehungsziel") or extracted_data.get("prioritaeten"):
+                    # Lade das bestehende Profil, um es zu mergen
+                    existing_profile_res = supabase.table("profile").select("*").eq("id", user_id).execute().data
+                    existing_profile = existing_profile_res[0] if existing_profile_res else {}
+
+                    # Erstelle das Payload, überschreibe nur, wenn neue Daten vorhanden sind
+                    update_payload = {}
+                    if extracted_data.get("beruf"):
+                        update_payload["beruf"] = extracted_data["beruf"]
+                    if extracted_data.get("beziehungsziel"):
+                        update_payload["beziehungsziel"] = extracted_data["beziehungsziel"]
+                    if extracted_data.get("prioritaeten"):
+                        update_payload["prioritaeten"] = extracted_data["prioritaeten"]
+
+                    if update_payload: # Nur ausführen, wenn es etwas zu aktualisieren gibt
+                        print(f"Aktualisiere Profil für user_id {user_id} mit: {update_payload}") # Debug
+                        supabase.table("profile").update(update_payload).eq("id", user_id).execute()
+                        print("Profil-Update erfolgreich.") # Debug
+                    else:
+                        print("Keine relevanten Profilinformationen zur Aktualisierung gefunden.") # Debug
+                else:
+                    print("Extrahierte Daten enthielten keine Profil-Updates.") # Debug
+
+            except json.JSONDecodeError as e:
+                print(f"Fehler beim Parsen des extrahierten JSON: {e}. Roher String: {extracted_json_str}")
+            except Exception as e:
+                print(f"Allgemeiner Fehler bei der Profilaktualisierung aus Interview-Antwort: {e}")
+        # NEUE LOGIK ENDE
+
+        # 2. Routinen laden (Der Rest deiner ursprünglichen Logik bleibt unverändert)
         today = datetime.datetime.now().strftime("%A")
         routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data
         routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
@@ -316,7 +388,7 @@ async def chat(input: ChatInput):
         print(f"Fehler in der Chat-Funktion: {e}")
         # Gib eine Fehlermeldung zurück, die auch dem Frontend hilft
         return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal."}
-
+        
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
 def automatischer_bericht():
