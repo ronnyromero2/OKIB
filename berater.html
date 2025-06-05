@@ -279,15 +279,14 @@ async function sendChat() {
   // Korrigierte ladeInterviewFrage Funktion
 async function ladeInterviewFrage() {
     const box = document.getElementById("interviewBox");
-    box.innerHTML = ''; // Box vor dem Hinzufügen der neuen Frage leeren
     try {
-        const userId = USER_ID; // Verwende die global definierte USER_ID
+        const userId = USER_ID;
         const response = await fetch(`${API_URL}/interview/${userId}`);
         const data = await response.json();
         if (data.frage) {
-            box.innerHTML += `<div class='message'><strong>🤖:</strong> ${data.frage}</div>`; // HIER ÄNDERN auf Roboter-Emoji
+            box.innerHTML += `<div class='message'><strong>🤖:</strong> ${data.frage}</div>`; // Roboter-Emoji für die Frage
         } else {
-            box.innerHTML += `<div class='message'><strong>🤖:</strong> Momentan keine weiteren Interviewfragen.</div>`; // Fallback für keine Fragen
+            box.innerHTML += `<div class='message'><strong>🤖:</strong> Momentan keine weiteren Interviewfragen.</div>`; // Fallback, falls keine Frage kommt
         }
         box.scrollTop = box.scrollHeight; // Zum Ende scrollen
     } catch (error) {
