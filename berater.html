@@ -277,45 +277,64 @@ async function sendChat() {
   }
 
   // Korrigierte ladeInterviewFrage Funktion
-  async function ladeInterviewFrage() {
-    const res = await fetch(`${API_URL}/interview/${USER_ID}`); // HIER IST DIE KORREKTE ÄNDERUNG MIT USER_ID
-    const data = await res.json();
-    const box = document.getElementById("interviewBox");
-    box.innerHTML = ''; // Box vor dem Hinzufügen der neuen Frage leeren
-    box.innerHTML += `<div class='message'><strong>Frage:</strong> ${data.frage}</div>`;
-  }
+async function ladeInterviewFrage() {
+    const box = document.getElementById("interviewBox");
+    box.innerHTML = ''; // Box vor dem Hinzufügen der neuen Frage leeren
+    try {
+        const userId = USER_ID; // Verwende die global definierte USER_ID
+        const response = await fetch(`${API_URL}/interview/${userId}`);
+        const data = await response.json();
+        if (data.frage) {
+            box.innerHTML += `<div class='message'><strong>🤖:</strong> ${data.frage}</div>`; // HIER ÄNDERN auf Roboter-Emoji
+        } else {
+            box.innerHTML += `<div class='message'><strong>🤖:</strong> Momentan keine weiteren Interviewfragen.</div>`; // Fallback für keine Fragen
+        }
+        box.scrollTop = box.scrollHeight; // Zum Ende scrollen
+    } catch (error) {
+        console.error("Fehler beim Laden der Interviewfrage:", error);
+        box.innerHTML += `<div class='message' style="color: red;">Fehler beim Laden der Frage.</div>`;
+    }
+}
 
   // Korrigierte sendeInterviewAntwort Funktion
-  async function sendeInterviewAntwort() {
-    console.log("sendeInterviewAntwort wird aufgerufen!");
-    const antwort = document.getElementById("interviewAntwort").value.trim();
-    const frage = document.getElementById("interviewBox").innerText.trim();
-    const resBox = document.getElementById("interviewBox");
+async function sendeInterviewAntwort() {
+    console.log("sendeInterviewAntwort wird aufgerufen!"); // Kannst du jetzt entfernen, wenn du sicher bist, dass es funktioniert
 
-    // Keine Antwort gegeben? Nichts speichern.
-    if (!antwort) {
-      console.log("Keine Antwort gegeben. Nichts wird gespeichert.");
-      return;
-    }
+    const antwort = document.getElementById("interviewAntwort").value.trim();
+    const resBox = document.getElementById("interviewBox"); // Dies ist die Box, wo die Fragen/Antworten erscheinen
 
-    try {
-      // Speichere die Antwort im conversation_history
-      await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: `Interviewfrage: ${frage} | Antwort: ${antwort}` })
-      });
+    if (!antwort) {
+        console.log("Keine Antwort gegeben. Nichts wird gesendet.");
+        return;
+    }
 
-      resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${antwort}</div>`;
-      resBox.scrollTop = resBox.scrollHeight;
+    try {
+        // 1. Benutzerantwort in der Interview-Box anzeigen
+        // Mit Benutzer-Emoji (👤)
+        resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${antwort}</div>`;
+        resBox.scrollTop = resBox.scrollHeight; // Zum Ende scrollen
 
-      // Lade die nächste Interviewfrage
-      ladeInterviewFrage();
+        // 2. Sende die Antwort an den Backend /chat-Endpunkt
+        // WICHTIG: Sende nur die Antwort, nicht die Frage nochmal
+        await fetch(`${API_URL}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: `Interviewfrage: ${antwort}` }) 
+        });
 
-    } catch (error) {
-      console.error("Fehler beim Senden der Interviewantwort:", error);
-    }
-  }
+        // 3. Eingabefeld leeren
+        document.getElementById("interviewAntwort").value = ''; // <-- DIESE ZEILE leert das Feld
+
+        // 4. Lade die nächste Interviewfrage (mit Roboter-Emoji)
+        await ladeInterviewFrage(); // Diese Funktion aktualisiert die interviewBox
+                                     // Und sollte das Roboter-Emoji hinzufügen (wie unten in ladeInterviewFrage)
+
+    } catch (error) {
+        console.error("Fehler beim Senden der Interviewantwort:", error);
+        resBox.innerHTML += `<div class='message' style="color: red;"><strong>Fehler:</strong> Deine Antwort konnte nicht gesendet werden.</div>`;
+    }
+}
+  
   async function neuesZiel() {
     const titel = document.getElementById("zielTitel").value;
     const deadline = document.getElementById("zielDeadline").value;
