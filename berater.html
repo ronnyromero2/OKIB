@@ -116,8 +116,7 @@ input[type="checkbox"] {
     <div id="chatBox" class="response"></div>
     <input type="text" id="chatInput" placeholder="Nachricht eingeben..." onkeydown="if(event.key==='Enter'){event.preventDefault(); sendChat();}" />
     <button onclick="sendChat()">Absenden</button>
-  </div><div class="section"><h2>Interview-Frage:</h2>
-    <div id="interviewBox" class="response"></div>
+  </div><div class="section"><h2>Interview-Frage:</h2><div id="interviewBox" class="response"></div>
     <input type="text" id="interviewAntwort" placeholder="Antwort eingeben..." onkeydown="if(event.key==='Enter'){event.preventDefault(); sendeInterviewAntwort()}" />
     <button onclick="sendeInterviewAntwort()">Absenden</button>
   </div>
@@ -297,10 +296,8 @@ async function ladeInterviewFrage() {
 
   // Korrigierte sendeInterviewAntwort Funktion
 async function sendeInterviewAntwort() {
-    console.log("sendeInterviewAntwort wird aufgerufen!"); // Kannst du jetzt entfernen, wenn du sicher bist, dass es funktioniert
-
     const antwort = document.getElementById("interviewAntwort").value.trim();
-    const resBox = document.getElementById("interviewBox"); // Dies ist die Box, wo die Fragen/Antworten erscheinen
+    const resBox = document.getElementById("interviewBox");
 
     if (!antwort) {
         console.log("Keine Antwort gegeben. Nichts wird gesendet.");
@@ -308,25 +305,22 @@ async function sendeInterviewAntwort() {
     }
 
     try {
-        // 1. Benutzerantwort in der Interview-Box anzeigen
-        // Mit Benutzer-Emoji (👤)
+        // 1. Benutzerantwort sofort in der Interview-Box anzeigen
         resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${antwort}</div>`;
-        resBox.scrollTop = resBox.scrollHeight; // Zum Ende scrollen
+        resBox.scrollTop = resBox.scrollHeight;
 
-        // 2. Sende die Antwort an den Backend /chat-Endpunkt
-        // WICHTIG: Sende nur die Antwort, nicht die Frage nochmal
+        // 2. Eingabefeld sofort leeren (DIESE ZEILE WIRD NACH OBEN VERSCHOBEN)
+        document.getElementById("interviewAntwort").value = ''; // <-- HIERHER VERSCHIEBEN!
+
+        // 3. Sende die Antwort an das Backend (async, passiert jetzt parallel zum Feld leeren)
         await fetch(`${API_URL}/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: `Interviewfrage: ${antwort}` }) 
+            body: JSON.stringify({ message: `Interviewfrage: ${antwort}` })
         });
 
-        // 3. Eingabefeld leeren
-        document.getElementById("interviewAntwort").value = ''; // <-- DIESE ZEILE leert das Feld
-
-        // 4. Lade die nächste Interviewfrage (mit Roboter-Emoji)
-        await ladeInterviewFrage(); // Diese Funktion aktualisiert die interviewBox
-                                     // Und sollte das Roboter-Emoji hinzufügen (wie unten in ladeInterviewFrage)
+        // 4. Lade die nächste Interviewfrage
+        await ladeInterviewFrage();
 
     } catch (error) {
         console.error("Fehler beim Senden der Interviewantwort:", error);
