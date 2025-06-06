@@ -232,24 +232,39 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
         if not frage:
             frage = "Was möchtest du heute erreichen oder klären?"
 
-    # Speichere die generierte dynamische Frage als ai_prompt
-    try:
-        supabase.table("conversation_history").insert({
-            "user_id": user_id,
-            "user_input": None,
-            "ai_response": None,
-            "ai_prompt": frage_text,
-            "timestamp": datetime.datetime.utcnow().isoformat()
-        }).execute()
-    except Exception as e:
-        print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
+    # Speichere die generierte dynamische Frage als ai_prompt# ... (viel Code davor in der start_interaction Funktion) ...
 
-    return {"frage": frage_text}
+    try: # <--- Dies ist der äußere try-Block, der die gesamte GPT-Anfrage und das Speichern schützt
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
+            max_tokens=120,
+            temperature=0.7
+        )
 
-    except Exception as e:
+        frage = response.choices[0].message.content.strip()
+
+        # Fallback, falls GPT keine sinnvolle Frage liefert
+        if not frage:
+            frage = "Was möchtest du heute erreichen oder klären?"
+
+        # Speichere die generierte dynamische Frage als ai_prompt (dieser Teil ist korrekt eingerückt)
+        try: # <--- Dies ist der innere try-Block nur für den Supabase-Insert
+            supabase.table("conversation_history").insert({
+                "user_id": user_id,
+                "user_input": None,
+                "ai_response": None,
+                "ai_prompt": frage, # frage, nicht frage_text, da frage von GPT kommt
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            }).execute()
+        except Exception as e:
+            print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
+
+        return {"frage": frage} # <--- Dieses return ist WICHTIG und muss zum äußeren try-Block gehören
+
+    except Exception as e: # <--- Dieser except-Block gehört zum ÄUSSEREN try-Block
         print(f"Fehler bei der GPT-Anfrage: {e}")
         return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
-
 
 # Chat-Funktion
 @app.post("/chat")
