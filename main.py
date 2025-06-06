@@ -142,7 +142,7 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
         }).execute()
     except Exception as e:
         print(f"Fehler beim Speichern der initialen Einstiegsfrage als AI-Prompt: {e}")
-    return {"frage": frage_text}
+    return {"frage": frage} # <-- ÄNDERUNG: frage_text durch frage ersetzt
     
     # Letzte 4 Einstiegsfragen abrufen
     recent_entry_questions = get_recent_entry_questions(user_id)
