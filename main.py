@@ -310,9 +310,20 @@ async def chat(input: ChatInput):
         routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
 
         # Konversationshistorie laden
-        history = supabase.table("conversation_history").select("user_input, ai_response").order("timestamp", desc=True).limit(5).execute().data
-        history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else "Bisher keine frühere Konversationshistorie."
+        history_raw = supabase.table("conversation_history").select("user_input, ai_response, ai_prompt").order("timestamp", desc=True).limit(5).execute().data
 
+        # Konversationshistorie für den System-Prompt formatieren
+        history_messages = []
+        for h in reversed(history_raw):
+            if h['user_input'] is not None and h['user_input'] != "": # Nur wenn User-Input existiert
+                history_messages.append(f"User: {h['user_input']}")
+            if h['ai_response'] is not None and h['ai_response'] != "": # Nur wenn AI-Response existiert
+                history_messages.append(f"Berater: {h['ai_response']}")
+            if h['ai_prompt'] is not None and h['ai_prompt'] != "": # Nur wenn AI-Prompt existiert
+                history_messages.append(f"Berater (Frage): {h['ai_prompt']}")
+
+        history_text = "\n".join(history_messages) if history_messages else "Bisher keine frühere Konversationshistorie."
+        
         # Langzeitgedächtnis laden
         memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
         memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else "Keine spezifischen Langzeit-Erkenntnisse gespeichert."
