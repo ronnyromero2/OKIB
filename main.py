@@ -235,51 +235,39 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
 async def chat(input: ChatInput):
     try:
         # 1. Benutzerprofil laden
-        user_id = 1 # Hier wird eine feste user_id verwendet, wie besprochen
-
-        # KORREKTUR: "profile" statt "user_profile" verwenden!
+        user_id = 1 
         profile_data = supabase.table("profile").select("*").eq("id", user_id).execute().data
-
-        # Sicherstellen, dass 'profile' ein Dictionary ist, auch wenn keine Daten gefunden wurden
         profile = profile_data[0] if profile_data else {}
 
-        # Variablen sicher definieren: Verwende .get() um KeyError zu vermeiden und stelle sicher,
-        # dass die Variablennamen konsistent sind (hier alle ohne Umlaut, passend zum Prompt)
         beruf = profile.get("beruf", "")
         beziehungsziel = profile.get("beziehungsziel", "")
-        prioritaeten = profile.get("prioritaeten", "") # <-- Hier ist die Variable ohne Umlaut 'ä'
+        prioritaeten = profile.get("prioritaeten", "")
 
-        # NEUE LOGIK START: Versuche, Profilinformationen zu extrahieren und zu aktualisieren
-        # Erkennen, ob die Nachricht eine Interview-Antwort ist
+        # Profilinformationen extrahieren und aktualisieren
         if input.message.startswith("Interviewfrage:"):
-            # Der Prompt für GPT, um die Information zu extrahieren
             extraction_prompt = f"""
-            Der Benutzer hat auf eine Interviewfrage geantwortet. Extrahiere die relevanten Profilinformationen (beruf, beziehungsziel, prioritaeten) aus der Antwort.
-            Falls eine Information nicht klar ist oder nicht gegeben wurde, lass sie leer.
+            Extrahiere Profilinformationen (beruf, beziehungsziel, prioritaeten) aus der Antwort.
             Antworte NUR im JSON-Format:
             {{
               "beruf": "...",
               "beziehungsziel": "...",
               "prioritaeten": "..."
             }}
-
             Benutzerantwort: {input.message}
             """
             try:
                 extraction_response = client.chat.completions.create(
-                    model="gpt-3.5-turbo", # Kann auch gpt-4 sein, aber 3.5 ist schneller/günstiger für Extraktion
+                    model="gpt-3.5-turbo",
                     messages=[
-                        {"role": "system", "content": "Du bist ein JSON-Extraktor. Extrahiere nur die angefragten Informationen und antworte ausschließlich im JSON-Format."},
+                        {"role": "system", "content": "Du bist ein JSON-Extraktor. Antworte ausschließlich im JSON-Format."},
                         {"role": "user", "content": extraction_prompt}
                     ],
                     max_tokens=150,
                     temperature=0.1
                 )
                 extracted_json_str = extraction_response.choices[0].message.content.strip()
-                print(f"Extrahierter JSON-String aus Interview-Antwort: {extracted_json_str}") # Debug-Ausgabe
+                print(f"Extrahierter JSON-String aus Interview-Antwort: {extracted_json_str}")
 
-                # Stellen Sie sicher, dass nur der JSON-Teil geparst wird (falls GPT zusätzlichen Text sendet)
-                # Finde den ersten { und letzten }
                 json_start = extracted_json_str.find('{')
                 json_end = extracted_json_str.rfind('}') + 1
 
@@ -287,16 +275,13 @@ async def chat(input: ChatInput):
                     clean_json_str = extracted_json_str[json_start:json_end]
                     extracted_data = json.loads(clean_json_str)
                 else:
-                    print("Fehler: Kein gültiges JSON in der extrahierten Antwort gefunden.")
+                    print("Fehler: Kein gültiges JSON in extrahierter Antwort gefunden.")
                     extracted_data = {}
 
-                # Nur aktualisieren, wenn Daten extrahiert wurden
                 if extracted_data.get("beruf") or extracted_data.get("beziehungsziel") or extracted_data.get("prioritaeten"):
-                    # Lade das bestehende Profil, um es zu mergen
                     existing_profile_res = supabase.table("profile").select("*").eq("id", user_id).execute().data
                     existing_profile = existing_profile_res[0] if existing_profile_res else {}
 
-                    # Erstelle das Payload, überschreibe nur, wenn neue Daten vorhanden sind
                     update_payload = {}
                     if extracted_data.get("beruf"):
                         update_payload["beruf"] = extracted_data["beruf"]
@@ -305,39 +290,38 @@ async def chat(input: ChatInput):
                     if extracted_data.get("prioritaeten"):
                         update_payload["prioritaeten"] = extracted_data["prioritaeten"]
 
-                    if update_payload: # Nur ausführen, wenn es etwas zu aktualisieren gibt
-                        print(f"Aktualisiere Profil für user_id {user_id} mit: {update_payload}") # Debug
+                    if update_payload:
+                        print(f"Aktualisiere Profil für user_id {user_id} mit: {update_payload}")
                         supabase.table("profile").update(update_payload).eq("id", user_id).execute()
-                        print("Profil-Update erfolgreich.") # Debug
+                        print("Profil-Update erfolgreich.")
                     else:
-                        print("Keine relevanten Profilinformationen zur Aktualisierung gefunden.") # Debug
+                        print("Keine relevanten Profilinformationen zur Aktualisierung gefunden.")
                 else:
-                    print("Extrahierte Daten enthielten keine Profil-Updates.") # Debug
+                    print("Extrahierte Daten enthielten keine Profil-Updates.")
 
             except json.JSONDecodeError as e:
                 print(f"Fehler beim Parsen des extrahierten JSON: {e}. Roher String: {extracted_json_str}")
             except Exception as e:
                 print(f"Allgemeiner Fehler bei der Profilaktualisierung aus Interview-Antwort: {e}")
-        # NEUE LOGIK ENDE
 
-        # 2. Routinen laden (Der Rest deiner ursprünglichen Logik bleibt unverändert)
+        # Routinen laden
         today = datetime.datetime.now().strftime("%A")
         routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data
         routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
 
-        # 3. Konversationshistorie laden (reduziert für Chat)
+        # Konversationshistorie laden
         history = supabase.table("conversation_history").select("user_input, ai_response").order("timestamp", desc=True).limit(5).execute().data
         history_text = "\n".join([f"User: {h['user_input']} | Berater: {h['ai_response']}" for h in reversed(history)]) if history else "Bisher keine frühere Konversationshistorie."
 
-        # 4. Langzeitgedächtnis laden (reduziert für Chat)
+        # Langzeitgedächtnis laden
         memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
         memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else "Keine spezifischen Langzeit-Erkenntnisse gespeichert."
 
-        # 5. Systemnachricht zusammenstellen (GPT-4)
+        # Systemnachricht zusammenstellen
         system_message = f"""
-        Du bist ein persönlicher, **anspruchsvoller und konstruktiver Mentor und Therapeut**. Dein Ziel ist es, dem Nutzer **realistisch, prägnant und umsetzbar** zu helfen.
+        Du bist ein persönlicher, anspruchsvoller und konstruktiver Mentor und Therapeut. Dein Ziel ist es, dem Nutzer realistisch, prägnant und umsetzbar zu helfen.
 
-        Nutze die folgenden Informationen, um dem Nutzer **direkt auf den Punkt kommende, handlungsorientierte Ratschläge und Verbesserungsvorschläge** zu geben:
+        Nutze folgende Informationen für direkt handlungsorientierte Ratschläge:
 
         Nutzerprofil:
         Beruf: {beruf}
@@ -353,31 +337,42 @@ async def chat(input: ChatInput):
         Aktuelle Konversationshistorie (letzte 5 Nachrichten):
         {history_text}
 
-        **Analysiere die aktuelle Nachricht des Nutzers IMMER im Kontext ALLER verfügbaren Informationen.**
-        **Erkenne dabei auch mögliche Inkonsistenzen (z.B. wenn Routinen nicht eingehalten werden, aber Ziele hochgesteckt sind) oder mangelnden Fortschritt.**
-        **Gebe KEIN allgemeines Lob oder oberflächliche Bestätigungen.**
-        **Fokussiere dich darauf, WO der Nutzer WIRKLICH ansetzen kann, um voranzukommen.**
-        **Stelle konkrete Fragen, schlage spezifische Aktionen vor oder weise auf notwendige Reflexionen hin.**
+        Analysiere die aktuelle Nachricht im Kontext ALLER Infos. Erkenne Inkonsistenzen oder mangelnden Fortschritt.
+        Kein allgemeines Lob. Fokussiere dich auf konkrete Ansatzpunkte.
+        Stelle konkrete Fragen, schlage Aktionen vor oder weise auf Reflexionen hin.
 
-        Antworte **maximal 4 Sätze**. Deine Antworten sollen **knapp, direkt, motivierend und auf konkrete nächste Schritte** ausgerichtet sein.
+        Antworte maximal 4 Sätze. Deine Antworten sollen knapp, direkt, motivierend und auf konkrete nächste Schritte ausgerichtet sein.
         """
 
-        # 6. Chat-Interaktion mit OpenAI
+        # Chat-Interaktion mit OpenAI
         response = client.chat.completions.create(
-            model="gpt-4", # Oder "gpt-3.5-turbo", falls gpt-4 Rate-Limits zu aggressiv sind
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": input.message}
             ],
-            max_tokens=100, # Begrenze die Länge der Antwort
+            max_tokens=100,
             temperature=0.7
         )
         reply = response.choices[0].message.content.strip()
 
-        # 7. Nachricht in Historie speichern
+        # Bestimme den tatsächlichen Benutzer-Input für die Historie
+        actual_user_input_for_history = input.message
+
+        # Wenn es eine Interview-Antwort ist, schneide das "Interviewfrage:"-Prefix ab
+        if actual_user_input_for_history.startswith("Interviewfrage:"):
+            actual_user_input_for_history = actual_user_input_for_history.replace("Interviewfrage:", "").strip()
+        
+        # Optional: Filter für KI-Einstiegsfragen
+        # Passe den String an deine tatsächliche Einstiegsfrage an, falls zutreffend.
+        # Beispiel: if actual_user_input_for_history.startswith("Hallo, ich bin dein persönlicher Berater."):
+        #    actual_user_input_for_history = ""
+        # Entferne diesen Block, wenn keine KI-Einstiegsfragen über diesen Endpunkt gesendet werden.
+
+        # Nachricht in Historie speichern
         supabase.table("conversation_history").insert({
-            "user_id": user_id, # user_id hier auch hinzufügen!
-            "user_input": input.message,
+            "user_id": user_id,
+            "user_input": actual_user_input_for_history,
             "ai_response": reply,
             "timestamp": datetime.datetime.utcnow().isoformat()
         }).execute()
@@ -386,7 +381,6 @@ async def chat(input: ChatInput):
 
     except Exception as e:
         print(f"Fehler in der Chat-Funktion: {e}")
-        # Gib eine Fehlermeldung zurück, die auch dem Frontend hilft
         return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal."}
         
 # Automatischer Wochen- und Monatsbericht
