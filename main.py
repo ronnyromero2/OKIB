@@ -90,20 +90,22 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
         return "Eine Zusammenfassung konnte nicht erstellt werden." # Fallback
 
-
 def get_recent_entry_questions(user_id: str):
     """
-    Hol die letzten 4 Einstiegsfragen des Nutzers.
+    Hol die letzten 4 Einstiegsfragen des Nutters.
     """
     recent_questions = supabase.table("conversation_history") \
         .select("ai_prompt") \
         .eq("user_id", user_id) \
         .is_("user_input", None) \
         .is_("ai_response", None) \
-        .not_("ai_prompt", "is", None) \
+        .neq("ai_prompt", None) \  # <--- ÄNDERUNG: Statt .not_("ai_prompt", "is", None) verwenden wir .neq("ai_prompt", None)
         .order("timestamp", desc=True) \
         .limit(4) \
         .execute()
+    
+    # Optional: Filter hier nochmals zur Sicherheit, falls neq nicht 100% greift
+    return [q["ai_prompt"] for q in recent_questions.data if q["ai_prompt"]]
 
     questions = [q["ai_prompt"] for q in recent_questions.data if q["ai_prompt"]] # Changed from user_input
 
