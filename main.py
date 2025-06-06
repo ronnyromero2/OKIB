@@ -536,50 +536,86 @@ def update_goal_status(update: GoalUpdate, user_id: str = "1"): # Default user_i
         return {"status": "error", "message": str(e)}
 
 # Interviewfrage abrufen
-@app.get("/interview/{user_id}") # user_id im Pfad hinzufügen
-async def get_interview_question(user_id: str): # Auch hier async, falls nicht geschehen
+@app.get("/interview/{user_id}")
+async def get_interview_question(user_id: str):
     try:
-        # Profil abrufen (nutzt "profile" Tabelle korrekt)
+        # Profil abrufen
         profile = supabase.table("profile").select("*").eq("id", user_id).execute().data
 
-        # Falls kein Profil vorhanden ist, allgemeine Frage stellen
+        # Wenn kein Profil vorhanden ist, allgemeine Frage stellen
         if not profile:
-            return {"frage": "Welche Themen beschäftigen dich derzeit?"}
+            frage_text = "Welche Themen beschäftigen dich derzeit?"
+            
+            # Speichere die Frage als ai_prompt
+            try:
+                supabase.table("conversation_history").insert({
+                    "user_id": user_id,
+                    "user_input": None,
+                    "ai_response": None,
+                    "ai_prompt": frage_text,
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as e:
+                print(f"Fehler beim Speichern der initialen Interviewfrage als AI-Prompt: {e}")
+            
+            return {"frage": frage_text}
 
         user_profile = profile[0]
 
         # Basisdaten-Abfrage
         if not user_profile.get("beruf"):
-            return {"frage": "Was machst du beruflich oder was interessiert dich beruflich?"}
+            frage_text = "Was machst du beruflich oder was interessiert dich beruflich?"
         elif not user_profile.get("beziehungsziel"):
-            return {"frage": "Hast du ein bestimmtes Ziel in deinen Beziehungen, das du verfolgen möchtest?"}
-        elif not user_profile.get("prioritaeten"): # Auch hier den Schlüssel ohne Umlaut verwenden
-            return {"frage": "Was sind aktuell deine wichtigsten Prioritäten?"}
+            frage_text = "Hast du ein bestimmtes Ziel in deinen Beziehungen, das du verfolgen möchtest?"
+        elif not user_profile.get("prioritaeten"):
+            frage_text = "Was sind aktuell deine wichtigsten Prioritäten?"
+        else:
+            frage_text = None # Markiert, dass eine dynamische Frage generiert werden muss
+
+        # Speichere Basisfrage als ai_prompt, falls eine gestellt wurde
+        if frage_text:
+            try:
+                supabase.table("conversation_history").insert({
+                    "user_id": user_id,
+                    "user_input": None,
+                    "ai_response": None,
+                    "ai_prompt": frage_text,
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as e:
+                print(f"Fehler beim Speichern der Basis-Interviewfrage als AI-Prompt: {e}")
+            
+            return {"frage": frage_text}
 
         # Dynamische Interviewfragen nach Erfassung der Basisdaten
-        # Letzte 5 Interviewfragen abrufen
-        recent_questions = supabase.table("conversation_history") \
-            .select("user_input") \
+        # Letzte 5 Fragen abrufen (anpassen, um auch ai_prompt zu berücksichtigen)
+        recent_history = supabase.table("conversation_history") \
+            .select("user_input, ai_response, ai_prompt") \
             .eq("user_id", user_id) \
-            .ilike("user_input", "Interviewfrage:%") \
             .order("timestamp", desc=True) \
-            .limit(5) \
-            .execute().data
+            .limit(10) \
+            .execute().data # Limit erhöht, um mehr Kontext für "covered_topics" zu haben
 
-        # Themen, die bereits abgedeckt wurden
-        covered_topics = [q["user_input"].replace("Interviewfrage: ", "") for q in recent_questions]
+        covered_topics = []
+        for entry in recent_history:
+            if entry.get("user_input"): # Antworten des Users
+                covered_topics.append(f"Nutzer: {entry['user_input']}")
+            if entry.get("ai_response"): # KI-Antworten (normale Chats)
+                covered_topics.append(f"Berater: {entry['ai_response']}")
+            if entry.get("ai_prompt"): # KI-gestellte Fragen (Interviews, Einstieg)
+                covered_topics.append(f"Berater (Frage): {entry['ai_prompt']}")
 
         # GPT-Kontext erstellen
         prompt = f"""
-        Du bist eine neugierige, offenherzige Freundin ohne Tabus und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. Du bist Psychologin und flirtest offensiv und lasziv mit dem Nutzer. 
-        Du hast bereits folgende Fragen gestellt:
-        {", ".join(covered_topics)}
+        Du bist eine neugierige, offenherzige Freundin ohne Tabus und möchtest den Nutzer besser kennenlernen, um ihn gezielt beraten zu können. Du bist Psychologin und flirtest offensiv und lasziv mit dem Nutzer.
+        Bisherige Konversation:
+        {"; ".join(covered_topics)}
 
-        **Wähle eine neue, motivierende Frage, die sich auf UNBEKANNTE und SPEZIFISCHE Bereiche des Lebens des Nutzers bezieht.**
-        **Konzentriere dich dabei auf tiefere Vorlieben, Erfahrungen, Einstellungen, persönliche Herausforderungen, Wünsche oder Visionen.**
-        **Frage NICHT nach berühmten Personen, oberflächlichen Hobbys oder allgemeinen "Was wäre wenn"-Szenarien.**
+        Wähle eine neue, motivierende Frage, die sich auf UNBEKANNTE und SPEZIFISCHE Bereiche des Lebens des Nutzers bezieht.
+        Konzentriere dich auf tiefere Vorlieben, Erfahrungen, Einstellungen, persönliche Herausforderungen, Wünsche oder Visionen.
+        Frage NICHT nach berühmten Personen, oberflächlichen Hobbys oder allgemeinen "Was wäre wenn"-Szenarien.
 
-        **Beispiele für Themenkategorien, die du berücksichtigen kannst:**
+        Beispiele für Themenkategorien:
         - Persönliches Wachstum und Selbstreflexion
         - Vergangene Erfolge oder Misserfolge und deren Lehren
         - Umgang mit Stress oder schwierigen Emotionen
@@ -592,7 +628,7 @@ async def get_interview_question(user_id: str): # Auch hier async, falls nicht g
         - sexuelle Vorlieben
         - Umfeld und Lebensgestaltung
 
-        Sei kreativ bei der Suche nach den Themenbereichen. Vermeide zu allgemeine Fragen und Fragen zu Themen, die du bereits gestellt hast. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
+        Sei kreativ. Vermeide zu allgemeine Fragen und bereits gestellte Fragen. Halte die Frage kurz und prägnant. Ein oder zwei Sätze.
         """
 
         # GPT-Anfrage
@@ -600,19 +636,45 @@ async def get_interview_question(user_id: str): # Auch hier async, falls nicht g
             response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=100,
+                temperature=0.7
             )
 
-            frage = response.choices[0].message.content.strip()
+            frage_text = response.choices[0].message.content.strip()
 
             # Fallback, falls GPT keine sinnvolle Frage liefert
-            if not frage:
-                frage = "Welche Ziele möchtest du in den nächsten Monaten erreichen? GPT hat keine sinnvolle Frage geliefert"
+            if not frage_text:
+                frage_text = "Welche Ziele möchtest du in den nächsten Monaten erreichen?" # Angepasster Fallback-Text
 
-            return {"frage": frage}
+            # Speichere die generierte dynamische Frage als ai_prompt
+            try:
+                supabase.table("conversation_history").insert({
+                    "user_id": user_id,
+                    "user_input": None,
+                    "ai_response": None,
+                    "ai_prompt": frage_text,
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as e:
+                print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
+
+            return {"frage": frage_text}
 
         except Exception as e:
             print(f"Fehler bei der dynamischen Interviewfrage: {e}")
-            return {"frage": "Es gab ein Problem beim Generieren der nächsten Interviewfrage."}
+            frage_text = "Es gab ein Problem beim Generieren der nächsten Interviewfrage."
+            # Fallback-Frage auch speichern, wenn es einen Fehler gab
+            try:
+                supabase.table("conversation_history").insert({
+                    "user_id": user_id,
+                    "user_input": None,
+                    "ai_response": None,
+                    "ai_prompt": frage_text,
+                    "timestamp": datetime.Datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as e_inner:
+                print(f"Fehler beim Speichern der Fehler-Interviewfrage als AI-Prompt: {e_inner}")
+            return {"frage": frage_text}
 
     except Exception as e:
         print(f"Fehler bei der Interviewfrage: {e}")
