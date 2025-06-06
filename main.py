@@ -96,16 +96,18 @@ def get_recent_entry_questions(user_id: str):
     Hol die letzten 4 Einstiegsfragen des Nutzers.
     """
     recent_questions = supabase.table("conversation_history") \
-        .select("user_input") \
+        .select("ai_prompt") \
         .eq("user_id", user_id) \
-        .ilike("user_input", "Einstiegsfrage:%") \
+        .is_("user_input", None) \
+        .is_("ai_response", None) \
+        .not_("ai_prompt", "is", None) \
         .order("timestamp", desc=True) \
         .limit(4) \
         .execute()
 
-    questions = [q["user_input"].replace("Einstiegsfrage: ", "") for q in recent_questions.data]
-    
-    print("Letzte 4 Einstiegsfragen:", questions)
+    questions = [q["ai_prompt"] for q in recent_questions.data if q["ai_prompt"]] # Changed from user_input
+
+    print("Letzte 4 Einstiegsfragen (aus ai_prompt):", questions) # Changed log
     return questions
 
 # Startfrage bei neuer Interaktion
@@ -128,7 +130,20 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
     # Wenn keine Nachrichten vorhanden sind
     if not messages:
         return {"frage": "Was möchtest du heute angehen? Gibt es ein neues Thema, über das du sprechen möchtest?"}
-
+  
+    # Speichern als ai_prompt
+    try:
+        supabase.table("conversation_history").insert({
+            "user_id": user_id,
+            "user_input": None,  # Einstiegsfrage kommt von KI, nicht vom User
+            "ai_response": None,
+            "ai_prompt": frage_text, # <-- ÄNDERUNG: Einstiegsfrage in ai_prompt speichern
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
+    except Exception as e:
+        print(f"Fehler beim Speichern der initialen Einstiegsfrage als AI-Prompt: {e}")
+    return {"frage": frage_text}
+    
     # Letzte 4 Einstiegsfragen abrufen
     recent_entry_questions = get_recent_entry_questions(user_id)
 
@@ -168,7 +183,8 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
         """
     else:
         # Themen, die nicht in den letzten 4 Einstiegsfragen vorkommen
-        filtered_messages = [msg for msg in remaining_messages if msg not in recent_entry_questions]
+        all_past_prompts = [h["ai_prompt"] for h in supabase.table("conversation_history").select("ai_prompt").eq("user_id", user_id).order("timestamp", desc=True).limit(20).execute().data if h["ai_prompt"]]
+        filtered_messages = [msg for msg in remaining_messages if msg not in recent_entry_questions and msg not in all_past_prompts]
 
         # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
         if not filtered_messages:
@@ -216,14 +232,19 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
         if not frage:
             frage = "Was möchtest du heute erreichen oder klären?"
 
-        # Einstiegsfrage als solche markieren und speichern
-        supabase.table("conversation_history").insert({
-            "user_input": f"Einstiegsfrage: {frage}",
-            "timestamp": datetime.datetime.utcnow().isoformat(),
-            "user_id": user_id # user_id auch hier speichern!
-        }).execute()
+    # Speichere die generierte dynamische Frage als ai_prompt
+    try:
+    supabase.table("conversation_history").insert({
+        "user_id": user_id,
+        "user_input": None,
+        "ai_response": None,
+        "ai_prompt": frage_text,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }).execute()
+    except Exception as e:
+    print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
 
-        return {"frage": frage}
+    return {"frage": frage_text}
 
     except Exception as e:
         print(f"Fehler bei der GPT-Anfrage: {e}")
@@ -320,7 +341,7 @@ async def chat(input: ChatInput):
             if h['ai_response'] is not None and h['ai_response'] != "": # Nur wenn AI-Response existiert
                 history_messages.append(f"Berater: {h['ai_response']}")
             if h['ai_prompt'] is not None and h['ai_prompt'] != "": # Nur wenn AI-Prompt existiert
-                history_messages.append(f"Berater (Frage): {h['ai_prompt']}")
+                history_messages.append(f"Interviewfrage: {h['ai_prompt']}")
 
         history_text = "\n".join(history_messages) if history_messages else "Bisher keine frühere Konversationshistorie."
         
@@ -381,13 +402,22 @@ async def chat(input: ChatInput):
         # Entferne diesen Block, wenn keine KI-Einstiegsfragen über diesen Endpunkt gesendet werden.
 
         # Nachricht in Historie speichern
-        supabase.table("conversation_history").insert({
-            "user_id": user_id,
-            "user_input": input.message, # <-- HIER IST WIEDER DER ORIGINALE input.message
-            "ai_response": reply,
-            "ai_prompt": None, # <-- NEU: Diese Spalte ist hier immer None
-            "timestamp": datetime.datetime.utcnow().isoformat()
-        }).execute()
+        user_input_to_save = input.message
+    # Check if the message is actually an entry question passed by the frontend
+    # This is a heuristic and ideally the frontend should not send entry questions here.
+    if "Einstiegsfrage:" in user_input_to_save and reply is not None:
+     # If it's a known entry question format AND we're getting a reply, it's probably the frontend re-sending it.
+     # In this case, we don't save it as user_input.
+     user_input_to_save = None
+
+
+supabase.table("conversation_history").insert({
+    "user_id": user_id,
+    "user_input": user_input_to_save, # <-- ÄNDERUNG: Vermeide Speicherung von "Einstiegsfrage" als User-Input
+    "ai_response": reply,
+    "ai_prompt": None, # Diese Spalte ist hier immer None, da dies eine User-Antwort + AI-Reaktion ist
+    "timestamp": datetime.datetime.utcnow().isoformat()
+}).execute()
 
         return {"reply": reply}
 
