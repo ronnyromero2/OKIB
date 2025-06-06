@@ -403,21 +403,20 @@ async def chat(input: ChatInput):
 
         # Nachricht in Historie speichern
         user_input_to_save = input.message
-    # Check if the message is actually an entry question passed by the frontend
-    # This is a heuristic and ideally the frontend should not send entry questions here.
-    if "Einstiegsfrage:" in user_input_to_save and reply is not None:
-     # If it's a known entry question format AND we're getting a reply, it's probably the frontend re-sending it.
-     # In this case, we don't save it as user_input.
-     user_input_to_save = None
+        # Check if the message is actually an entry question passed by the frontend
+        # This is a heuristic and ideally the frontend should not send entry questions here.
+        if "Einstiegsfrage:" in user_input_to_save and reply is not None:
+            # If it's a known entry question format AND we're getting a reply, it's probably the frontend re-sending it.
+            # In this case, we don't save it as user_input.
+            user_input_to_save = None
 
-
-supabase.table("conversation_history").insert({
-    "user_id": user_id,
-    "user_input": user_input_to_save, # <-- ÄNDERUNG: Vermeide Speicherung von "Einstiegsfrage" als User-Input
-    "ai_response": reply,
-    "ai_prompt": None, # Diese Spalte ist hier immer None, da dies eine User-Antwort + AI-Reaktion ist
-    "timestamp": datetime.datetime.utcnow().isoformat()
-}).execute()
+        supabase.table("conversation_history").insert({
+            "user_id": user_id,
+            "user_input": user_input_to_save, # <-- ÄNDERUNG: Vermeide Speicherung von "Einstiegsfrage" als User-Input
+            "ai_response": reply,
+            "ai_prompt": None, # Diese Spalte ist hier immer None, da dies eine User-Antwort + AI-Reaktion ist
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
 
         return {"reply": reply}
 
