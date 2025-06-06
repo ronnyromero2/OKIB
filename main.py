@@ -372,8 +372,9 @@ async def chat(input: ChatInput):
         # Nachricht in Historie speichern
         supabase.table("conversation_history").insert({
             "user_id": user_id,
-            "user_input": actual_user_input_for_history,
+            "user_input": input.message, # <-- HIER IST WIEDER DER ORIGINALE input.message
             "ai_response": reply,
+            "ai_prompt": None, # <-- NEU: Diese Spalte ist hier immer None
             "timestamp": datetime.datetime.utcnow().isoformat()
         }).execute()
 
