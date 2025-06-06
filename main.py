@@ -218,22 +218,7 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
     # Konsolen-Log zur Überprüfung des Prompts
     print("GPT Prompt:", prompt)
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
-            max_tokens=120,
-            temperature=0.7
-        )
-
-        frage = response.choices[0].message.content.strip()
-
-        # Fallback, falls GPT keine sinnvolle Frage liefert
-        if not frage:
-            frage = "Was möchtest du heute erreichen oder klären?"
-
     # Speichere die generierte dynamische Frage als ai_prompt# ... (viel Code davor in der start_interaction Funktion) ...
-
     try: # <--- Dies ist der äußere try-Block, der die gesamte GPT-Anfrage und das Speichern schützt
         response = client.chat.completions.create(
             model="gpt-4",
