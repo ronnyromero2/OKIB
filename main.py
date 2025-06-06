@@ -99,7 +99,7 @@ def get_recent_entry_questions(user_id: str):
         .eq("user_id", user_id) \
         .is_("user_input", None) \
         .is_("ai_response", None) \
-        .neq("ai_prompt", None) \  # <--- ÄNDERUNG: Statt .not_("ai_prompt", "is", None) verwenden wir .neq("ai_prompt", None)
+        .neq("ai_prompt", None) \  
         .order("timestamp", desc=True) \
         .limit(4) \
         .execute()
