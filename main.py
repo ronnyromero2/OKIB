@@ -127,129 +127,136 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
     # Konsolen-Log zur Überprüfung der Nachrichten
     print("Letzte 30 Nachrichten:", messages)
 
-    # Wenn keine Nachrichten vorhanden sind
+    # Wenn keine Nachrichten vorhanden sind (erste Interaktion)
     if not messages:
-        return {"frage": "Was möchtest du heute angehen? Gibt es ein neues Thema, über das du sprechen möchtest?"}
-  
-    # Speichern als ai_prompt
-    try:
-        supabase.table("conversation_history").insert({
-            "user_id": user_id,
-            "user_input": None,  # Einstiegsfrage kommt von KI, nicht vom User
-            "ai_response": None,
-            "ai_prompt": frage_text, # <-- ÄNDERUNG: Einstiegsfrage in ai_prompt speichern
-            "timestamp": datetime.datetime.utcnow().isoformat()
-        }).execute()
-    except Exception as e:
-        print(f"Fehler beim Speichern der initialen Einstiegsfrage als AI-Prompt: {e}")
-    return {"frage": frage} # <-- ÄNDERUNG: frage_text durch frage ersetzt
-    
-    # Letzte 4 Einstiegsfragen abrufen
-    recent_entry_questions = get_recent_entry_questions(user_id)
-
-    # Die letzten 5 Nachrichten ignorieren (für die Themenauswahl, nicht für GPT-Ausschluss)
-    recent_topics = messages[:5]
-    remaining_messages = messages[5:]
-
-    # Routinen überprüfen
-    today = datetime.datetime.now().strftime("%A")
-    unfulfilled_routines = supabase.table("routines") \
-        .select("*") \
-        .eq("day", today) \
-        .eq("checked", False) \
-        .eq("user_id", user_id) \
-        .execute().data
-
-    # Routinen, die mindestens 3-mal nicht erfüllt wurden
-    routine_texts = [r["task"] for r in unfulfilled_routines if r.get("missed_count", 0) >= 3]
-    routine_context = ", ".join(routine_texts)
-
-    # Konsolen-Log zur Überprüfung der Routinen
-    print("Wiederholt unerfüllte Routinen:", routine_context)
-
-    # 5% Wahrscheinlichkeit für Simulation/Universum-Perspektive
-    simulate_universe = random.random() < 0.05
-
-    # GPT-Anfrage vorbereiten
-    if simulate_universe:
-        prompt = f"""
-        Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
-        Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
-        Vermeide die letzten vier Einstiegsfragen:
-
-        {", ".join(recent_entry_questions)}
-
-        Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
-        """
-    else:
-        # Themen, die nicht in den letzten 4 Einstiegsfragen vorkommen
-        all_past_prompts = [h["ai_prompt"] for h in supabase.table("conversation_history").select("ai_prompt").eq("user_id", user_id).order("timestamp", desc=True).limit(20).execute().data if h["ai_prompt"]]
-        filtered_messages = [msg for msg in remaining_messages if msg not in recent_entry_questions and msg not in all_past_prompts]
-
-        # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
-        if not filtered_messages:
-            filtered_messages = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
-                                 "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
-                                 "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
-                                 "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"] # HIER WURDEN THEMEN HINZUGEFÜGT
-
-        # Zufälliges Thema auswählen
-        selected_topic = random.choice(filtered_messages)
-
-        prompt = f"""
-        Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere eine **motivierende, sehr konkrete und personalisierte** Frage basierend auf einem Thema,
-        das länger nicht angesprochen wurde oder bisher kaum behandelt wurde.
-        **Sei spezifisch und gehe auf die Essenz des Themas ein, anstatt generisch zu fragen.**
-        Vermeide die letzten vier Einstiegsfragen:
-
-        {", ".join(recent_entry_questions)}
-
-        Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
-
-        **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
-        - Wie genau hast du es geschafft, XYZ zu erreichen? Was war der entscheidende Schritt?
-        - Gibt es eine Gewohnheit, die du schon lange ändern möchtest? Was hält dich davon ab, heute damit zu starten?
-        - Welchen konkreten Plan hast du für dein Ziel, [Ziel aus Profil/Gedächtnis]?
-        - Wie möchtest du heute sicherstellen, dass [Routine aus Kontext] erledigt wird? Gibt es eine Hürde?
-        - Welche Art von Unterstützung bräuchtest du, um dein [Beziehungsziel] in den nächsten Tagen aktiv zu verfolgen?
-        - Was ist die eine Sache, die dich aktuell am meisten beschäftigt und wo du dir konkrete Unterstützung wünschst?
-        """
-
-    # Konsolen-Log zur Überprüfung des Prompts
-    print("GPT Prompt:", prompt)
-
-    # Speichere die generierte dynamische Frage als ai_prompt# ... (viel Code davor in der start_interaction Funktion) ...
-    try: # <--- Dies ist der äußere try-Block, der die gesamte GPT-Anfrage und das Speichern schützt
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
-            max_tokens=120,
-            temperature=0.7
-        )
-
-        frage = response.choices[0].message.content.strip()
-
-        # Fallback, falls GPT keine sinnvolle Frage liefert
-        if not frage:
-            frage = "Was möchtest du heute erreichen oder klären?"
-
-        # Speichere die generierte dynamische Frage als ai_prompt (dieser Teil ist korrekt eingerückt)
-        try: # <--- Dies ist der innere try-Block nur für den Supabase-Insert
+        frage_text = "Was möchtest du heute angehen? Gibt es ein neues Thema, über das du sprechen möchtest?"
+        
+        # Speichern als ai_prompt
+        try:
             supabase.table("conversation_history").insert({
                 "user_id": user_id,
-                "user_input": None,
+                "user_input": None,  # Einstiegsfrage kommt von KI, nicht vom User
                 "ai_response": None,
-                "ai_prompt": frage, # frage, nicht frage_text, da frage von GPT kommt
+                "ai_prompt": frage_text, # <-- Hier wird frage_text verwendet
                 "timestamp": datetime.datetime.utcnow().isoformat()
             }).execute()
         except Exception as e:
-            print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
+            print(f"Fehler beim Speichern der initialen Einstiegsfrage als AI-Prompt: {e}")
+            # Wenn das Speichern fehlschlägt, geben wir trotzdem die Frage zurück
+            return {"frage": frage_text} # Wichtig: Hier weiter frage_text verwenden!
+        
+        return {"frage": frage_text} # <-- Hier auch frage_text! Dieser return-Statement sollte eigentlich NACH dem try-except stehen, damit der except-Block den Fehler fangen kann. Schiebe ihn dorthin.
 
-        return {"frage": frage} # <--- Dieses return ist WICHTIG und muss zum äußeren try-Block gehören
+    # Wenn Nachrichten vorhanden sind, generiere dynamische Frage
+    else: # <--- DIES IST DER START DES "ELSE"-BLOCKS
+        frage = "" # <--- NEU HINZUFÜGEN: Initialisierung von 'frage' hier
+        
+        # Letzte 4 Einstiegsfragen abrufen
+        recent_entry_questions = get_recent_entry_questions(user_id)
 
-    except Exception as e: # <--- Dieser except-Block gehört zum ÄUSSEREN try-Block
-        print(f"Fehler bei der GPT-Anfrage: {e}")
-        return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
+        # Die letzten 5 Nachrichten ignorieren (für die Themenauswahl, nicht für GPT-Ausschluss)
+        recent_topics = messages[:5]
+        remaining_messages = messages[5:]
+
+        # Routinen überprüfen
+        today = datetime.datetime.now().strftime("%A")
+        unfulfilled_routines = supabase.table("routines") \
+            .select("*") \
+            .eq("day", today) \
+            .eq("checked", False) \
+            .eq("user_id", user_id) \
+            .execute().data
+
+        # Routinen, die mindestens 3-mal nicht erfüllt wurden
+        routine_texts = [r["task"] for r in unfulfilled_routines if r.get("missed_count", 0) >= 3]
+        routine_context = ", ".join(routine_texts)
+
+        # Konsolen-Log zur Überprüfung der Routinen
+        print("Wiederholt unerfüllte Routinen:", routine_context)
+
+        # 5% Wahrscheinlichkeit für Simulation/Universum-Perspektive
+        simulate_universe = random.random() < 0.05
+
+        # GPT-Anfrage vorbereiten
+        if simulate_universe:
+            prompt = f"""
+            Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
+            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
+            Vermeide die letzten vier Einstiegsfragen:
+
+            {", ".join(recent_entry_questions)}
+
+            Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
+            """
+        else:
+            # Themen, die nicht in den letzten 4 Einstiegsfragen vorkommen
+            all_past_prompts = [h["ai_prompt"] for h in supabase.table("conversation_history").select("ai_prompt").eq("user_id", user_id).order("timestamp", desc=True).limit(20).execute().data if h["ai_prompt"]]
+            filtered_messages = [msg for msg in remaining_messages if msg not in recent_entry_questions and msg not in all_past_prompts]
+
+            # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
+            if not filtered_messages:
+                filtered_messages = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
+                                     "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
+                                     "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
+                                     "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"] # HIER WURDEN THEMEN HINZUGEFÜGT
+
+            # Zufälliges Thema auswählen
+            selected_topic = random.choice(filtered_messages)
+
+            prompt = f"""
+            Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere eine **motivierende, sehr konkrete und personalisierte** Frage basierend auf einem Thema,
+            das länger nicht angesprochen wurde oder bisher kaum behandelt wurde.
+            **Sei spezifisch und gehe auf die Essenz des Themas ein, anstatt generisch zu fragen.**
+            Vermeide die letzten vier Einstiegsfragen:
+
+            {", ".join(recent_entry_questions)}
+
+            Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
+
+            **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
+            - Wie genau hast du es geschafft, XYZ zu erreichen? Was war der entscheidende Schritt?
+            - Gibt es eine Gewohnheit, die du schon lange ändern möchtest? Was hält dich davon ab, heute damit zu starten?
+            - Welchen konkreten Plan hast du für dein Ziel, [Ziel aus Profil/Gedächtnis]?
+            - Wie möchtest du heute sicherstellen, dass [Routine aus Kontext] erledigt wird? Gibt es eine Hürde?
+            - Welche Art von Unterstützung bräuchtest du, um dein [Beziehungsziel] in den nächsten Tagen aktiv zu verfolgen?
+            - Was ist die eine Sache, die dich aktuell am meisten beschäftigt und wo du dir konkrete Unterstützung wünschst?
+            """
+
+        # Konsolen-Log zur Überprüfung des Prompts
+        print("GPT Prompt:", prompt)
+
+        # Speichere die generierte dynamische Frage als ai_prompt# ... (viel Code davor in der start_interaction Funktion) ...
+        try: # <--- Dies ist der äußere try-Block, der die gesamte GPT-Anfrage und das Speichern schützt
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
+                max_tokens=120,
+                temperature=0.7
+            )
+
+            frage = response.choices[0].message.content.strip()
+
+            # Fallback, falls GPT keine sinnvolle Frage liefert
+            if not frage:
+                frage = "Was möchtest du heute erreichen oder klären?"
+
+            # Speichere die generierte dynamische Frage als ai_prompt (dieser Teil ist korrekt eingerückt)
+            try: # <--- Dies ist der innere try-Block nur für den Supabase-Insert
+                supabase.table("conversation_history").insert({
+                    "user_id": user_id,
+                    "user_input": None,
+                    "ai_response": None,
+                    "ai_prompt": frage, # frage, nicht frage_text, da frage von GPT kommt
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as e:
+                print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
+
+            return {"frage": frage} # <--- Dieses return ist WICHTIG und muss zum äußeren try-Block gehören
+
+        except Exception as e: # <--- Dieser except-Block gehört zum ÄUSSEREN try-Block
+            print(f"Fehler bei der GPT-Anfrage: {e}")
+            return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
 # Chat-Funktion
 @app.post("/chat")
