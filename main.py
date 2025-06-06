@@ -145,7 +145,7 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
             # Wenn das Speichern fehlschlägt, geben wir trotzdem die Frage zurück
             return {"frage": frage_text} # Wichtig: Hier weiter frage_text verwenden!
         
-        return {"frage": frage_text} # <-- Hier auch frage_text! Dieser return-Statement sollte eigentlich NACH dem try-except stehen, damit der except-Block den Fehler fangen kann. Schiebe ihn dorthin.
+        return {"frage": frage_text}
 
     # Wenn Nachrichten vorhanden sind, generiere dynamische Frage
     else: # <--- DIES IST DER START DES "ELSE"-BLOCKS
