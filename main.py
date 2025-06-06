@@ -234,15 +234,15 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
 
     # Speichere die generierte dynamische Frage als ai_prompt
     try:
-    supabase.table("conversation_history").insert({
-        "user_id": user_id,
-        "user_input": None,
-        "ai_response": None,
-        "ai_prompt": frage_text,
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    }).execute()
+        supabase.table("conversation_history").insert({
+            "user_id": user_id,
+            "user_input": None,
+            "ai_response": None,
+            "ai_prompt": frage_text,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
     except Exception as e:
-    print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
+        print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
 
     return {"frage": frage_text}
 
