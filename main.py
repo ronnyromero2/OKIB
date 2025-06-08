@@ -59,12 +59,8 @@ class GoalUpdate(BaseModel):
     id: int
     status: str
 
-# Neue Hilfsfunktion zum Summarisieren
+# Zusammenfassung um Token zu sparen (mit gpt-3.5-turbo)
 def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, prompt_context: str = "wichtige Punkte und Muster"):
-    """
-    Fasst einen langen Text mit GPT zusammen, um Token zu sparen.
-    Verwendet gpt-3.5-turbo für Kosten- und Geschwindigkeitseffizienz bei der Summarisierung.
-    """
     if not text_to_summarize.strip():
         return "" # Nichts zusammenfassen, wenn der Text leer ist
 
@@ -82,39 +78,31 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
                 {"role": "system", "content": "Du bist ein hilfreicher Assistent, der lange Texte zusammenfassen kann."},
                 {"role": "user", "content": summary_prompt}
             ],
-            max_tokens=summary_length * 2, # Erlaube mehr Tokens für die Ausgabe
-            temperature=0.3 # Eher faktenbasiert
+            max_tokens=summary_length * 2,
+            temperature=0.3
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
-        return "Eine Zusammenfassung konnte nicht erstellt werden." # Fallback
+        return "Eine Zusammenfassung konnte nicht erstellt werden."
 
+#Abrufen der letzten 8 unbeantworteten Einstiegs- und Interviewfragen
 def get_recent_entry_questions(user_id: str):
-    """
-    Hol die letzten 4 Einstiegsfragen des Nutters.
-    """
-    recent_questions = supabase.table("conversation_history") \
+    recent_prompts = supabase.table("conversation_history") \
         .select("ai_prompt") \
         .eq("user_id", user_id) \
-        .is_("user_input", None) \
-        .is_("ai_response", None) \
-        .neq("ai_prompt", None) \
+        .neq("ai_prompt", None) \ # Nur Einträge, die eine KI-Frage waren
         .order("timestamp", desc=True) \
-        .limit(4) \
+        .limit(8) \
         .execute()
     
-    # Optional: Filter hier nochmals zur Sicherheit, falls neq nicht 100% greift
-    return [q["ai_prompt"] for q in recent_questions.data if q["ai_prompt"]]
-
-    questions = [q["ai_prompt"] for q in recent_questions.data if q["ai_prompt"]] # Changed from user_input
-
-    print("Letzte 4 Einstiegsfragen (aus ai_prompt):", questions) # Changed log
+    questions = [q["ai_prompt"] for q in recent_prompts.data if q["ai_prompt"]]
+    print("Letzte 8 Einstiegsfragen (aus ai_prompt):", questions)
     return questions
 
-# Startfrage bei neuer Interaktion
+# Einstiegsfrage bei neuer Interaktion
 @app.get("/start_interaction/{user_id}")
-async def start_interaction(user_id: str): # Auch hier async, falls nicht geschehen
+async def start_interaction(user_id: str):
     # Letzte 30 Nachrichten abrufen
     recent_interactions = supabase.table("conversation_history") \
         .select("user_input") \
@@ -137,29 +125,63 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
         try:
             supabase.table("conversation_history").insert({
                 "user_id": user_id,
-                "user_input": None,  # Einstiegsfrage kommt von KI, nicht vom User
+                "user_input": None,
                 "ai_response": None,
-                "ai_prompt": frage_text, # <-- Hier wird frage_text verwendet
+                "ai_prompt": frage_text,
                 "timestamp": datetime.datetime.utcnow().isoformat()
             }).execute()
         except Exception as e:
             print(f"Fehler beim Speichern der initialen Einstiegsfrage als AI-Prompt: {e}")
-            # Wenn das Speichern fehlschlägt, geben wir trotzdem die Frage zurück
-            return {"frage": frage_text} # Wichtig: Hier weiter frage_text verwenden!
+            return {"frage": frage_text}
         
         return {"frage": frage_text}
 
     # Wenn Nachrichten vorhanden sind, generiere dynamische Frage
-    else: # <--- DIES IST DER START DES "ELSE"-BLOCKS
-        frage = "" # <--- NEU HINZUFÜGEN: Initialisierung von 'frage' hier
+    else:
+        frage = ""
         
-        # Letzte 4 Einstiegsfragen abrufen
-        recent_entry_questions = get_recent_entry_questions(user_id)
+        # Letzte 8 Einstiegsfragen abrufen
+        recent_ai_prompts_to_avoid = get_recent_entry_questions(user_id)
+        
+        # Laden der Wochen- und Monatszusammenfassungen aus long_term_memory
+        recent_reports = supabase.table("long_term_memory") \
+            .select("thema", "inhalt") \
+            .eq("user_id", user_id) \
+            .in_("thema", ["Wochenrückblick", "Monatsrückblick"]) \
+            .order("timestamp", desc=True) \
+            .limit(2) \
+            .execute().data        
 
-        # Die letzten 5 Nachrichten ignorieren (für die Themenauswahl, nicht für GPT-Ausschluss)
-        recent_topics = messages[:5]
-        remaining_messages = messages[5:]
+        reports_context = "\n".join([f"{r['thema']}: {r['inhalt']}" for r in recent_reports])
+        if not reports_context:
+            reports_context = "Bisher keine Berichte verfügbar."
+         
+        # Laden der Ziele aus der 'goals'-Tabelle
+        user_goals = supabase.table("goals") \
+            .select("goal_description", "status") \
+            .eq("user_id", user_id) \
+            .limit(5) \
+            .execute().data            
+ 
+        goals_context = ""
+        if user_goals:
+            goals_context = "\nAktuelle Ziele:\n" + "\n".join([f"- {g['goal_description']} (Status: {g['status']})" for g in user_goals])
+        else:
+            goals_context = "\nBisher keine Ziele erfasst."
 
+        # Laden aller Routinen aus der 'routines'-Tabelle für eine Gesamtübersicht
+        all_user_routines = supabase.table("routines") \
+            .select("task", "day", "checked", "missed_count") \
+            .eq("user_id", user_id) \
+            .limit(10) \
+            .execute().data # Limitiert auf 10, um den Kontext nicht zu überladen
+        
+        routines_overview_context = ""
+        if all_user_routines:
+            routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([f"- {r['task']} ({r['day']}, Verpasst: {r['missed_count']})" for r in all_user_routines])
+        else:
+            routines_overview_context = "\nBisher keine Routinen erfasst."
+            
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         unfulfilled_routines = supabase.table("routines") \
@@ -184,36 +206,36 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
             prompt = f"""
             Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
             Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
-            Vermeide die letzten vier Einstiegsfragen:
+            Vermeide die letzten acht Einstiegsfragen:
 
-            {", ".join(recent_entry_questions)}
+            {", ".join(recent_ai_prompts_to_avoid)}
 
             Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
             """
         else:
-            # Themen, die nicht in den letzten 4 Einstiegsfragen vorkommen
-            all_past_prompts = [h["ai_prompt"] for h in supabase.table("conversation_history").select("ai_prompt").eq("user_id", user_id).order("timestamp", desc=True).limit(20).execute().data if h["ai_prompt"]]
-            filtered_messages = [msg for msg in remaining_messages if msg not in recent_entry_questions and msg not in all_past_prompts]
+            context_for_gpt = "\nUser-Historie (letzte 30 Nachrichten):\n" + "\n".join(messages)
+            if recent_ai_prompts_to_avoid:
+                context_for_gpt += "\nKürzlich gestellte Fragen des Beraters:\n" + ", ".join(recent_ai_prompts_to_avoid)
+            
+            context_for_gpt += "\nAktuelle Berichte:\n" + reports_context
+            context_for_gpt += goals_context           
+            context_for_gpt += routines_overview_context 
+            context_for_gpt += routine_context_today   
 
-            # Falls keine geeigneten Themen gefunden werden, nutze ältere Nachrichten
-            if not filtered_messages:
-                filtered_messages = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
-                                     "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
-                                     "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
-                                     "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"] # HIER WURDEN THEMEN HINZUGEFÜGT
-
-            # Zufälliges Thema auswählen
-            selected_topic = random.choice(filtered_messages)
+            fallback_topics = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
+                               "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
+                               "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
+                               "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"]
+            topic_suggestions = ", ".join(fallback_topics)
 
             prompt = f"""
-            Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere eine **motivierende, sehr konkrete und personalisierte** Frage basierend auf einem Thema,
-            das länger nicht angesprochen wurde oder bisher kaum behandelt wurde.
+            Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere eine **motivierende, sehr konkrete und personalisierte** Frage basierend auf einem spezifischen Thema,
+            das länger nicht angesprochen wurde oder bisher kaum oder nicht behandelt wurde.
             **Sei spezifisch und gehe auf die Essenz des Themas ein, anstatt generisch zu fragen.**
+            Stelle wirklich nur eine Frage, nicht mehrere auf einmal, die mit und verbunden sind. Höchstens zwei Sätze.
             Vermeide die letzten vier Einstiegsfragen:
 
-            {", ".join(recent_entry_questions)}
-
-            Wähle als Ausgangspunkt für die Frage dieses Thema: {selected_topic}
+            {", ".join(recent_ai_prompts_to_avoid)}
 
             **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
             - Wie genau hast du es geschafft, XYZ zu erreichen? Was war der entscheidende Schritt?
@@ -222,13 +244,14 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
             - Wie möchtest du heute sicherstellen, dass [Routine aus Kontext] erledigt wird? Gibt es eine Hürde?
             - Welche Art von Unterstützung bräuchtest du, um dein [Beziehungsziel] in den nächsten Tagen aktiv zu verfolgen?
             - Was ist die eine Sache, die dich aktuell am meisten beschäftigt und wo du dir konkrete Unterstützung wünschst?
+            - Nutze den oben bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) für die Personalisierung der Frage.
             """
 
         # Konsolen-Log zur Überprüfung des Prompts
         print("GPT Prompt:", prompt)
 
-        # Speichere die generierte dynamische Frage als ai_prompt# ... (viel Code davor in der start_interaction Funktion) ...
-        try: # <--- Dies ist der äußere try-Block, der die gesamte GPT-Anfrage und das Speichern schützt
+        # Speichere die generierte dynamische Frage als ai_prompt# 
+        try:
             response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
@@ -242,21 +265,21 @@ async def start_interaction(user_id: str): # Auch hier async, falls nicht gesche
             if not frage:
                 frage = "Was möchtest du heute erreichen oder klären?"
 
-            # Speichere die generierte dynamische Frage als ai_prompt (dieser Teil ist korrekt eingerückt)
-            try: # <--- Dies ist der innere try-Block nur für den Supabase-Insert
+            # Speichere die generierte dynamische Frage als ai_prompt
+            try:
                 supabase.table("conversation_history").insert({
                     "user_id": user_id,
                     "user_input": None,
                     "ai_response": None,
-                    "ai_prompt": frage, # frage, nicht frage_text, da frage von GPT kommt
+                    "ai_prompt": frage,
                     "timestamp": datetime.datetime.utcnow().isoformat()
                 }).execute()
             except Exception as e:
                 print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
 
-            return {"frage": frage} # <--- Dieses return ist WICHTIG und muss zum äußeren try-Block gehören
+            return {"frage": frage}
 
-        except Exception as e: # <--- Dieser except-Block gehört zum ÄUSSEREN try-Block
+        except Exception as e:
             print(f"Fehler bei der GPT-Anfrage: {e}")
             return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
