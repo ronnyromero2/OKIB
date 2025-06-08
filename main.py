@@ -91,7 +91,7 @@ def get_recent_entry_questions(user_id: str):
     recent_prompts = supabase.table("conversation_history") \
         .select("ai_prompt") \
         .eq("user_id", user_id) \
-        .neq("ai_prompt", None) \ # Nur Einträge, die eine KI-Frage waren
+        .neq("ai_prompt", None) \
         .order("timestamp", desc=True) \
         .limit(8) \
         .execute()
