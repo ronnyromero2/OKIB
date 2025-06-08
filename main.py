@@ -481,7 +481,7 @@ def generiere_rueckblick(zeitraum: str, tage: int):
 
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
-    all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", asc=True).execute().data # user_id hier hinzufügen!
+    all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data # user_id hier hinzufügen!
 
 
     # Trenne jüngste Gespräche (z.B. die letzten 10) vom Rest für detaillierte Darstellung
