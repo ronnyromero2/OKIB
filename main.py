@@ -104,15 +104,24 @@ def get_recent_entry_questions(user_id: str):
 @app.get("/start_interaction/{user_id}")
 async def start_interaction(user_id: str):
     # Letzte 30 Nachrichten abrufen
-    recent_interactions = supabase.table("conversation_history") \
-        .select("user_input") \
+    recent_interactions_data = supabase.table("conversation_history") \
+        .select("user_input, ai_response") \
         .eq("user_id", user_id) \
         .order("timestamp", desc=True) \
         .limit(30) \
-        .execute()
-
+        .execute().data
+    
+    messages = [] # <--- Initialisierung der messages Liste
     # Nachrichten extrahieren
-    messages = [msg["user_input"] for msg in recent_interactions.data if msg["user_input"] != "Starte ein Gespräch"]
+    for msg_entry in recent_interactions_data:
+        user_msg = msg_entry.get("user_input")
+        ai_msg = msg_entry.get("ai_response")
+
+        # Nur hinzufügen, wenn BEIDES (User-Input UND AI-Response) vorhanden und nicht leer ist
+        if (user_msg is not None and user_msg.strip() != "" and user_msg != "Starte ein Gespräch") and \
+           (ai_msg is not None and ai_msg.strip() != ""):
+            messages.append(f"User: {user_msg}")
+            messages.append(f"AI: {ai_msg}")
 
     # Konsolen-Log zur Überprüfung der Nachrichten
     print("Letzte 30 Nachrichten:", messages)
@@ -481,7 +490,7 @@ def generiere_rueckblick(zeitraum: str, tage: int):
 
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
-    all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data # user_id hier hinzufügen!
+    all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
 
 
     # Trenne jüngste Gespräche (z.B. die letzten 10) vom Rest für detaillierte Darstellung
