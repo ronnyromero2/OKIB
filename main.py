@@ -478,20 +478,67 @@ async def chat(input: ChatInput):
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
 def automatischer_bericht():
+def automatischer_bericht():
+    # Annahme einer festen User ID für Berichte, wie in generiere_rueckblick
+    user_id = 1 
+
     heute = datetime.datetime.now()
     wochentag = heute.weekday()  # Montag = 0, Sonntag = 6
     # Korrektur des letzten Tages des Monats (robustere Berechnung)
     letzter_tag_des_monats = (heute.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
 
+    # Für die Prüfung, ob ein Bericht für heute existiert (in UTC, da Supabase UTC speichert)
+    # NEU: today_start_utc und tomorrow_start_utc für Datumsbereichsprüfung
+    today_start_utc = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start_utc = today_start_utc + datetime.timedelta(days=1)
 
+    # NEU: Variablen zur Speicherung des Berichtstyps und -inhalts
+    bericht_typ = None
+    bericht_inhalt = None
+
+    # Monatsbericht prüfen und ggf. generieren
     if heute.date() == letzter_tag_des_monats.date():
-        bericht = generiere_rueckblick("Monats", 30)
-        return {"typ": "Monatsbericht", "inhalt": bericht}
+        bericht_typ = "Monatsrückblick"
+        # NEU: Prüfen, ob Monatsbericht für heute bereits existiert
+        existing_report = supabase.table("long_term_memory") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("thema", bericht_typ) \
+            .gte("timestamp", today_start_utc.isoformat()) \
+            .lt("timestamp", tomorrow_start_utc.isoformat()) \
+            .execute().data
+        
+        # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
+        if not existing_report:
+            print(f"Generiere neuen {bericht_typ} für User {user_id}...")
+            bericht_inhalt = generiere_rueckblick("Monats", 30)
+            # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
+        # NEU: Nachricht, wenn Bericht bereits existiert
+        else:
+            print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
+
+    # Wochenbericht prüfen und ggf. generieren
     elif wochentag == 6: # Sonntag
-        bericht = generiere_rueckblick("Wochen", 7)
-        return {"typ": "Wochenbericht", "inhalt": bericht}
-    else:
-        return {"typ": None, "inhalt": None}
+        bericht_typ = "Wochenrückblick"
+        # NEU: Prüfen, ob Wochenbericht für heute bereits existiert
+        existing_report = supabase.table("long_term_memory") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("thema", bericht_typ) \
+            .gte("timestamp", today_start_utc.isoformat()) \
+            .lt("timestamp", tomorrow_start_utc.isoformat()) \
+            .execute().data
+        
+        # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
+        if not existing_report:
+            print(f"Generiere neuen {bericht_typ} für User {user_id}...")
+            bericht_inhalt = generiere_rueckblick("Wochen", 7)
+            # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
+        # NEU: Nachricht, wenn Bericht bereits existiert
+        else:
+            print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
+    
+    return {"typ": bericht_typ, "inhalt": bericht_inhalt}
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
 def generiere_rueckblick(zeitraum: str, tage: int):
