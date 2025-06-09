@@ -478,7 +478,6 @@ async def chat(input: ChatInput):
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
 def automatischer_bericht():
-def automatischer_bericht():
     # Annahme einer festen User ID für Berichte, wie in generiere_rueckblick
     user_id = 1 
 
