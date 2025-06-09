@@ -125,8 +125,8 @@ async def start_interaction(user_id: str):
         try:
             supabase.table("conversation_history").insert({
                 "user_id": user_id,
-                "user_input": None,
-                "ai_response": None,
+                "user_input": "",
+                "ai_response": "",
                 "ai_prompt": frage_text,
                 "timestamp": datetime.datetime.utcnow().isoformat()
             }).execute()
