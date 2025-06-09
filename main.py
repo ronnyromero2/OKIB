@@ -145,12 +145,15 @@ async def start_interaction(user_id: str):
         
         return {"frage": frage_text}
 
-    # Wenn Nachrichten vorhanden sind, generiere dynamische Frage
-    else:
+else:
         frage = ""
         
         # Letzte 8 Einstiegsfragen abrufen
-        recent_ai_prompts_to_avoid = get_recent_entry_questions(user_id)
+        recent_ai_prompts_to_avoid_raw = get_recent_entry_questions(user_id)
+        recent_ai_prompts_to_avoid = [
+            str(p) for p in recent_ai_prompts_to_avoid_raw
+            if p is not None and str(p).strip() != ""
+        ]
         
         # Laden der Wochen- und Monatszusammenfassungen aus long_term_memory
         recent_reports = supabase.table("long_term_memory") \
@@ -161,10 +164,13 @@ async def start_interaction(user_id: str):
             .limit(2) \
             .execute().data        
 
-        reports_context = "\n".join([f"{r['thema']}: {r['inhalt']}" for r in recent_reports])
-        if not reports_context:
+        reports_context = "\n".join([
+            f"{str(r.get('thema', ''))}: {str(r.get('inhalt', ''))}" 
+            for r in recent_reports
+        ])
+        if not reports_context.strip():
             reports_context = "Bisher keine Berichte verfügbar."
-         
+            
         # Laden der Ziele aus der 'goals'-Tabelle
         user_goals = supabase.table("goals") \
             .select("goal_description", "status") \
@@ -174,7 +180,10 @@ async def start_interaction(user_id: str):
  
         goals_context = ""
         if user_goals:
-            goals_context = "\nAktuelle Ziele:\n" + "\n".join([f"- {g['goal_description']} (Status: {g['status']})" for g in user_goals])
+            goals_context = "\nAktuelle Ziele:\n" + "\n".join([
+                f"- {str(g.get('goal_description', ''))} (Status: {str(g.get('status', ''))})" 
+                for g in user_goals
+            ])
         else:
             goals_context = "\nBisher keine Ziele erfasst."
 
@@ -183,29 +192,34 @@ async def start_interaction(user_id: str):
             .select("task", "day", "checked", "missed_count") \
             .eq("user_id", user_id) \
             .limit(10) \
-            .execute().data # Limitiert auf 10, um den Kontext nicht zu überladen
-        
+            .execute().data
+            
         routines_overview_context = ""
         if all_user_routines:
-            routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([f"- {r['task']} ({r['day']}, Verpasst: {r['missed_count']})" for r in all_user_routines])
+            routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([
+                f"- {str(r.get('task', ''))} ({str(r.get('day', ''))}, Verpasst: {str(r.get('missed_count', 0))})" 
+                for r in all_user_routines
+            ])
         else:
             routines_overview_context = "\nBisher keine Routinen erfasst."
             
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         unfulfilled_routines = supabase.table("routines") \
-            .select("*") \
+            .select("task", "missed_count") \
             .eq("day", today) \
             .eq("checked", False) \
             .eq("user_id", user_id) \
             .execute().data
 
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
-        routine_texts = [r["task"] for r in unfulfilled_routines if r.get("missed_count", 0) >= 3]
-        routine_context = ", ".join(routine_texts)
+        routine_texts = [
+            str(r.get("task", '')) for r in unfulfilled_routines 
+            if r.get("missed_count", 0) >= 3 and r.get("task") is not None
+        ]
+        routine_context_today = ", ".join(routine_texts)
 
-        # Konsolen-Log zur Überprüfung der Routinen
-        print("Wiederholt unerfüllte Routinen:", routine_context)
+        print("Wiederholt unerfüllte Routinen:", routine_context_today)
 
         # 5% Wahrscheinlichkeit für Simulation/Universum-Perspektive
         simulate_universe = random.random() < 0.05
@@ -225,11 +239,11 @@ async def start_interaction(user_id: str):
             context_for_gpt = "\nUser-Historie (letzte 30 Nachrichten):\n" + "\n".join(messages)
             if recent_ai_prompts_to_avoid:
                 context_for_gpt += "\nKürzlich gestellte Fragen des Beraters:\n" + ", ".join(recent_ai_prompts_to_avoid)
-            
+                
             context_for_gpt += "\nAktuelle Berichte:\n" + reports_context
-            context_for_gpt += goals_context           
-            context_for_gpt += routines_overview_context 
-            context_for_gpt += routine_context_today   
+            context_for_gpt += goals_context            
+            context_for_gpt += routines_overview_context    
+            context_for_gpt += routine_context_today    
 
             fallback_topics = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
                                "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
@@ -256,10 +270,8 @@ async def start_interaction(user_id: str):
             - Nutze den oben bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) für die Personalisierung der Frage.
             """
 
-        # Konsolen-Log zur Überprüfung des Prompts
         print("GPT Prompt:", prompt)
 
-        # Speichere die generierte dynamische Frage als ai_prompt# 
         try:
             response = client.chat.completions.create(
                 model="gpt-4",
@@ -270,16 +282,14 @@ async def start_interaction(user_id: str):
 
             frage = response.choices[0].message.content.strip()
 
-            # Fallback, falls GPT keine sinnvolle Frage liefert
-            if not frage:
+            if not frage.strip():
                 frage = "Was möchtest du heute erreichen oder klären?"
 
-            # Speichere die generierte dynamische Frage als ai_prompt
             try:
                 supabase.table("conversation_history").insert({
                     "user_id": user_id,
-                    "user_input": None,
-                    "ai_response": None,
+                    "user_input": "",
+                    "ai_response": "",
                     "ai_prompt": frage,
                     "timestamp": datetime.datetime.utcnow().isoformat()
                 }).execute()
