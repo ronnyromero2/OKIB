@@ -145,7 +145,7 @@ async def start_interaction(user_id: str):
         
         return {"frage": frage_text}
 
-else:
+    else:
         frage = ""
         
         # Letzte 8 Einstiegsfragen abrufen
