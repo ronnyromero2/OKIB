@@ -264,31 +264,28 @@ async def start_interaction(user_id: str):
             topic_suggestions = ", ".join(fallback_topics)
 
             prompt = f"""
-            Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere eine **motivierende, sehr konkrete und personalisierte** Frage basierend auf einem spezifischen Thema,
-            das länger nicht angesprochen wurde oder bisher kaum oder nicht behandelt wurde.
-            **Sei spezifisch und gehe auf die Essenz des Themas ein, anstatt generisch zu fragen.**
-            Stelle wirklich nur eine Frage, nicht mehrere auf einmal, die mit und verbunden sind. Höchstens zwei Sätze.
+            Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere EINE einzige, konkrete, lockere und personalisierte Frage, entweder basierend auf dem bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) oder zu einem ganz neuen Thema, das noch nie besprochen wurde.
+            Frage z.B. zu Meinungen und Interessen aus allen möglichen Bereichen, je präziser desto besser. Du willst mehr über den Benutzer erfahren, aber ihn nicht durch zu komplizierte Fragen überfordern.
+            **Vermeide zusammengesetzte Fragen oder Fragen, die mit 'und' verbunden sind.**
+            **Halte die Frage sehr kurz, idealerweise in einem Satz.**
             Vermeide die letzten vier Einstiegsfragen:
 
             {", ".join(recent_ai_prompts_to_avoid)}
-
+            
             **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
-            - Wie genau hast du es geschafft, XYZ zu erreichen? Was war der entscheidende Schritt?
-            - Gibt es eine Gewohnheit, die du schon lange ändern möchtest? Was hält dich davon ab, heute damit zu starten?
-            - Welchen konkreten Plan hast du für dein Ziel, [Ziel aus Profil/Gedächtnis]?
-            - Wie möchtest du heute sicherstellen, dass [Routine aus Kontext] erledigt wird? Gibt es eine Hürde?
-            - Welche Art von Unterstützung bräuchtest du, um dein [Beziehungsziel] in den nächsten Tagen aktiv zu verfolgen?
-            - Was ist die eine Sache, die dich aktuell am meisten beschäftigt und wo du dir konkrete Unterstützung wünschst?
-            - Nutze den oben bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) für die Personalisierung der Frage.
+            - Aus welchem Themenbereich soll das nächste Buch sein, das Du liest?
+            - Was macht Dir morgens schlechte Laune?
+            - Wo machst Du gerne Urlaub?
+            - Was würdest Du mit einem Lottogewinn machen?
+            Nutze den oben bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) für die Personalisierung der Frage.
             """
-
+            
         print("GPT Prompt:", prompt)
 
         try:
             response = client.chat.completions.create(
                 model="gpt-4",
-                messages=[{"role": "user", "content": prompt + "\n\nBitte antworte in maximal 3 kurzen Zeilen."}],
-                max_tokens=120,
+                max_tokens=60,
                 temperature=0.7
             )
 
