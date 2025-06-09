@@ -155,19 +155,31 @@ async def start_interaction(user_id: str):
             if p is not None and str(p).strip() != ""
         ]
         
-        # Laden der Wochen- und Monatszusammenfassungen aus long_term_memory
-        recent_reports = supabase.table("long_term_memory") \
+        # Letzte 10 Monatsrückblicke und letzte 4 Wochenrückblicke
+        monthly_reports = supabase.table("long_term_memory") \
             .select("thema", "inhalt") \
             .eq("user_id", user_id) \
-            .in_("thema", ["Wochenrückblick", "Monatsrückblick"]) \
+            .eq("thema", "Monatsrückblick") \
             .order("timestamp", desc=True) \
-            .limit(2) \
-            .execute().data        
-
+            .limit(10) \
+            .execute().data
+        
+        weekly_reports = supabase.table("long_term_memory") \
+            .select("thema", "inhalt") \
+            .eq("user_id", user_id) \
+            .eq("thema", "Wochenrückblick") \
+            .order("timestamp", desc=True) \
+            .limit(4) \
+            .execute().data
+        
+        # Kombiniere die Berichte für den Kontext
+        all_recent_reports = monthly_reports + weekly_reports
+        
         reports_context = "\n".join([
             f"{str(r.get('thema', ''))}: {str(r.get('inhalt', ''))}" 
-            for r in recent_reports
+            for r in all_recent_reports
         ])
+
         if not reports_context.strip():
             reports_context = "Bisher keine Berichte verfügbar."
             
