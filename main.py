@@ -285,6 +285,7 @@ async def start_interaction(user_id: str):
         try:
             response = client.chat.completions.create(
                 model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=60,
                 temperature=0.7
             )
