@@ -326,7 +326,7 @@ async def chat(input: ChatInput):
         prioritaeten = profile.get("prioritaeten", "")
 
         # Profilinformationen extrahieren und aktualisieren
-        if input.message.startswith("Interviewfrage:"):
+        if input.message and input.message.strip():
             extraction_prompt = f"""
             Extrahiere Profilinformationen (beruf, beziehungsziel, prioritaeten) aus der Antwort.
             Antworte NUR im JSON-Format:
