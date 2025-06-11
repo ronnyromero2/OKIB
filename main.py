@@ -130,12 +130,17 @@ async def start_interaction(user_id: str):
     for msg_entry in recent_interactions_data:
         user_msg = msg_entry.get("user_input")
         ai_msg = msg_entry.get("ai_response")
+        ai_prompt_msg = msg_entry.get("ai_prompt")
 
         # Nur hinzufügen, wenn BEIDES (User-Input UND AI-Response) vorhanden und nicht leer ist
         if (user_msg is not None and user_msg.strip() != "" and user_msg != "Starte ein Gespräch") and \
            (ai_msg is not None and ai_msg.strip() != ""):
             messages.append(f"User: {user_msg}")
             messages.append(f"AI: {ai_msg}")
+
+        # Hinzufügen von ai_prompts zur Historie (damit sie bei Vermeidung berücksichtigt werden)
+        if ai_prompt_msg is not None and ai_prompt_msg.strip() != "": # <--- DIESER BLOCK IST NEU
+            messages.append(f"Berater (Frage): {ai_prompt_msg}")
 
     # Konsolen-Log zur Überprüfung der Nachrichten
     print("Letzte 30 Nachrichten:", messages)
@@ -294,7 +299,7 @@ async def start_interaction(user_id: str):
 
             Mögliche Themenbereiche:
  
-            {"; ".join(covered_topics)}
+            {"; ".join(topic_suggestions)}
     
             Beispiele für Themenkategorien:
             - Persönliches Wachstum und Selbstreflexion
