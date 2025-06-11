@@ -434,7 +434,7 @@ async def chat(input: ChatInput):
         Kein allgemeines Lob. Fokussiere dich auf konkrete Ansatzpunkte.
         Stelle konkrete Fragen, schlage Aktionen vor oder weise auf Reflexionen hin.
 
-        Antworte maximal 4 Sätze. Deine Antworten sollen knapp, direkt, motivierend und auf konkrete nächste Schritte ausgerichtet sein.
+        Antworte maximal 3 Sätze. Deine Antworten sollen knapp, direkt, motivierend und auf konkrete nächste Schritte ausgerichtet sein.
         """
 
         # Chat-Interaktion mit OpenAI
