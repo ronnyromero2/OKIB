@@ -348,7 +348,7 @@ async def chat(input: ChatInput):
                     temperature=0.1
                 )
                 extracted_json_str = extraction_response.choices[0].message.content.strip()
-                print(f"Extrahierter JSON-String aus Interview-Antwort: {extracted_json_str}")
+                print(f"Extrahierter JSON-String aus Nachricht: {extracted_json_str}")
 
                 json_start = extracted_json_str.find('{')
                 json_end = extracted_json_str.rfind('}') + 1
@@ -384,7 +384,7 @@ async def chat(input: ChatInput):
             except json.JSONDecodeError as e:
                 print(f"Fehler beim Parsen des extrahierten JSON: {e}. Roher String: {extracted_json_str}")
             except Exception as e:
-                print(f"Allgemeiner Fehler bei der Profilaktualisierung aus Interview-Antwort: {e}")
+                print(f"Allgemeiner Fehler bei der Profilaktualisierung aus Nachricht: {e}")
 
         # Routinen laden
         today = datetime.datetime.now().strftime("%A")
@@ -397,11 +397,11 @@ async def chat(input: ChatInput):
         # Konversationshistorie für den System-Prompt formatieren
         history_messages = []
         for h in reversed(history_raw):
-            if h['user_input'] is not None and h['user_input'] != "": # Nur wenn User-Input existiert
+            if h.get('user_input'):
                 history_messages.append(f"User: {h['user_input']}")
-            if h['ai_response'] is not None and h['ai_response'] != "": # Nur wenn AI-Response existiert
+            if h.get('ai_response'):
                 history_messages.append(f"Berater: {h['ai_response']}")
-            if h['ai_prompt'] is not None and h['ai_prompt'] != "": # Nur wenn AI-Prompt existiert
+            if h.get('ai_prompt'):
                 history_messages.append(f"Interviewfrage: {h['ai_prompt']}")
 
         history_text = "\n".join(history_messages) if history_messages else "Bisher keine frühere Konversationshistorie."
@@ -433,6 +433,7 @@ async def chat(input: ChatInput):
         Analysiere die aktuelle Nachricht im Kontext ALLER Infos. Erkenne Inkonsistenzen oder mangelnden Fortschritt.
         Kein allgemeines Lob. Fokussiere dich auf konkrete Ansatzpunkte.
         Stelle konkrete Fragen, schlage Aktionen vor oder weise auf Reflexionen hin.
+        Achte auf realistische Vorschläge, da der Nutzer schon feste Routinen, eine Arbeit und Frau hat.
 
         Antworte maximal 3 Sätze. Deine Antworten sollen knapp, direkt, motivierend und auf konkrete nächste Schritte ausgerichtet sein.
         """
@@ -444,41 +445,13 @@ async def chat(input: ChatInput):
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": input.message}
             ],
-            max_tokens=100,
+            max_tokens=60,
             temperature=0.7
         )
         reply = response.choices[0].message.content.strip()
 
-        # Bestimme den tatsächlichen Benutzer-Input für die Historie
-        actual_user_input_for_history = input.message
-
-        # Wenn es eine Interview-Antwort ist, schneide das "Interviewfrage:"-Prefix ab
-        if actual_user_input_for_history.startswith("Interviewfrage:"):
-            actual_user_input_for_history = actual_user_input_for_history.replace("Interviewfrage:", "").strip()
-        
-        # Optional: Filter für KI-Einstiegsfragen
-        # Passe den String an deine tatsächliche Einstiegsfrage an, falls zutreffend.
-        # Beispiel: if actual_user_input_for_history.startswith("Hallo, ich bin dein persönlicher Berater."):
-        #    actual_user_input_for_history = ""
-        # Entferne diesen Block, wenn keine KI-Einstiegsfragen über diesen Endpunkt gesendet werden.
-
         # Nachricht in Historie speichern
-        user_input_to_save = input.message
-        # Check if the message is actually an entry question passed by the frontend
-        # This is a heuristic and ideally the frontend should not send entry questions here.
-        if "Einstiegsfrage:" in user_input_to_save and reply is not None:
-            # If it's a known entry question format AND we're getting a reply, it's probably the frontend re-sending it.
-            # In this case, we don't save it as user_input.
-            user_input_to_save = None
-
-        supabase.table("conversation_history").insert({
-            "user_id": user_id,
-            "user_input": user_input_to_save, # <-- ÄNDERUNG: Vermeide Speicherung von "Einstiegsfrage" als User-Input
-            "ai_response": reply,
-            "ai_prompt": None, # Diese Spalte ist hier immer None, da dies eine User-Antwort + AI-Reaktion ist
-            "timestamp": datetime.datetime.utcnow().isoformat()
-        }).execute()
-
+        await _save_conversation_entry(user_id, input.message, reply, None)
         return {"reply": reply}
 
     except Exception as e:
