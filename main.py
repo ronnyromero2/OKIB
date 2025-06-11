@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from typing import Optional
 import os
 import datetime
 import random # Hinzugefügt für random.choice
@@ -17,6 +18,19 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+async def _save_conversation_entry(user_id: str, user_input: Optional[str], ai_response: Optional[str], ai_prompt: Optional[str]):
+    """Speichert einen neuen Eintrag in der Konversationshistorie."""
+    try:
+        supabase.table("conversation_history").insert({
+            "user_id": user_id,
+            "user_input": user_input,
+            "ai_response": ai_response,
+            "ai_prompt": ai_prompt,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
+    except Exception as e:
+        print(f"Fehler beim Speichern der Konversationshistorie: {e}")
 
 app = FastAPI()
 
