@@ -333,9 +333,9 @@ async function sendChat() {
 async function ladeBericht(typ) {
     let endpoint = "";
     if (typ === 'wochenbericht') {
-        endpoint = "bericht/woche"; // Korrekter Endpunkt für Wochenbericht
+        endpoint = "bericht/automatisch"; //
     } else if (typ === 'monatsbericht') {
-        endpoint = "bericht/monat"; // Korrekter Endpunkt für Monatsbericht
+       endpoint = "bericht/automatisch"; //
     } else {
         console.error("Unbekannter Berichtstyp:", typ);
         return; // Funktion beenden, wenn Typ unbekannt
@@ -343,13 +343,22 @@ async function ladeBericht(typ) {
 
     try {
         const res = await fetch(`${API_URL}/${endpoint}`);
+        if (!res.ok) { // Prüfen, ob die HTTP-Antwort erfolgreich war (z.B. kein 500er)
+            const errorText = await res.text();
+            console.error(`HTTP Fehler: ${res.status} - ${errorText}`);
+            throw new Error(`Serverfehler: ${res.status}`);
+        }
         const data = await res.json();
         const box = document.getElementById("berichtBox");
 
         // Überprüfe, ob Daten und Inhalt vorhanden sind, bevor du sie anzeigst
         if (data.inhalt) { // <-- HIER VON data.bericht AUF data.inhalt GEÄNDERT
-            box.innerText = data.inhalt;
-        } else {
+        } else if (data.typ === "Monatsrückblick" && !data.inhalt) { //
+            box.innerText = "Monatsbericht noch nicht verfügbar oder leer. Er wird am Monatsende generiert.";
+        } else if (data.typ === "Wochenrückblick" && !data.inhalt) { //
+            box.innerText = "Wochenbericht noch nicht verfügbar oder leer. Er wird sonntags generiert.";
+        }
+        else {
             box.innerText = "Bericht konnte nicht geladen werden oder ist leer.";
         }
     } catch (error) {
@@ -358,8 +367,8 @@ async function ladeBericht(typ) {
         box.innerText = "Fehler beim Laden des Berichts. Bitte versuche es später noch einmal.";
     }
 }
-
-  // Neue Funktion: Einstiegsfrage beim Laden der Seite
+  
+    // Neue Funktion: Einstiegsfrage beim Laden der Seite
 async function stelleEinstiegsfrage() {
   const resBox = document.getElementById("chatBox");
 
