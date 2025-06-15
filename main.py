@@ -556,8 +556,8 @@ def automatischer_bericht():
             .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
-            .gte("timestamp", today_start_utc.isoformat() + 'Z') \
-            .lt("timestamp", tomorrow_start_utc.isoformat() + 'Z') \
+            .gte("timestamp", today_start_utc.isoformat() + 'Z') \
+            .lt("timestamp", tomorrow_start_utc.isoformat() + 'Z') \
             .execute()
         
         # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
