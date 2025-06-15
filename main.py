@@ -524,7 +524,7 @@ def automatischer_bericht():
         print(f"Monatsbericht-Check - Abfragebereich: {start_of_month_utc.isoformat()} bis {end_of_month_utc.isoformat()}")
   
         existing_report_response = supabase.table("long_term_memory") \
-            .select("id, thema, timestamp") \ # ! NEU: thema und timestamp selektieren für bessere Diagnose
+            .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
             .gte("timestamp", start_of_month_utc.isoformat()) \
@@ -553,7 +553,7 @@ def automatischer_bericht():
         print(f"Wochenbericht-Check - Abfragebereich: {today_start_utc.isoformat()} bis {tomorrow_start_utc.isoformat()}")
 
         existing_report_response = supabase.table("long_term_memory") \
-            .select("id, thema, timestamp") \ # ! NEU: thema und timestamp selektieren für bessere Diagnose
+            .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
             .gte("timestamp", today_start_utc.isoformat()) \
