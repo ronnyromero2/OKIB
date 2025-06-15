@@ -580,7 +580,7 @@ def automatischer_bericht():
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
 def generiere_rueckblick(zeitraum: str, tage: int):
     user_id = 1 # Annahme einer festen User ID für Berichte
-    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat()
+    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat() + 'Z'
 
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
