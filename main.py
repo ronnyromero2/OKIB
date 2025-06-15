@@ -641,7 +641,7 @@ def generiere_rueckblick(zeitraum: str, tage: int):
 
     # Bericht speichern
     supabase.table("long_term_memory").insert({
-        "thema": f"{zeitraum}srückblick",
+        "thema": f"{zeitraum}rückblick",
         "inhalt": bericht,
         "timestamp": datetime.datetime.utcnow().isoformat() + 'Z',
         "user_id": user_id # user_id auch hier speichern!
