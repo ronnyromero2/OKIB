@@ -527,8 +527,8 @@ def automatischer_bericht():
             .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
-            .gte("timestamp", start_of_month_utc.isoformat()) \
-            .lt("timestamp", end_of_month_utc.isoformat()) \
+            .gte("timestamp", start_of_month_utc.isoformat() + 'Z') \
+            .lt("timestamp", end_of_month_utc.isoformat() + 'Z') \
             .execute()
         
         # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
@@ -556,8 +556,8 @@ def automatischer_bericht():
             .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
-            .gte("timestamp", today_start_utc.isoformat()) \
-            .lt("timestamp", tomorrow_start_utc.isoformat()) \
+            .gte("timestamp", today_start_utc.isoformat() + 'Z') \
+            .lt("timestamp", tomorrow_start_utc.isoformat() + 'Z') \
             .execute()
         
         # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
@@ -644,7 +644,7 @@ def generiere_rueckblick(zeitraum: str, tage: int):
     supabase.table("long_term_memory").insert({
         "thema": f"{zeitraum}srückblick",
         "inhalt": bericht,
-        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "timestamp": datetime.datetime.utcnow().isoformat() + 'Z',
         "user_id": user_id # user_id auch hier speichern!
     }).execute()
 
