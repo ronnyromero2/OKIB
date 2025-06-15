@@ -527,7 +527,7 @@ def automatischer_bericht():
             .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
-            .gte("timestamp", start_of_month_utc.isoformat() + 'Z') \
+            .gte("timestamp", start_of_month_utc.isoformat() + 'Z') \
             .lt("timestamp", end_of_month_utc.isoformat() + 'Z') \
             .execute()
         
