@@ -515,7 +515,7 @@ def automatischer_bericht():
 
     # Monatsbericht prüfen und ggf. generieren
     # Prüfe, ob es der letzte Tag des Monats ist (konsistent in UTC)
-    if heute_utc.day == 15 and heute_utc.month == 6:
+    if heute_utc.day == (heute_utc.replace(day=1) + datetime.timedelta(days=32)).replace(day=1).day - 1:
         bericht_typ = "Monatsrückblick"
         # Start des aktuellen Monats (UTC)
         start_of_month_utc = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
