@@ -311,9 +311,8 @@ async def start_interaction(user_id: str):
             - Rolle von Spiritualität oder Sinnhaftigkeit im Leben
             - Beziehungen (außerhalb des Beziehungsziels)
             - Umgang mit Geld und Finanzen
-            - sexuelle Vorlieben
             - Umfeld und Lebensgestaltung
-
+            Frage aber auch nach anderen Themen.
             Nutze den oben bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) für die Personalisierung der Frage.
             """
             
@@ -533,7 +532,6 @@ def automatischer_bericht():
         
         # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
         existing_report_data = existing_report_response.data
-        
         print(f"Monatsbericht-Check - Supabase Roh-Response: {existing_report_response}")
         print(f"Monatsbericht-Check - Gefundene Berichte: {existing_report_data}")
         
@@ -541,7 +539,6 @@ def automatischer_bericht():
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
             bericht_inhalt = generiere_rueckblick("Monats", 30)
-            # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
         else:
             print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
 
@@ -586,32 +583,25 @@ def generiere_rueckblick(zeitraum: str, tage: int):
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
     all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
 
-    # Trenne jüngste Gespräche (z.B. die letzten 10) vom Rest für detaillierte Darstellung
-    recent_gespraeche = all_gespraeche[-10:] if len(all_gespraeche) > 10 else all_gespraeche[:]
-    older_gespraeche = all_gespraeche[:-10] if len(all_gespraeche) > 10 else []
-
     recent_gespraeche_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in recent_gespraeche])
 
-    summarized_older_history = ""
-    if older_gespraeche:
-        older_history_raw_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in older_gespraeche])
-        summarized_older_history = summarize_text_with_gpt(older_history_raw_text, summary_length=200, prompt_context="die wichtigsten Trends, Herausforderungen und Entscheidungen")
-
+    # Alle Gespräche des Zeitraums für den Prompt nutzen
     gespraeche_text_for_prompt = ""
-    if recent_gespraeche_text:
-        gespraeche_text_for_prompt += f"Jüngste Gespräche (letzte {len(recent_gespraeche)}):\n{recent_gespraeche_text}\n"
-    if summarized_older_history:
-        gespraeche_text_for_prompt += f"\nZusammenfassung älterer Gespräche im {zeitraum}:\n{summarized_older_history}\n"
-    if not gespraeche_text_for_prompt:
+    if all_gespraeche:
+        # Hier optional die Rohdaten übergeben, wenn der Prompt damit umgehen kann,
+        # oder eine einfache Textrepräsentation aller Gespräche.
+        # Da wir max_tokens im GPT-Call haben, kann GPT selbst zusammenfassen.
+        gespraeche_text_for_prompt += "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in all_gespraeche])
+    else:
         gespraeche_text_for_prompt = "Es gab keine relevanten Gespräche in diesem Zeitraum."
 
     # Ziele können oft kompakter sein. Wenn sie aber auch zu lang werden, hier auch summarisieren.
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
 
     system = f"""
-    Du bist ein persönlicher Assistent. Schreibe einen detaillierten und motivierenden Rückblick basierend auf den letzten {zeitraum}, einschließlich der wichtigsten Punkte aus Gesprächen und dem Status von Zielen.
+    Du bist ein persönlicher Beobachter und Coach. Liste die im letzten {zeitraum} besprochenen Themen und den Status von Zielen und Routinen rückblickend knapp auf.
     Analysiere Trends, erkenne Fortschritte oder Herausforderungen und gebe konkrete, umsetzbare Vorschläge für die Zukunft.
-    Berücksichtige sowohl die jüngsten detaillierten Gespräche als auch die zusammengefassten älteren Kontexte.
+    Berücksichtige alle Gespräche im jeweiligen Zeitraum (Woche oder Monat).
     """
     user = f"""
     Hier sind die Informationen für den {zeitraum}-Rückblick:
@@ -633,7 +623,7 @@ def generiere_rueckblick(zeitraum: str, tage: int):
             {"role": "system", "content": system},
             {"role": "user", "content": user}
         ],
-        max_tokens=500, # Begrenze die Ausgabe des Berichts auf z.B. 500 Tokens
+        max_tokens=300, # Begrenze die Ausgabe des Berichts
         temperature=0.7
     )
 
