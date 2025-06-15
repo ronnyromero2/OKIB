@@ -501,62 +501,80 @@ def automatischer_bericht():
     # Annahme einer festen User ID für Berichte, wie in generiere_rueckblick
     user_id = 1 
 
-    heute = datetime.datetime.now()
-    wochentag = heute.weekday()  # Montag = 0, Sonntag = 6
-    # Korrektur des letzten Tages des Monats (robustere Berechnung)
-    letzter_tag_des_monats = (heute.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
+    # Alle Zeitberechnungen basieren jetzt konsistent auf UTC
+    heute_utc = datetime.datetime.utcnow() 
+    wochentag_utc = heute_utc.weekday() # Montag = 0, Sonntag = 6 (UTC-basiert)
+    
+    # Debug-Ausgaben für den Start
+    print(f"\n--- Start 'automatischer_bericht' ---")
+    print(f"Aktuelle Server-UTC-Zeit: {heute_utc.isoformat()}")
+    print(f"Aktueller Wochentag (0=Mo, 6=So) in UTC: {wochentag_utc}")
 
-    # Für die Prüfung, ob ein Bericht für heute existiert (in UTC, da Supabase UTC speichert)
-    # NEU: today_start_utc und tomorrow_start_utc für Datumsbereichsprüfung
-    today_start_utc = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow_start_utc = today_start_utc + datetime.timedelta(days=1)
-
-    # NEU: Variablen zur Speicherung des Berichtstyps und -inhalts
     bericht_typ = None
     bericht_inhalt = None
 
     # Monatsbericht prüfen und ggf. generieren
-    if heute.date() == letzter_tag_des_monats.date():
+    # Prüfe, ob es der letzte Tag des Monats ist (konsistent in UTC)
+    if heute_utc.day == (heute_utc.replace(day=1) + datetime.timedelta(days=32)).replace(day=1).day - 1:
         bericht_typ = "Monatsrückblick"
-        # NEU: Prüfen, ob Monatsbericht für heute bereits existiert
-        existing_report = supabase.table("long_term_memory") \
-            .select("id") \
+        # Start des aktuellen Monats (UTC)
+        start_of_month_utc = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # Ende des aktuellen Monats (UTC) - 1 Mikrosekunde vor dem nächsten Monat
+        end_of_month_utc = (start_of_month_utc.replace(month=start_of_month_utc.month % 12 + 1, day=1) - datetime.timedelta(microseconds=1))
+        print(f"Monatsbericht-Check - Abfragebereich: {start_of_month_utc.isoformat()} bis {end_of_month_utc.isoformat()}")
+  
+        existing_report_response = supabase.table("long_term_memory") \
+            .select("id, thema, timestamp") \ # ! NEU: thema und timestamp selektieren für bessere Diagnose
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
-            .gte("timestamp", today_start_utc.isoformat()) \
-            .lt("timestamp", tomorrow_start_utc.isoformat()) \
-            .execute().data
+            .gte("timestamp", start_of_month_utc.isoformat()) \
+            .lt("timestamp", end_of_month_utc.isoformat()) \
+            .execute()
+        
+        # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
+        existing_report_data = existing_report_response.data
+        
+        print(f"Monatsbericht-Check - Supabase Roh-Response: {existing_report_response}")
+        print(f"Monatsbericht-Check - Gefundene Berichte: {existing_report_data}")
         
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
-        if not existing_report:
+        if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
             bericht_inhalt = generiere_rueckblick("Monats", 30)
             # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
-        # NEU: Nachricht, wenn Bericht bereits existiert
         else:
             print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
 
     # Wochenbericht prüfen und ggf. generieren
-    elif wochentag == 6: # Sonntag
+    elif wochentag_utc == 6: # Sonntag (im deutschen Kontext, basierend auf UTC)
         bericht_typ = "Wochenrückblick"
-        # NEU: Prüfen, ob Wochenbericht für heute bereits existiert
-        existing_report = supabase.table("long_term_memory") \
-            .select("id") \
+        today_start_utc = heute_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start_utc = today_start_utc + datetime.timedelta(days=1)
+        print(f"Wochenbericht-Check - Abfragebereich: {today_start_utc.isoformat()} bis {tomorrow_start_utc.isoformat()}")
+
+        existing_report_response = supabase.table("long_term_memory") \
+            .select("id, thema, timestamp") \ # ! NEU: thema und timestamp selektieren für bessere Diagnose
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
             .gte("timestamp", today_start_utc.isoformat()) \
             .lt("timestamp", tomorrow_start_utc.isoformat()) \
-            .execute().data
+            .execute()
         
+        # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
+        existing_report_data = existing_report_response.data
+        
+        print(f"Wochenbericht-Check - Supabase Roh-Response: {existing_report_response}")
+        print(f"Wochenbericht-Check - Gefundene Berichte: {existing_report_data}")
+
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
-        if not existing_report:
+        if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
             bericht_inhalt = generiere_rueckblick("Wochen", 7)
             # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
         # NEU: Nachricht, wenn Bericht bereits existiert
         else:
             print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
-    
+    print(f"--- Ende 'automatischer_bericht' ---\n")
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
