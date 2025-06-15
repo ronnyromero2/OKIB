@@ -528,7 +528,7 @@ def automatischer_bericht():
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
             .gte("timestamp", start_of_month_utc.isoformat() + 'Z') \
-            .lt("timestamp", end_of_month_utc.isoformat() + 'Z') \
+            .lt("timestamp", end_of_month_utc.isoformat() + 'Z') \
             .execute()
         
         # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
@@ -585,7 +585,6 @@ def generiere_rueckblick(zeitraum: str, tage: int):
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
     all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
-
 
     # Trenne jüngste Gespräche (z.B. die letzten 10) vom Rest für detaillierte Darstellung
     recent_gespraeche = all_gespraeche[-10:] if len(all_gespraeche) > 10 else all_gespraeche[:]
