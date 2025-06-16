@@ -331,40 +331,57 @@ async function sendChat() {
   }
 
 async function ladeBericht(typ) {
-    let endpoint = "";
+    let reportTypeName = ""; // Wird den korrekten Namen des Berichts für das Backend halten
+
+    // Mapping von Frontend-Typ auf Backend-Thema
     if (typ === 'wochenbericht') {
-        endpoint = "bericht/automatisch"; //
+        reportTypeName = "Wochenrückblick"; // Backend erwartet diesen String
     } else if (typ === 'monatsbericht') {
-       endpoint = "bericht/automatisch"; //
+        reportTypeName = "Monatsrückblick"; // Backend erwartet diesen String
     } else {
         console.error("Unbekannter Berichtstyp:", typ);
-        return; // Funktion beenden, wenn Typ unbekannt
+        const box = document.getElementById("berichtBox");
+        box.innerText = "Unbekannter Berichtstyp angefragt.";
+        return; // Funktion beenden
     }
+
+    // Aufruf des NEUEN Backend-Endpunkts zum Abrufen des Berichts
+    // Der Backend-Endpunkt ist jetzt `bericht/abrufen/{report_type_name}`
+    // Annahme: user_id ist fest 1, ansonsten müsste sie hier übergeben werden
+    const endpoint = `bericht/abrufen/${reportTypeName}?user_id=1`; 
 
     try {
         const res = await fetch(`${API_URL}/${endpoint}`);
-        if (!res.ok) { // Prüfen, ob die HTTP-Antwort erfolgreich war (z.B. kein 500er)
-            const errorText = await res.text();
-            console.error(`HTTP Fehler: ${res.status} - ${errorText}`);
-            throw new Error(`Serverfehler: ${res.status}`);
+        
+        if (!res.ok) {
+            // Versuche, Fehlerdetails als JSON zu bekommen, wenn der Server sie sendet
+            let errorDetail = res.statusText;
+            try {
+                const errorJson = await res.json();
+                if (errorJson && errorJson.detail) {
+                    errorDetail = errorJson.detail;
+                }
+            } catch (e) {
+                // Konnte kein JSON parsen, verwende den StatusText
+            }
+            console.error(`HTTP Fehler: ${res.status} - ${errorDetail}`);
+            throw new Error(`Serverfehler (${res.status}): ${errorDetail}`);
         }
+
         const data = await res.json();
         const box = document.getElementById("berichtBox");
 
-        // Überprüfe, ob Daten und Inhalt vorhanden sind, bevor du sie anzeigst
-        if (data.inhalt) { // <-- HIER VON data.bericht AUF data.inhalt GEÄNDERT
-        } else if (data.typ === "Monatsrückblick" && !data.inhalt) { //
-            box.innerText = "Monatsbericht noch nicht verfügbar oder leer. Er wird am Monatsende generiert.";
-        } else if (data.typ === "Wochenrückblick" && !data.inhalt) { //
-            box.innerText = "Wochenbericht noch nicht verfügbar oder leer. Er wird sonntags generiert.";
-        }
-        else {
-            box.innerText = "Bericht konnte nicht geladen werden oder ist leer.";
+        // Überprüfe, ob Inhalt vorhanden und nicht leer ist
+        if (data.inhalt && data.inhalt.trim() !== "") { 
+            box.innerText = data.inhalt;
+        } else {
+            // Wenn kein Inhalt vom Backend zurückkommt, aber kein Fehler (z.B. Bericht existiert noch nicht)
+            box.innerText = `Kein ${reportTypeName} verfügbar. Er wird automatisch am entsprechenden Tag generiert.`;
         }
     } catch (error) {
         console.error("Fehler beim Laden des Berichts:", error);
         const box = document.getElementById("berichtBox");
-        box.innerText = "Fehler beim Laden des Berichts. Bitte versuche es später noch einmal.";
+        box.innerText = `Fehler beim Laden des Berichts: ${error.message || error}. Bitte versuche es später noch einmal.`;
     }
 }
   
