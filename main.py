@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi import HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -642,6 +643,37 @@ def generiere_rueckblick(zeitraum: str, tage: int):
 class RoutineUpdate(BaseModel):
     id: int
     checked: bool
+
+# Endpunkt zum Abrufen des neuesten gespeicherten Berichts
+@app.get("/bericht/abrufen/{report_type_name}")
+def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann als Standard 1 haben
+    try:
+        # Hier wird der "thema"-String genau so gesucht, wie er gespeichert wird
+        # (z.B. "Wochenrückblick" oder "Monatsrückblick", ohne 's')
+        
+        # Sicherstellen, dass der übergebene Typ einem bekannten Thema entspricht
+        if report_type_name not in ["Wochenrückblick", "Monatsrückblick"]:
+            raise HTTPException(status_code=400, detail="Ungültiger Berichtstyp angefragt.")
+
+        report_data = supabase.table("long_term_memory") \
+            .select("inhalt") \
+            .eq("user_id", user_id) \
+            .eq("thema", report_type_name) \
+            .order("timestamp", desc=True) \
+            .limit(1) \
+            .execute().data
+        
+        if report_data:
+            print(f"Bericht '{report_type_name}' für User {user_id} gefunden.")
+            return {"inhalt": report_data[0]["inhalt"]}
+        else:
+            print(f"Kein Bericht '{report_type_name}' für User {user_id} gefunden.")
+            return {"inhalt": f"Kein {report_type_name} verfügbar. Er wird {report_type_name.lower().replace('rückblick', '')}s generiert."}
+    except HTTPException as http_exc:
+        raise http_exc # HTTPExceptions weiterleiten
+    except Exception as e:
+        print(f"FEHLER beim Abrufen des Berichts '{report_type_name}' für User {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Fehler beim Abrufen des Berichts.")
 
 # Routinen abrufen
 @app.get("/routines/{user_id}") # user_id im Pfad hinzufügen
