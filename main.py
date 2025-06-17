@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from typing import Optional
+from typing import Optional, Dict, Any
 import os
 import datetime
 import random # Hinzugefügt für random.choice
@@ -28,7 +28,7 @@ async def _save_conversation_entry(user_id: str, user_input: Optional[str], ai_r
             "user_input": user_input,
             "ai_response": ai_response,
             "ai_prompt": ai_prompt,
-            "timestamp": datetime.datetime.utcnow().isoformat()
+            "timestamp": datetime.datetime.utcnow().isoformat() + 'Z'
         }).execute()
     except Exception as e:
         print(f"Fehler beim Speichern der Konversationshistorie: {e}")
@@ -52,12 +52,7 @@ def serve_html():
 # Modelle
 class ChatInput(BaseModel):
     message: str
-
-class ProfileData(BaseModel):
-    beruf: str
-    beziehungsziel: str
-    prioritäten: str # Beibehalten, da dies die Modell-Definition ist
-
+    
 class InterviewAntwort(BaseModel):
     antwort: str
 
@@ -73,6 +68,128 @@ class Goal(BaseModel):
 class GoalUpdate(BaseModel):
     id: int
     status: str
+
+class RoutineUpdate(BaseModel):
+    id: int
+    checked: bool
+    
+# Funktion zur Extraktion und Speicherung von erweiterten Profildetails im EAV-Modell
+async def extrahiere_und_speichere_profil_details(user_id: int, gespraechs_historie: list):
+    print(f"Starte dynamische Profil-Extraktion und Speicherung für User {user_id}...")
+    recent_history_for_extraction = gespraechs_historie[-10:] if len(gespraechs_historie) > 10 else gespraechs_historie[:]
+    
+    if not recent_history_for_extraction:
+        print("Keine relevante Gesprächshistorie für Profil-Extraktion vorhanden.")
+        return
+
+    history_text = "\n".join([f"User: {g['user_input']} | AI: {g['ai_response']}" for g in recent_history_for_extraction])
+
+    # Bestehendes dynamisches Profil aus der 'profile'-Tabelle abrufen
+    # Die 'profile'-Tabelle ist jetzt unsere EAV-Tabelle
+    current_dynamic_profile_response = supabase.table("profile") \
+        .select("attribute_name, attribute_value") \
+        .eq("user_id", user_id) \
+        .execute().data
+    
+    existing_dynamic_profile: Dict[str, str] = {
+        item["attribute_name"]: item["attribute_value"] 
+        for item in current_dynamic_profile_response
+    }
+
+    # Feste Attribute für den Kontext (aus der 'profile' Tabelle abrufen, falls benötigt)
+    # Wenn Sie diese als Kontext für GPT nutzen wollen, müssten diese aus einer separaten Tabelle kommen,
+    # oder wenn sie Teil des EAV-Modells sind, sind sie bereits in existing_dynamic_profile.
+    # Hier nehmen wir an, dass alle Attribute im EAV-Modell sind.
+    existing_fixed_attributes = {} # Keine separaten festen Attribute mehr
+
+    system_prompt = f"""
+    Du bist ein spezialisierter Assistent, der wichtige persönliche Informationen und Vorlieben des Benutzers aus Gesprächen extrahiert.
+    Deine Aufgabe ist es, ein detailliertes Langzeitprofil des Benutzers aufzubauen und inkrementell zu aktualisieren.
+    Extrahiere alle relevanten und konsistenten Erkenntnisse über den Benutzer, ignoriere unwichtige, temporäre oder irrelevante Details.
+    Denke daran, dass nur Informationen wichtig sind, die das System nutzen kann, um zukünftige Interaktionen zu personalisieren oder besser auf den Benutzer einzugehen (z.B. Vorlieben, Ziele, relevante persönliche Umstände).
+    
+    Du erhältst eine aktuelle Gesprächshistorie und ein JSON-Objekt mit bereits bekannten dynamischen Profilinformationen des Benutzers.
+    Analysiere die neuen Gesprächssegmente. Wenn neue relevante Informationen gefunden werden oder sich bestehende ändern, aktualisiere das bereitgestellte JSON-Objekt entsprechend.
+    Wenn eine Information gelöscht oder als falsch identifiziert wird, entferne den Schlüssel aus dem JSON-Objekt.
+    Gib immer das **vollständige, aktualisierte JSON-Objekt** zurück, auch wenn keine Änderungen vorgenommen wurden.
+
+    Beispiele für relevante Informationen sind Schlüsselwörter wie "Beruf", "Beziehungsziel", "Prioritäten", "Hobbys", "Interessen", "Urlaubsziel", "Lieblingsessen", "persönliche Ziele", "Familienstand", "aktuelle Herausforderungen", "Softwarepräferenzen", "Lernziele", etc.
+    Verwende prägnante, aussagekräftige Schlüsselnamen (z.B. "Interessen" statt "Was mag der Nutzer machen").
+
+    Antworte NUR mit dem JSON-Objekt.
+    """
+
+    user_prompt = f"""
+    Hier ist die aktuelle Gesprächshistorie:
+
+    {history_text}
+
+    Bereits bekanntes dynamisches Profil: {json.dumps(existing_dynamic_profile, ensure_ascii=False)}
+    
+    Gib das vollständige, aktualisierte dynamische Profil als JSON-Objekt zurück.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o", # GPT-4o ist gut für JSON-Extraktion
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"}, # Explizit JSON-Format anfordern
+            temperature=0.0 # Geringe Temperatur für präzise Extraktion
+        )
+        
+        extracted_data_str = response.choices[0].message.content
+        new_extracted_profile: Dict[str, str] = json.loads(extracted_data_str)
+
+        print(f"Extrahierte Profildaten von GPT für User {user_id}: {new_extracted_profile}")
+
+        # Vergleichen und Aktualisieren der Daten in der 'profile' Tabelle (EAV-Modell)
+        for attribute_name, attribute_value in new_extracted_profile.items():
+            if attribute_name and attribute_value: # Stelle sicher, dass Schlüssel und Wert nicht leer sind
+                # Überprüfen, ob der Wert sich geändert hat, bevor wir aktualisieren
+                if existing_dynamic_profile.get(attribute_name) != attribute_value:
+                    # Update (Upsert-Logik)
+                    supabase.table("profile") \
+                        .upsert({ # Tabelle ist jetzt 'profile'
+                            "user_id": user_id,
+                            "attribute_name": attribute_name,
+                            "attribute_value": attribute_value,
+                            "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'
+                        }, on_conflict="user_id, attribute_name") \
+                        .execute()
+                    print(f"Profilattribut '{attribute_name}' für User {user_id} aktualisiert/eingefügt.")
+            else:
+                # Wenn das LLM einen Wert als leer zurückgibt, löschen wir ihn (optional, je nach gewünschtem Verhalten)
+                if attribute_name in existing_dynamic_profile:
+                    supabase.table("profile") \
+                        .delete() \
+                        .eq("user_id", user_id) \
+                        .eq("attribute_name", attribute_name) \
+                        .execute()
+                    print(f"Profilattribut '{attribute_name}' für User {user_id} gelöscht (vom LLM als leer gemeldet).")
+        
+        # Attribute löschen, die nicht mehr vom LLM zurückgegeben wurden
+        attributes_to_delete = [
+            name for name in existing_dynamic_profile 
+            if name not in new_extracted_profile
+        ]
+        if attributes_to_delete:
+            supabase.table("profile") \
+                .delete() \
+                .eq("user_id", user_id) \
+                .in_("attribute_name", attributes_to_delete) \
+                .execute()
+            print(f"Profilattribute für User {user_id} gelöscht: {', '.join(attributes_to_delete)}")
+
+
+    except json.JSONDecodeError as e:
+        print(f"FEHLER beim Parsen der JSON-Antwort von GPT in extrahiere_und_speichere_profil_details: {e}")
+        print(f"GPT-Antwort (Roh): {extracted_data_str}")
+    except Exception as e:
+        print(f"FEHLER bei der Profil-Extraktion oder Speicherung in extrahiere_und_speichere_profil_details: {e}")
+
 
 # Zusammenfassung um Token zu sparen (mit gpt-3.5-turbo)
 def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, prompt_context: str = "wichtige Punkte und Muster"):
@@ -353,75 +470,21 @@ async def start_interaction(user_id: str):
 @app.post("/chat")
 async def chat(input: ChatInput):
     try:
-        # 1. Benutzerprofil laden
         user_id = 1 
-        profile_data = supabase.table("profile").select("*").eq("id", user_id).execute().data
-        profile = profile_data[0] if profile_data else {}
+        # Laden der dynamischen Profildaten aus der 'profile'-Tabelle (EAV-Modell)
+        profile_attributes_data = supabase.table("profile") \
+            .select("attribute_name, attribute_value") \
+            .eq("user_id", user_id) \
+            .execute().data
 
-        beruf = profile.get("beruf", "")
-        beziehungsziel = profile.get("beziehungsziel", "")
-        prioritaeten = profile.get("prioritaeten", "")
-
-        # Profilinformationen extrahieren und aktualisieren
-        if input.message and input.message.strip():
-            extraction_prompt = f"""
-            Extrahiere Profilinformationen (beruf, beziehungsziel, prioritaeten) aus der Antwort.
-            Antworte NUR im JSON-Format:
-            {{
-              "beruf": "...",
-              "beziehungsziel": "...",
-              "prioritaeten": "..."
-            }}
-            Benutzerantwort: {input.message}
-            """
-            try:
-                extraction_response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "Du bist ein JSON-Extraktor. Antworte ausschließlich im JSON-Format."},
-                        {"role": "user", "content": extraction_prompt}
-                    ],
-                    max_tokens=150,
-                    temperature=0.1
-                )
-                extracted_json_str = extraction_response.choices[0].message.content.strip()
-                print(f"Extrahierter JSON-String aus Nachricht: {extracted_json_str}")
-
-                json_start = extracted_json_str.find('{')
-                json_end = extracted_json_str.rfind('}') + 1
-
-                if json_start != -1 and json_end != -1:
-                    clean_json_str = extracted_json_str[json_start:json_end]
-                    extracted_data = json.loads(clean_json_str)
-                else:
-                    print("Fehler: Kein gültiges JSON in extrahierter Antwort gefunden.")
-                    extracted_data = {}
-
-                if extracted_data.get("beruf") or extracted_data.get("beziehungsziel") or extracted_data.get("prioritaeten"):
-                    existing_profile_res = supabase.table("profile").select("*").eq("id", user_id).execute().data
-                    existing_profile = existing_profile_res[0] if existing_profile_res else {}
-
-                    update_payload = {}
-                    if extracted_data.get("beruf"):
-                        update_payload["beruf"] = extracted_data["beruf"]
-                    if extracted_data.get("beziehungsziel"):
-                        update_payload["beziehungsziel"] = extracted_data["beziehungsziel"]
-                    if extracted_data.get("prioritaeten"):
-                        update_payload["prioritaeten"] = extracted_data["prioritaeten"]
-
-                    if update_payload:
-                        print(f"Aktualisiere Profil für user_id {user_id} mit: {update_payload}")
-                        supabase.table("profile").update(update_payload).eq("id", user_id).execute()
-                        print("Profil-Update erfolgreich.")
-                    else:
-                        print("Keine relevanten Profilinformationen zur Aktualisierung gefunden.")
-                else:
-                    print("Extrahierte Daten enthielten keine Profil-Updates.")
-
-            except json.JSONDecodeError as e:
-                print(f"Fehler beim Parsen des extrahierten JSON: {e}. Roher String: {extracted_json_str}")
-            except Exception as e:
-                print(f"Allgemeiner Fehler bei der Profilaktualisierung aus Nachricht: {e}")
+        user_profile_details = {item["attribute_name"]: item["attribute_value"] for item in profile_attributes_data}
+        
+        # Formatieren der Profildaten für den Prompt
+        profile_text_for_prompt = ""
+        if user_profile_details:
+            profile_text_for_prompt = "\n".join([f"{name}: {value}" for name, value in user_profile_details.items()])
+        else:
+            profile_text_for_prompt = "Keine spezifischen Profilinformationen erfasst."
 
         # Routinen laden
         today = datetime.datetime.now().strftime("%A")
@@ -454,9 +517,7 @@ async def chat(input: ChatInput):
         Nutze folgende Informationen für direkt handlungsorientierte Ratschläge:
 
         Nutzerprofil:
-        Beruf: {beruf}
-        Beziehungsziel: {beziehungsziel}
-        Prioritäten: {prioritaeten}
+        {profile_text_for_prompt}
         
         Deine heutigen Routinen:
         {routines_text}
@@ -489,6 +550,16 @@ async def chat(input: ChatInput):
 
         # Nachricht in Historie speichern
         await _save_conversation_entry(user_id, input.message, reply, None)
+        # Holen Sie sich die gesamte Konversationshistorie, um sie an die Extraktionsfunktion zu übergeben
+        all_conversation_history = supabase.table("conversation_history") \
+            .select("user_input, ai_response") \
+            .eq("user_id", user_id) \
+            .order("timestamp", desc=False) \
+            .limit(20) \
+            .execute().data
+
+        await extrahiere_und_speichere_profil_details(user_id, all_conversation_history)
+
         return {"reply": reply}
 
     except Exception as e:
