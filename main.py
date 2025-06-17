@@ -6,10 +6,10 @@ from fastapi import HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import os
 import datetime
-import random # Hinzugefügt für random.choice
+import random
 import json
 
 load_dotenv()
@@ -72,9 +72,16 @@ class GoalUpdate(BaseModel):
 class RoutineUpdate(BaseModel):
     id: int
     checked: bool
+
+class ProfileData(BaseModel):
+    # Fügen Sie hier die Attribute hinzu, die Sie im Benutzerprofil speichern möchten
+    # und die von der Funktion extrahiert werden (z.B. durch InterviewAntwort)
+    hobby: Optional[str] = None
+    beruf: Optional[str] = None
+    interessen: Optional[str] = None
     
 # Funktion zur Extraktion und Speicherung von erweiterten Profildetails im EAV-Modell
-async def extrahiere_und_speichere_profil_details(user_id: int, gespraechs_historie: list):
+async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_historie: list):
     print(f"Starte dynamische Profil-Extraktion und Speicherung für User {user_id}...")
     recent_history_for_extraction = gespraechs_historie[-10:] if len(gespraechs_historie) > 10 else gespraechs_historie[:]
     
@@ -87,12 +94,12 @@ async def extrahiere_und_speichere_profil_details(user_id: int, gespraechs_histo
     # Bestehendes dynamisches Profil aus der 'profile'-Tabelle abrufen
     # Die 'profile'-Tabelle ist jetzt unsere EAV-Tabelle
     current_dynamic_profile_response = supabase.table("profile") \
-        .select("attribute_name, attribute_value") \
+        .select("attribute, value") \
         .eq("user_id", user_id) \
         .execute().data
     
     existing_dynamic_profile: Dict[str, str] = {
-        item["attribute_name"]: item["attribute_value"] 
+        item["attribute"]: item["value"] 
         for item in current_dynamic_profile_response
     }
 
@@ -100,8 +107,7 @@ async def extrahiere_und_speichere_profil_details(user_id: int, gespraechs_histo
     # Wenn Sie diese als Kontext für GPT nutzen wollen, müssten diese aus einer separaten Tabelle kommen,
     # oder wenn sie Teil des EAV-Modells sind, sind sie bereits in existing_dynamic_profile.
     # Hier nehmen wir an, dass alle Attribute im EAV-Modell sind.
-    existing_fixed_attributes = {} # Keine separaten festen Attribute mehr
-
+    
     system_prompt = f"""
     Du bist ein spezialisierter Assistent, der wichtige persönliche Informationen und Vorlieben des Benutzers aus Gesprächen extrahiert.
     Deine Aufgabe ist es, ein detailliertes Langzeitprofil des Benutzers aufzubauen und inkrementell zu aktualisieren.
@@ -146,50 +152,22 @@ async def extrahiere_und_speichere_profil_details(user_id: int, gespraechs_histo
         print(f"Extrahierte Profildaten von GPT für User {user_id}: {new_extracted_profile}")
 
         # Vergleichen und Aktualisieren der Daten in der 'profile' Tabelle (EAV-Modell)
-        for attribute_name, attribute_value in new_extracted_profile.items():
-            if attribute_name and attribute_value: # Stelle sicher, dass Schlüssel und Wert nicht leer sind
-                # Überprüfen, ob der Wert sich geändert hat, bevor wir aktualisieren
-                if existing_dynamic_profile.get(attribute_name) != attribute_value:
-                    # Update (Upsert-Logik)
-                    supabase.table("profile") \
-                        .upsert({ # Tabelle ist jetzt 'profile'
-                            "user_id": user_id,
-                            "attribute_name": attribute_name,
-                            "attribute_value": attribute_value,
-                            "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'
-                        }, on_conflict="user_id, attribute_name") \
-                        .execute()
-                    print(f"Profilattribut '{attribute_name}' für User {user_id} aktualisiert/eingefügt.")
-            else:
-                # Wenn das LLM einen Wert als leer zurückgibt, löschen wir ihn (optional, je nach gewünschtem Verhalten)
-                if attribute_name in existing_dynamic_profile:
-                    supabase.table("profile") \
-                        .delete() \
-                        .eq("user_id", user_id) \
-                        .eq("attribute_name", attribute_name) \
-                        .execute()
-                    print(f"Profilattribut '{attribute_name}' für User {user_id} gelöscht (vom LLM als leer gemeldet).")
-        
-        # Attribute löschen, die nicht mehr vom LLM zurückgegeben wurden
-        attributes_to_delete = [
-            name for name in existing_dynamic_profile 
-            if name not in new_extracted_profile
-        ]
-        if attributes_to_delete:
-            supabase.table("profile") \
-                .delete() \
-                .eq("user_id", user_id) \
-                .in_("attribute_name", attributes_to_delete) \
-                .execute()
-            print(f"Profilattribute für User {user_id} gelöscht: {', '.join(attributes_to_delete)}")
+        supabase.table("profile").delete().eq("user_id", user_id).execute()
 
+        if new_extracted_profile:
+            insert_data = [
+                {"user_id": user_id, "attribute": k, "value": v, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}
+                for k, v in new_extracted_profile.items() if v is not None # Nur Nicht-None Werte speichern
+            ]
+            if insert_data:
+                supabase.table("profile").insert(insert_data).execute()
+        print(f"Dynamisches Profil für User {user_id} erfolgreich aktualisiert.")
 
     except json.JSONDecodeError as e:
         print(f"FEHLER beim Parsen der JSON-Antwort von GPT in extrahiere_und_speichere_profil_details: {e}")
         print(f"GPT-Antwort (Roh): {extracted_data_str}")
     except Exception as e:
         print(f"FEHLER bei der Profil-Extraktion oder Speicherung in extrahiere_und_speichere_profil_details: {e}")
-
 
 # Zusammenfassung um Token zu sparen (mit gpt-3.5-turbo)
 def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, prompt_context: str = "wichtige Punkte und Muster"):
@@ -219,7 +197,7 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
         return "Eine Zusammenfassung konnte nicht erstellt werden."
 
 #Abrufen der letzten 8 unbeantworteten Einstiegs- und Interviewfragen
-def get_recent_entry_questions(user_id: str):
+async def get_recent_entry_questions(user_id: str):
     recent_prompts = supabase.table("conversation_history") \
         .select("ai_prompt") \
         .eq("user_id", user_id) \
@@ -274,7 +252,7 @@ async def start_interaction(user_id: str):
                 "user_input": "",
                 "ai_response": "",
                 "ai_prompt": frage_text,
-                "timestamp": datetime.datetime.utcnow().isoformat()
+                "timestamp": datetime.datetime.utcnow().isoformat() + 'Z'
             }).execute()
         except Exception as e:
             print(f"Fehler beim Speichern der initialen Einstiegsfrage als AI-Prompt: {e}")
@@ -286,11 +264,25 @@ async def start_interaction(user_id: str):
         frage = ""
         
         # Letzte 8 Einstiegsfragen abrufen
-        recent_ai_prompts_to_avoid_raw = get_recent_entry_questions(user_id)
+        recent_ai_prompts_to_avoid_raw = await get_recent_entry_questions(user_id)
         recent_ai_prompts_to_avoid = [
             str(p) for p in recent_ai_prompts_to_avoid_raw
             if p is not None and str(p).strip() != ""
         ]
+
+                user_profile_data_raw = supabase.table("profile") \
+            .select("attribute, value") \
+            .eq("user_id", user_id) \
+            .execute().data
+        
+        user_profile_context = ""
+        if user_profile_data_raw:
+            user_profile_context = "\nAktuelles Benutzerprofil:\n" + "\n".join([
+                f"- {item['attribute']}: {item['value']}"
+                for item in user_profile_data_raw
+            ])
+        else:
+            user_profile_context = "\nBisher keine Profilinformationen erfasst."
         
         # Letzte 10 Monatsrückblicke und letzte 4 Wochenrückblicke
         monthly_reports = supabase.table("long_term_memory") \
@@ -389,6 +381,7 @@ async def start_interaction(user_id: str):
             if recent_ai_prompts_to_avoid:
                 context_for_gpt += "\nKürzlich gestellte Fragen des Beraters:\n" + ", ".join(recent_ai_prompts_to_avoid)
                 
+            context_for_gpt += user_profile_context
             context_for_gpt += "\nAktuelle Berichte:\n" + reports_context
             context_for_gpt += goals_context            
             context_for_gpt += routines_overview_context    
@@ -467,36 +460,105 @@ async def start_interaction(user_id: str):
             return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
 
 # Chat-Funktion
-@app.post("/chat")
-async def chat(input: ChatInput):
+@app.post("/chat/{user_id}")
+async def chat(user_id: str, chat_input: ChatInput):
+    user_message = chat_input.message
     try:
-        user_id = 1 
-        # Laden der dynamischen Profildaten aus der 'profile'-Tabelle (EAV-Modell)
-        profile_attributes_data = supabase.table("profile") \
-            .select("attribute_name, attribute_value") \
-            .eq("user_id", user_id) \
-            .execute().data
+        # Konversationshistorie der letzten 5 Nachrichten abrufen
+        try:
+            history_response = supabase.table("conversation_history") \
+                .select("user_input, ai_response, ai_prompt") \
+                .eq("user_id", user_id) \
+                .order("timestamp", desc=True) \
+                .limit(5) \
+                .execute()
+            gespraechs_historie = history_response.data
+            gespraechs_historie.reverse() # Älteste zuerst
+        except Exception as e:
+            print(f"Fehler beim Abrufen der Konversationshistorie: {e}")
+            gespraechs_historie = [] # Setze Historie auf leer im Fehlerfall
 
-        user_profile_details = {item["attribute_name"]: item["attribute_value"] for item in profile_attributes_data}
-        
-        # Formatieren der Profildaten für den Prompt
-        profile_text_for_prompt = ""
-        if user_profile_details:
-            profile_text_for_prompt = "\n".join([f"{name}: {value}" for name, value in user_profile_details.items()])
-        else:
-            profile_text_for_prompt = "Keine spezifischen Profilinformationen erfasst."
+        # Laden des Wochenberichts
+        wochenbericht_text = "Kein Wochenbericht verfügbar."
+        try:
+            latest_weekly_report = supabase.table("long_term_memory") \
+                .select("inhalt") \
+                .eq("user_id", user_id) \
+                .eq("thema", "Wochenrückblick") \
+                .order("timestamp", desc=True) \
+                .limit(1) \
+                .execute()
+            if latest_weekly_report.data:
+                wochenbericht_text = latest_weekly_report.data[0]['inhalt']
+        except Exception as e:
+            print(f"Fehler beim Abrufen des Wochenberichts: {e}")
+
+        # Laden des Monatsberichts
+        monatsbericht_text = "Kein Monatsbericht verfügbar."
+        try:
+            latest_monthly_report = supabase.table("long_term_memory") \
+                .select("inhalt") \
+                .eq("user_id", user_id) \
+                .eq("thema", "Monatsrückblick") \
+                .order("timestamp", desc=True) \
+                .limit(1) \
+                .execute()
+            if latest_monthly_report.data:
+                monatsbericht_text = latest_monthly_report.data[0]['inhalt']
+        except Exception as e:
+            print(f"Fehler beim Abrufen des Monatsberichts: {e}")
+
+        # Aktuelle Ziele abrufen
+        ziele_text = "Keine offenen Ziele."
+        try:
+            open_goals_response = supabase.table("goals") \
+                .select("titel", "status", "deadline") \
+                .eq("user_id", user_id) \
+                .eq("status", "offen") \
+                .execute()
+            open_goals = open_goals_response.data
+            if open_goals:
+                ziele_text = "Aktuelle offene Ziele:\n" + "\n".join([f"- {g['titel']} (Deadline: {g['deadline']})" for g in open_goals])
+        except Exception as e:
+            print(f"Fehler beim Abrufen der Ziele: {e}")
+
+        # Laden der dynamischen Profildaten aus der 'profile'-Tabelle (EAV-Modell)
+        profile_text_for_prompt = "Keine spezifischen Profilinformationen erfasst." # Standardwert
+        try:
+            profile_attributes_data = supabase.table("profile") \
+                .select("attribute, value") \
+                .eq("user_id", user_id) \
+                .execute().data
+            
+            if profile_attributes_data:
+                user_profile_details = {item["attribute"]: item["value"] for item in profile_attributes_data}
+                profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for name, value in user_profile_details.items()])
+        except Exception as e:
+            print(f"Fehler beim Laden des Profils: {e}")
 
         # Routinen laden
-        today = datetime.datetime.now().strftime("%A")
-        routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data
-        routines_text = "\n".join([f"{r['task']} (Erledigt: {'Ja' if r['checked'] else 'Nein'})" for r in routines]) if routines else "Keine spezifischen Routinen für heute."
-
-        # Konversationshistorie laden
-        history_raw = supabase.table("conversation_history").select("user_input, ai_response, ai_prompt").order("timestamp", desc=True).limit(5).execute().data
+        routines_text = "Keine Routinen definiert." # Standardwert
+        try:
+            today = datetime.datetime.now().strftime("%A")
+            routines_response = supabase.table("routines").select("name, is_checked, day, missed_count").eq("user_id", user_id).execute()
+            routines = routines_response.data
+            if routines:
+                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['name']} (Tag: {r['day']}, Erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
+        except Exception as e:
+            print(f"Fehler beim Abrufen der Routinen: {e}")
+        
+        # Langzeitgedächtnis laden
+        memory_text = "Keine spezifischen Langzeit-Erkenntnisse gespeichert." # Standardwert
+        try:
+            memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
+            if memory:
+                memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory])
+        except Exception as e:
+            print(f"Fehler beim Abrufen des Langzeitgedächtnisses: {e}")
 
         # Konversationshistorie für den System-Prompt formatieren
         history_messages = []
-        for h in reversed(history_raw):
+        for h in reversed(gespraechs_historie):
             if h.get('user_input'):
                 history_messages.append(f"User: {h['user_input']}")
             if h.get('ai_response'):
@@ -506,10 +568,6 @@ async def chat(input: ChatInput):
 
         history_text = "\n".join(history_messages) if history_messages else "Bisher keine frühere Konversationshistorie."
         
-        # Langzeitgedächtnis laden
-        memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
-        memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory]) if memory else "Keine spezifischen Langzeit-Erkenntnisse gespeichert."
-
         # Systemnachricht zusammenstellen
         system_message = f"""
         Du bist ein persönlicher, anspruchsvoller und konstruktiver Mentor und Therapeut. Dein Ziel ist es, dem Nutzer realistisch, prägnant und umsetzbar zu helfen.
@@ -525,7 +583,16 @@ async def chat(input: ChatInput):
         Langzeitgedächtnis / Wichtige Erkenntnisse:
         {memory_text}
 
-        Aktuelle Konversationshistorie (letzte 5 Nachrichten):
+        Aktueller Wochenbericht:
+        {wochenbericht_text}
+        
+        Aktueller Monatsbericht:
+        {monatsbericht_text}
+        
+        Aktuelle Ziele:
+        {ziele_text}
+
+        Konversationshistorie (letzte 5 Nachrichten):
         {history_text}
 
         Analysiere die aktuelle Nachricht im Kontext ALLER Infos. Erkenne Inkonsistenzen oder mangelnden Fortschritt.
@@ -537,34 +604,36 @@ async def chat(input: ChatInput):
         """
 
         # Chat-Interaktion mit OpenAI
-        response = client.chat.completions.create(
-            model="gpt-4",
+        completion = client.chat.completions.create(
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": input.message}
+                {"role": "user", "content": user_message}
             ],
-            max_tokens=60,
+            max_tokens=500,
             temperature=0.7
         )
-        reply = response.choices[0].message.content.strip()
+        ai_response_content = completion.choices[0].message.content.strip()
 
         # Nachricht in Historie speichern
-        await _save_conversation_entry(user_id, input.message, reply, None)
+        await _save_conversation_entry(user_id, user_message, ai_response_content, "")
+        
         # Holen Sie sich die gesamte Konversationshistorie, um sie an die Extraktionsfunktion zu übergeben
-        all_conversation_history = supabase.table("conversation_history") \
+        # Dies ist notwendig, da extrahiere_und_speichere_profil_details auf die gesamte Historie zugreift.
+        all_conversation_history_for_profile = supabase.table("conversation_history") \
             .select("user_input, ai_response") \
             .eq("user_id", user_id) \
             .order("timestamp", desc=False) \
             .limit(20) \
             .execute().data
+        
+        await extrahiere_und_speichere_profil_details(user_id, all_conversation_history_for_profile)
 
-        await extrahiere_und_speichere_profil_details(user_id, all_conversation_history)
-
-        return {"reply": reply}
+        return {"response": ai_response_content}
 
     except Exception as e:
         print(f"Fehler in der Chat-Funktion: {e}")
-        return {"reply": "Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal."}
+        raise HTTPException(status_code=500, detail="Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal.")
         
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
@@ -647,15 +716,23 @@ def automatischer_bericht():
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
-def generiere_rueckblick(zeitraum: str, tage: int):
-    user_id = 1 # Annahme einer festen User ID für Berichte
+def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat() + 'Z'
 
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
     all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
 
-    recent_gespraeche_text = "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in recent_gespraeche])
+    profil_data = supabase.table("profile") \
+        .select("attribute, value") \
+        .eq("user_id", user_id) \
+        .execute().data
+    
+    profil_text = ""
+    if profil_data:
+        profil_text = "\n".join([f"- {item['attribute']}: {item['value']}" for item in profil_data])
+    else:
+        profil_text = "Keine Profildaten vorhanden."
 
     # Alle Gespräche des Zeitraums für den Prompt nutzen
     gespraeche_text_for_prompt = ""
@@ -683,7 +760,10 @@ def generiere_rueckblick(zeitraum: str, tage: int):
 
     Ziele (Status):
     {ziele_text}
-
+    
+    Benutzerprofil-Details:
+    {profil_text}
+    
     Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
     ```
     ```
@@ -757,14 +837,16 @@ def get_routines(user_id: str):
     # Übergebe `checked`-Status für jede Routine
     return {"routines": routines}
 
+class RoutineUpdate(BaseModel):
+    id: int
+    checked: bool
+    user_id: str # Hinzugefügt, um den Benutzer zu identifizieren
+
 # Routinenstatus aktualisieren
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
     try:
-        # Hier sollte der user_id auch berücksichtigt werden, wenn Routinen pro Nutzer sind
-        # Annahme: user_id ist in der Routine selbst gespeichert oder über den Request Header kommt
-        # Für diesen Code hier nehmen wir an, die id reicht für das Update
-        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).execute()
+        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
         return {"status": "success"}
     except Exception as e:
         print(f"Fehler beim Aktualisieren der Routine: {e}")
@@ -780,10 +862,9 @@ def get_goals(user_id: str):
         print(f"Fehler beim Abrufen der Ziele: {e}")
         return {"goals": []}
 
-@app.post("/goals")
-def create_goal(goal: Goal, user_id: str = "1"): # Default user_id für Testzwecke
+@app.post("/goals/{user_id}")
+def create_goal(goal: Goal, user_id: str):
     try:
-        # Füge user_id zum Goal-Objekt hinzu, bevor es eingefügt wird
         goal_data = goal.model_dump()
         goal_data["user_id"] = user_id 
         supabase.table("goals").insert(goal_data).execute()
@@ -792,10 +873,9 @@ def create_goal(goal: Goal, user_id: str = "1"): # Default user_id für Testzwec
         print(f"Fehler beim Speichern des Ziels: {e}")
         return {"status": "error", "message": str(e)}
 
-@app.post("/goals/update")
-def update_goal_status(update: GoalUpdate, user_id: str = "1"): # Default user_id für Testzwecke
+@app.post("/goals/update/{user_id}")
+def update_goal_status(update: GoalUpdate, user_id: str):
     try:
-        # Stelle sicher, dass nur Ziele des spezifischen Nutzers aktualisiert werden können
         supabase.table("goals").update({"status": update.status}).eq("id", update.id).eq("user_id", user_id).execute()
         return {"status": "success"}
     except Exception as e:
@@ -803,8 +883,8 @@ def update_goal_status(update: GoalUpdate, user_id: str = "1"): # Default user_i
         return {"status": "error", "message": str(e)}
 
 # Memory-Endpoint
-@app.post("/memory")
-def create_memory(memory_input: MemoryInput, user_id: str = "1"):
+@app.post("/memory/{user_id}")
+def create_memory(memory_input: MemoryInput, user_id: str):
     try:
         supabase.table("long_term_memory").insert({
             "user_id": user_id,
@@ -818,23 +898,35 @@ def create_memory(memory_input: MemoryInput, user_id: str = "1"):
         return {"status": "error", "message": str(e)}
 
 # Profil-Endpoint
-@app.post("/profile")
-def create_profile(profile_data: ProfileData, user_id: str = "1"):
+@app.post("/profile/{user_id}")
+def create_profile(profile_data: ProfileData, user_id: str):
     try:
-        # Überprüfen, ob bereits ein Profil für diesen user_id existiert
-        existing_profile = supabase.table("profile").select("id").eq("id", user_id).execute().data
         
-        profile_dict = profile_data.model_dump()
-        profile_dict["id"] = user_id # Stelle sicher, dass die user_id mitgespeichert wird
+        for attribute, value in profile_data.model_dump(exclude_unset=True).items():
+            if value is None:
+                continue # Überspringe Attribute, die nicht gesetzt sind oder None sind
 
-        if existing_profile:
-            # Aktualisieren des bestehenden Profils
-            supabase.table("profile").update(profile_dict).eq("id", user_id).execute()
-            return {"status": "success", "message": "Profil erfolgreich aktualisiert."}
-        else:
-            # Neues Profil anlegen
-            supabase.table("profile").insert(profile_dict).execute()
-            return {"status": "success", "message": "Profil erfolgreich erstellt."}
+            # Prüfen, ob das Attribut für diesen Benutzer bereits existiert
+            existing_entry = supabase.table("profile") \
+                .select("id") \
+                .eq("user_id", user_id) \
+                .eq("attribute", attribute) \
+                .execute().data
+            
+            if existing_entry:
+                # Aktualisiere den Wert des bestehenden Attributs
+                supabase.table("profile") \
+                    .update({"value": value}) \
+                    .eq("id", existing_entry[0]["id"]) \
+                    .execute()
+                print(f"Profil-Attribut '{attribute}' für User '{user_id}' aktualisiert.")
+            else:
+                # Füge neues Attribut hinzu
+                supabase.table("profile") \
+                    .insert({"user_id": user_id, "attribute": attribute, "value": value}) \
+                    .execute()
+                print(f"Profil-Attribut '{attribute}' für User '{user_id}' erstellt.")
+        return {"status": "success", "message": "Profil erfolgreich verarbeitet."}
     except Exception as e:
         print(f"Fehler beim Speichern des Profils: {e}")
         return {"status": "error", "message": str(e)}
