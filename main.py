@@ -96,12 +96,12 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
     # Bestehendes dynamisches Profil aus der 'profile'-Tabelle abrufen
     # Die 'profile'-Tabelle ist jetzt unsere EAV-Tabelle
     current_dynamic_profile_response = supabase.table("profile") \
-        .select("**attribute_name**, **attribute_value**") \
+        .select("attribute_name, attribute_value") \
         .eq("user_id", user_id) \
         .execute().data
     
     existing_dynamic_profile: Dict[str, str] = {
-        item["**attribute_name**"]: item["**attribute_value**"] 
+        item["attribute_name"]: item["attribute_value"] 
         for item in current_dynamic_profile_response
     }
     
@@ -114,7 +114,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
     Du erhältst eine aktuelle Gesprächshistorie und ein JSON-Objekt mit bereits bekannten dynamischen Profilinformationen des Benutzers.
     Analysiere die neuen Gesprächssegmente. Wenn neue relevante Informationen gefunden werden oder sich bestehende ändern, aktualisiere das bereitgestellte JSON-Objekt entsprechend.
     Wenn eine Information gelöscht oder als falsch identifiziert wird, entferne den Schlüssel aus dem JSON-Objekt.
-    Gib immer das **vollständige, aktualisierte JSON-Objekt** zurück, auch wenn keine Änderungen vorgenommen wurden.
+    Gib immer das vollständige, aktualisierte JSON-Objekt zurück, auch wenn keine Änderungen vorgenommen wurden.
 
     Beispiele für relevante Informationen sind Schlüsselwörter wie "Beruf", "Beziehungsziel", "Prioritäten", "Hobbys", "Interessen", "Urlaubsziel", "Lieblingsessen", "persönliche Ziele", "Familienstand", "aktuelle Herausforderungen", "Softwarepräferenzen", "Lernziele", etc.
     Verwende prägnante, aussagekräftige Schlüsselnamen (z.B. "Interessen" statt "Was mag der Nutzer machen").
@@ -153,7 +153,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
 
         if new_extracted_profile:
             insert_data = [
-                {"user_id": user_id, "**attribute_name**": k, "**attribute_value**": v, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}
+                {"user_id": user_id, "attribute_name": k, "attribute_value": v, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}
                 for k, v in new_extracted_profile.items() if v is not None # Nur Nicht-None Werte speichern
             ]
             if insert_data:
@@ -268,14 +268,14 @@ async def start_interaction(user_id: str):
         ]
 
         user_profile_data_raw = supabase.table("profile") \
-            .select("**attribute_name**, **attribute_value**") \
+            .select("attribute_name, attribute_value") \
             .eq("user_id", user_id) \
             .execute().data
         
         user_profile_context = ""
         if user_profile_data_raw:
             user_profile_context = "\nAktuelles Benutzerprofil:\n" + "\n".join([
-                f"- {item['**attribute_name**']}: {item['**attribute_value**']}"
+                f"- {item['attribute_name']}: {item['attribute_value']}"
                 for item in user_profile_data_raw
             ])
         else:
@@ -327,7 +327,7 @@ async def start_interaction(user_id: str):
 
         # Laden aller Routinen aus der 'routines'-Tabelle für eine Gesamtübersicht
         all_user_routines = supabase.table("routines") \
-            .select("**name**, day, **is_checked**, missed_count") \
+            .select("name, day, is_checked, missed_count") \
             .eq("user_id", user_id) \
             .limit(10) \
             .execute().data
@@ -335,7 +335,7 @@ async def start_interaction(user_id: str):
         routines_overview_context = ""
         if all_user_routines:
             routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([
-                f"- {str(r.get('**name**', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('**is_checked**', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
+                f"- {str(r.get('name', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('is_checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
                 for r in all_user_routines
             ])
         else:
@@ -344,16 +344,16 @@ async def start_interaction(user_id: str):
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         unfulfilled_routines = supabase.table("routines") \
-            .select("**name**, missed_count") \
+            .select("name, missed_count") \
             .eq("day", today) \
-            .eq("**is_checked**", False) \
+            .eq("is_checked", False) \
             .eq("user_id", user_id) \
             .execute().data
 
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
         routine_texts = [
-            str(r.get("**name**", '')) for r in unfulfilled_routines 
-            if r.get("missed_count", 0) >= 3 and r.get("**name**") is not None
+            str(r.get("name", '')) for r in unfulfilled_routines 
+            if r.get("missed_count", 0) >= 3 and r.get("name") is not None
         ]
         routine_context_today = ", ".join(routine_texts)
 
@@ -393,7 +393,7 @@ async def start_interaction(user_id: str):
             prompt = f"""
             Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere EINE einzige, konkrete, lockere und personalisierte Frage, entweder basierend auf dem bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) oder zu einem ganz neuen Thema, das noch nie besprochen wurde.
             Frage z.B. zu Meinungen und Interessen aus allen möglichen Bereichen, je präziser desto besser. Du willst mehr über den Benutzer erfahren, aber ihn nicht durch zu komplizierte Fragen überfordern.
-            **Vermeide zusammengesetzte Fragen oder Fragen, die mit 'und' verbunden sind.**
+            Vermeide zusammengesetzte Fragen oder Fragen, die mit 'und' verbunden sind.
             **Halte die Frage sehr kurz, idealerweise in einem Satz.**
             Vermeide die letzten vier Einstiegsfragen:
 
@@ -523,12 +523,12 @@ async def chat(user_id: str, chat_input: ChatInput):
         profile_text_for_prompt = "Keine spezifischen Profilinformationen erfasst." # Standardwert
         try:
             profile_attributes_data = supabase.table("profile") \
-                .select("**attribute_name**, **attribute_value**") \
+                .select("attribute_name, attribute_value") \
                 .eq("user_id", user_id) \
                 .execute().data
             
             if profile_attributes_data:
-                user_profile_details = {item["**attribute_name**"]: item["**attribute_value**"] for item in profile_attributes_data}
+                user_profile_details = {item["attribute_name"]: item["attribute_value"] for item in profile_attributes_data}
                 profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for name, value in user_profile_details.items()])
         except Exception as e:
             print(f"Fehler beim Laden des Profils: {e}")
@@ -537,10 +537,10 @@ async def chat(user_id: str, chat_input: ChatInput):
         routines_text = "Keine Routinen definiert." # Standardwert
         try:
             today = datetime.datetime.now().strftime("%A")
-            routines_response = supabase.table("routines").select("**name**, **is_checked**, day, missed_count").eq("user_id", user_id).execute()
+            routines_response = supabase.table("routines").select("name, is_checked, day, missed_count").eq("user_id", user_id).execute()
             routines = routines_response.data
             if routines:
-                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['**name**']} (Tag: {r['day']}, Erledigt: {'Ja' if r['**is_checked**'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
+                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['name']} (Tag: {r['day']}, Erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
         except Exception as e:
             print(f"Fehler beim Abrufen der Routinen: {e}")
         
@@ -724,13 +724,13 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     all_ziele = supabase.table("goals").select("titel", "status", "created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
 
     profil_data = supabase.table("profile") \
-        .select("**attribute_name**, **attribute_value**") \
+        .select("attribute_name, attribute_value") \
         .eq("user_id", user_id) \
         .execute().data
     
     profil_text = ""
     if profil_data:
-        profil_text = "\n".join([f"- {item['**attribute_name**']}: {item['**attribute_value**']}" for item in profil_data])
+        profil_text = "\n".join([f"- {item['attribute_name']}: {item['attribute_value']}" for item in profil_data])
     else:
         profil_text = "Keine Profildaten vorhanden."
 
@@ -753,13 +753,13 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
 
     all_routines_res = supabase.table("routines") \
-        .select("**name**, **is_checked**, day, missed_count") \
+        .select("name, is_checked, day, missed_count") \
         .eq("user_id", user_id) \
         .execute().data
     
     routinen_text = ""
     if all_routines_res:
-        routinen_text = "\n".join([f"- {r['**name**']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['**is_checked**'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
+        routinen_text = "\n".join([f"- {r['name']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
     else:
         routinen_text = "Keine Routinen vorhanden."
         
@@ -859,7 +859,7 @@ def get_routines(user_id: str):
 
     # Routines abrufen für den spezifischen user_id
     # ▚▚▚ ANPASSUNG: '*' durch spezifische Spaltennamen ersetzt: 'name' und 'time' ▚▚▚
-    routines = supabase.table("routines").select("**name**, time, day, **is_checked**, missed_count").eq("day", today).eq("user_id", user_id).execute().data
+    routines = supabase.table("routines").select("name, time, day, is_checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
     # ▚▚▚ ENDE ANPASSUNG ▚▚▚
 
     # Übergebe `checked`-Status für jede Routine
@@ -939,20 +939,20 @@ def create_profile(profile_data: ProfileData, user_id: str):
             existing_entry = supabase.table("profile") \
                 .select("id") \
                 .eq("user_id", user_id) \
-                .eq("**attribute_name**", attribute) \
+                .eq("attribute_name", attribute) \
                 .execute().data
             
             if existing_entry:
                 # Aktualisiere den Wert des bestehenden Attributs
                 supabase.table("profile") \
-                    .update({"**attribute_value**": value}) \
+                    .update({"attribute_value": value}) \
                     .eq("id", existing_entry[0]["id"]) \
                     .execute()
                 print(f"Profil-Attribut '{attribute}' für User '{user_id}' aktualisiert.")
             else:
                 # Füge neues Attribut hinzu
                 supabase.table("profile") \
-                    .insert({"user_id": user_id, "**attribute_name**": attribute, "**attribute_value**": value}) \
+                    .insert({"user_id": user_id, "attribute_name": attribute, "attribute_value": value}) \
                     .execute()
                 print(f"Profil-Attribut '{attribute}' für User '{user_id}' erstellt.")
         return {"status": "success", "message": "Profil erfolgreich verarbeitet."}
