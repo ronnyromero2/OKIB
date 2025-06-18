@@ -197,7 +197,8 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
         return "Eine Zusammenfassung konnte nicht erstellt werden."
 
-#Abrufen der letzten 8 unbeantworteten Einstiegsfragen
+# Die Funktion gibt die letzten acht Einstiegsfragen aus der
+# Tabelle conversation_history zurück.
 async def get_recent_entry_questions(user_id: str):
     recent_prompts = supabase.table("conversation_history") \
         .select("ai_prompt") \
@@ -680,7 +681,8 @@ async def automatischer_bericht():
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
-            bericht_inhalt = generiere_rueckblick("Monats", 30)
+            bericht_result = await generiere_rueckblick("Monats", 30, user_id)
+            bericht_inhalt = bericht_result.get("rueckblick")
         else:
             print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
 
@@ -708,7 +710,7 @@ async def automatischer_bericht():
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
-            bericht_result = await generiere_rueckblick("Monats", 30, user_id)
+            bericht_result = await generiere_rueckblick("Wochen", 7, user_id)
             bericht_inhalt = bericht_result.get("rueckblick")
             # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
         # NEU: Nachricht, wenn Bericht bereits existiert
