@@ -875,7 +875,7 @@ class RoutineUpdate(BaseModel):
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
     try:
-        supabase.table("routines").update({"is_checked": update.**is_checked**}).eq("id", update.id).eq("user_id", update.user_id).execute()
+        supabase.table("routines").update({"is_checked": update.is_checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
         return {"status": "success"}
     except Exception as e:
         print(f"Fehler beim Aktualisieren der Routine: {e}")
