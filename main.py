@@ -72,6 +72,7 @@ class GoalUpdate(BaseModel):
 class RoutineUpdate(BaseModel):
     id: int
     checked: bool
+    user_id: str
 
 class ProfileData(BaseModel):
     # Fügen Sie hier die Attribute hinzu, die Sie im Benutzerprofil speichern möchten
@@ -196,12 +197,12 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
         return "Eine Zusammenfassung konnte nicht erstellt werden."
 
-#Abrufen der letzten 8 unbeantworteten Einstiegs- und Interviewfragen
+#Abrufen der letzten 8 unbeantworteten Einstiegsfragen
 async def get_recent_entry_questions(user_id: str):
     recent_prompts = supabase.table("conversation_history") \
         .select("ai_prompt") \
         .eq("user_id", user_id) \
-        .neq("ai_prompt", None) \
+        .eq("user_input", "") \
         .order("timestamp", desc=True) \
         .limit(8) \
         .execute()
@@ -215,7 +216,7 @@ async def get_recent_entry_questions(user_id: str):
 async def start_interaction(user_id: str):
     # Letzte 30 Nachrichten abrufen
     recent_interactions_data = supabase.table("conversation_history") \
-        .select("user_input, ai_response") \
+        .select("user_input, ai_response, ai_prompt") \
         .eq("user_id", user_id) \
         .order("timestamp", desc=True) \
         .limit(30) \
@@ -270,7 +271,7 @@ async def start_interaction(user_id: str):
             if p is not None and str(p).strip() != ""
         ]
 
-                user_profile_data_raw = supabase.table("profile") \
+        user_profile_data_raw = supabase.table("profile") \
             .select("attribute, value") \
             .eq("user_id", user_id) \
             .execute().data
@@ -338,7 +339,7 @@ async def start_interaction(user_id: str):
         routines_overview_context = ""
         if all_user_routines:
             routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([
-                f"- {str(r.get('task', ''))} ({str(r.get('day', ''))}, Verpasst: {str(r.get('missed_count', 0))})" 
+                f"- {str(r.get('name', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('is_checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
                 for r in all_user_routines
             ])
         else:
@@ -347,15 +348,15 @@ async def start_interaction(user_id: str):
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         unfulfilled_routines = supabase.table("routines") \
-            .select("task", "missed_count") \
+            .select("name", "missed_count") \
             .eq("day", today) \
-            .eq("checked", False) \
+            .eq("is_checked", False) \
             .eq("user_id", user_id) \
             .execute().data
 
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
         routine_texts = [
-            str(r.get("task", '')) for r in unfulfilled_routines 
+            str(r.get("name", '')) for r in unfulfilled_routines 
             if r.get("missed_count", 0) >= 3 and r.get("task") is not None
         ]
         routine_context_today = ", ".join(routine_texts)
@@ -621,7 +622,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Holen Sie sich die gesamte Konversationshistorie, um sie an die Extraktionsfunktion zu übergeben
         # Dies ist notwendig, da extrahiere_und_speichere_profil_details auf die gesamte Historie zugreift.
         all_conversation_history_for_profile = supabase.table("conversation_history") \
-            .select("user_input, ai_response") \
+            .select("user_input, ai_response, ai_prompt") \
             .eq("user_id", user_id) \
             .order("timestamp", desc=False) \
             .limit(20) \
@@ -637,9 +638,9 @@ async def chat(user_id: str, chat_input: ChatInput):
         
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
-def automatischer_bericht():
+async def automatischer_bericht():
     # Annahme einer festen User ID für Berichte, wie in generiere_rueckblick
-    user_id = 1 
+    user_id = "1" 
 
     # Alle Zeitberechnungen basieren jetzt konsistent auf UTC
     heute_utc = datetime.datetime.utcnow() 
@@ -707,7 +708,8 @@ def automatischer_bericht():
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
-            bericht_inhalt = generiere_rueckblick("Wochen", 7)
+            bericht_result = await generiere_rueckblick("Monats", 30, user_id)
+            bericht_inhalt = bericht_result.get("rueckblick")
             # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
         # NEU: Nachricht, wenn Bericht bereits existiert
         else:
@@ -716,11 +718,11 @@ def automatischer_bericht():
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
-def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
+async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat() + 'Z'
 
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
-    all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
+    all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, ai_prompt, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
     all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
 
     profil_data = supabase.table("profile") \
@@ -737,15 +739,41 @@ def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     # Alle Gespräche des Zeitraums für den Prompt nutzen
     gespraeche_text_for_prompt = ""
     if all_gespraeche:
-        # Hier optional die Rohdaten übergeben, wenn der Prompt damit umgehen kann,
-        # oder eine einfache Textrepräsentation aller Gespräche.
-        # Da wir max_tokens im GPT-Call haben, kann GPT selbst zusammenfassen.
-        gespraeche_text_for_prompt += "\n".join([f"User: {g['user_input']} | Berater: {g['ai_response']}" for g in all_gespraeche])
+        formatted_gespraeche = []
+        for g in all_gespraeche:
+            if g.get('user_input'):
+                formatted_gespraeche.append(f"User: {g['user_input']}")
+            if g.get('ai_response'):
+                formatted_gespraeche.append(f"Berater: {g['ai_response']}")
+            if g.get('ai_prompt'):
+                formatted_gespraeche.append(f"Interviewfrage: {g['ai_prompt']}")
+        gespraeche_text_for_prompt += "\n".join(formatted_gespraeche)
     else:
         gespraeche_text_for_prompt = "Es gab keine relevanten Gespräche in diesem Zeitraum."
 
     # Ziele können oft kompakter sein. Wenn sie aber auch zu lang werden, hier auch summarisieren.
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
+
+    all_routines_res = supabase.table("routines") \
+        .select("name", "is_checked", "day", "missed_count") \
+        .eq("user_id", user_id) \
+        .execute().data
+    
+    routinen_text = ""
+    if all_routines_res:
+        routinen_text = "\n".join([f"- {r['name']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
+    else:
+        routinen_text = "Keine Routinen vorhanden."
+        
+    latest_report_res = supabase.table("long_term_memory") \
+        .select("inhalt") \
+        .eq("user_id", user_id) \
+        .eq("thema", f"{zeitraum}rückblick") \
+        .order("timestamp", desc=True) \
+        .limit(1) \
+        .execute().data
+    
+    previous_report_content = latest_report_res[0]['inhalt'] if latest_report_res else "Kein früherer Bericht dieses Typs vorhanden."
 
     system = f"""
     Du bist ein persönlicher Beobachter und Coach. Liste die im letzten {zeitraum} besprochenen Themen und den Status von Zielen und Routinen rückblickend knapp auf.
@@ -763,8 +791,14 @@ def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     
     Benutzerprofil-Details:
     {profil_text}
+
+    Alle aktuellen Routinen:
+    {routinen_text}
+
+    Inhalt des letzten {zeitraum}rückblicks (falls vorhanden):
+    {previous_report_content}
     
-    Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
+    Bitte gib einen zusammenfassenden und sachlichen {zeitraum}Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
     ```
     ```
     """
@@ -789,15 +823,11 @@ def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
         "user_id": user_id # user_id auch hier speichern!
     }).execute()
 
-    return bericht
-    
-class RoutineUpdate(BaseModel):
-    id: int
-    checked: bool
+    return {"rueckblick": bericht}
 
 # Endpunkt zum Abrufen des neuesten gespeicherten Berichts
 @app.get("/bericht/abrufen/{report_type_name}")
-def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann als Standard 1 haben
+def get_stored_report(report_type_name: str, user_id: str = "1"): # user_id kann als Standard 1 haben
     try:
         # Hier wird der "thema"-String genau so gesucht, wie er gespeichert wird
         # (z.B. "Wochenrückblick" oder "Monatsrückblick", ohne 's')
@@ -832,21 +862,16 @@ def get_routines(user_id: str):
     today = datetime.datetime.now().strftime("%A")
 
     # Routines abrufen für den spezifischen user_id
-    routines = supabase.table("routines").select("*").eq("day", today).eq("user_id", user_id).execute().data
+    routines = supabase.table("routines").select("name, day, is_checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
 
     # Übergebe `checked`-Status für jede Routine
     return {"routines": routines}
 
-class RoutineUpdate(BaseModel):
-    id: int
-    checked: bool
-    user_id: str # Hinzugefügt, um den Benutzer zu identifizieren
-
 # Routinenstatus aktualisieren
-@app.post("/routines/update")
-def update_routine_status(update: RoutineUpdate):
+@app.post("/routines/update/{user_id}")
+def update_routine_status(update: RoutineUpdate, user_id: str):
     try:
-        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
+        supabase.table("routines").update({"is_checked": update.is_checked}).eq("id", update.id).eq("user_id", user_id).execute()
         return {"status": "success"}
     except Exception as e:
         print(f"Fehler beim Aktualisieren der Routine: {e}")
@@ -890,7 +915,7 @@ def create_memory(memory_input: MemoryInput, user_id: str):
             "user_id": user_id,
             "thema": memory_input.thema,
             "inhalt": memory_input.inhalt,
-            "timestamp": datetime.datetime.utcnow().isoformat()
+            "timestamp": datetime.datetime.utcnow().isoformat() + 'Z'
         }).execute()
         return {"status": "success", "message": "Erinnerung erfolgreich gespeichert."}
     except Exception as e:
