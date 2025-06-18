@@ -71,7 +71,8 @@ class GoalUpdate(BaseModel):
 
 class RoutineUpdate(BaseModel):
     id: int
-    checked: bool
+    # ▚▚▚ ANPASSUNG: 'checked' zu 'is_checked' geändert ▚▚▚
+    is_checked: bool
     user_id: str
 
 class ProfileData(BaseModel):
@@ -95,19 +96,14 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
     # Bestehendes dynamisches Profil aus der 'profile'-Tabelle abrufen
     # Die 'profile'-Tabelle ist jetzt unsere EAV-Tabelle
     current_dynamic_profile_response = supabase.table("profile") \
-        .select("attribute, value") \
+        .select("**attribute_name**, **attribute_value**") \
         .eq("user_id", user_id) \
         .execute().data
     
     existing_dynamic_profile: Dict[str, str] = {
-        item["attribute"]: item["value"] 
+        item["**attribute_name**"]: item["**attribute_value**"] 
         for item in current_dynamic_profile_response
     }
-
-    # Feste Attribute für den Kontext (aus der 'profile' Tabelle abrufen, falls benötigt)
-    # Wenn Sie diese als Kontext für GPT nutzen wollen, müssten diese aus einer separaten Tabelle kommen,
-    # oder wenn sie Teil des EAV-Modells sind, sind sie bereits in existing_dynamic_profile.
-    # Hier nehmen wir an, dass alle Attribute im EAV-Modell sind.
     
     system_prompt = f"""
     Du bist ein spezialisierter Assistent, der wichtige persönliche Informationen und Vorlieben des Benutzers aus Gesprächen extrahiert.
@@ -157,7 +153,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
 
         if new_extracted_profile:
             insert_data = [
-                {"user_id": user_id, "attribute": k, "value": v, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}
+                {"user_id": user_id, "**attribute_name**": k, "**attribute_value**": v, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}
                 for k, v in new_extracted_profile.items() if v is not None # Nur Nicht-None Werte speichern
             ]
             if insert_data:
@@ -197,8 +193,7 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
         return "Eine Zusammenfassung konnte nicht erstellt werden."
 
-# Die Funktion gibt die letzten acht Einstiegsfragen aus der
-# Tabelle conversation_history zurück.
+#Abrufen der letzten 8 unbeantworteten Einstiegsfragen
 async def get_recent_entry_questions(user_id: str):
     recent_prompts = supabase.table("conversation_history") \
         .select("ai_prompt") \
@@ -273,14 +268,14 @@ async def start_interaction(user_id: str):
         ]
 
         user_profile_data_raw = supabase.table("profile") \
-            .select("attribute, value") \
+            .select("**attribute_name**, **attribute_value**") \
             .eq("user_id", user_id) \
             .execute().data
         
         user_profile_context = ""
         if user_profile_data_raw:
             user_profile_context = "\nAktuelles Benutzerprofil:\n" + "\n".join([
-                f"- {item['attribute']}: {item['value']}"
+                f"- {item['**attribute_name**']}: {item['**attribute_value**']}"
                 for item in user_profile_data_raw
             ])
         else:
@@ -316,7 +311,7 @@ async def start_interaction(user_id: str):
             
         # Laden der Ziele aus der 'goals'-Tabelle
         user_goals = supabase.table("goals") \
-            .select("goal_description", "status") \
+            .select("titel", "status") \
             .eq("user_id", user_id) \
             .limit(5) \
             .execute().data            
@@ -324,7 +319,7 @@ async def start_interaction(user_id: str):
         goals_context = ""
         if user_goals:
             goals_context = "\nAktuelle Ziele:\n" + "\n".join([
-                f"- {str(g.get('goal_description', ''))} (Status: {str(g.get('status', ''))})" 
+                f"- {str(g.get('titel', ''))} (Status: {str(g.get('status', ''))})" 
                 for g in user_goals
             ])
         else:
@@ -332,7 +327,7 @@ async def start_interaction(user_id: str):
 
         # Laden aller Routinen aus der 'routines'-Tabelle für eine Gesamtübersicht
         all_user_routines = supabase.table("routines") \
-            .select("task", "day", "checked", "missed_count") \
+            .select("**name**, day, **is_checked**, missed_count") \
             .eq("user_id", user_id) \
             .limit(10) \
             .execute().data
@@ -340,7 +335,7 @@ async def start_interaction(user_id: str):
         routines_overview_context = ""
         if all_user_routines:
             routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([
-                f"- {str(r.get('name', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('is_checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
+                f"- {str(r.get('**name**', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('**is_checked**', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
                 for r in all_user_routines
             ])
         else:
@@ -349,16 +344,16 @@ async def start_interaction(user_id: str):
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         unfulfilled_routines = supabase.table("routines") \
-            .select("name", "missed_count") \
+            .select("**name**, missed_count") \
             .eq("day", today) \
-            .eq("is_checked", False) \
+            .eq("**is_checked**", False) \
             .eq("user_id", user_id) \
             .execute().data
 
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
         routine_texts = [
-            str(r.get("name", '')) for r in unfulfilled_routines 
-            if r.get("missed_count", 0) >= 3 and r.get("task") is not None
+            str(r.get("**name**", '')) for r in unfulfilled_routines 
+            if r.get("missed_count", 0) >= 3 and r.get("**name**") is not None
         ]
         routine_context_today = ", ".join(routine_texts)
 
@@ -528,12 +523,12 @@ async def chat(user_id: str, chat_input: ChatInput):
         profile_text_for_prompt = "Keine spezifischen Profilinformationen erfasst." # Standardwert
         try:
             profile_attributes_data = supabase.table("profile") \
-                .select("attribute, value") \
+                .select("**attribute_name**, **attribute_value**") \
                 .eq("user_id", user_id) \
                 .execute().data
             
             if profile_attributes_data:
-                user_profile_details = {item["attribute"]: item["value"] for item in profile_attributes_data}
+                user_profile_details = {item["**attribute_name**"]: item["**attribute_value**"] for item in profile_attributes_data}
                 profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for name, value in user_profile_details.items()])
         except Exception as e:
             print(f"Fehler beim Laden des Profils: {e}")
@@ -542,17 +537,17 @@ async def chat(user_id: str, chat_input: ChatInput):
         routines_text = "Keine Routinen definiert." # Standardwert
         try:
             today = datetime.datetime.now().strftime("%A")
-            routines_response = supabase.table("routines").select("name, is_checked, day, missed_count").eq("user_id", user_id).execute()
+            routines_response = supabase.table("routines").select("**name**, **is_checked**, day, missed_count").eq("user_id", user_id).execute()
             routines = routines_response.data
             if routines:
-                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['name']} (Tag: {r['day']}, Erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
+                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['**name**']} (Tag: {r['day']}, Erledigt: {'Ja' if r['**is_checked**'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
         except Exception as e:
             print(f"Fehler beim Abrufen der Routinen: {e}")
         
         # Langzeitgedächtnis laden
         memory_text = "Keine spezifischen Langzeit-Erkenntnisse gespeichert." # Standardwert
         try:
-            memory = supabase.table("long_term_memory").select("thema, inhalt").order("timestamp", desc=True).limit(10).execute().data
+            memory = supabase.table("long_term_memory").select("thema", "inhalt").order("timestamp", desc=True).limit(10).execute().data
             if memory:
                 memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory])
         except Exception as e:
@@ -623,7 +618,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Holen Sie sich die gesamte Konversationshistorie, um sie an die Extraktionsfunktion zu übergeben
         # Dies ist notwendig, da extrahiere_und_speichere_profil_details auf die gesamte Historie zugreift.
         all_conversation_history_for_profile = supabase.table("conversation_history") \
-            .select("user_input, ai_response, ai_prompt") \
+            .select("user_input", "ai_response", "ai_prompt") \
             .eq("user_id", user_id) \
             .order("timestamp", desc=False) \
             .limit(20) \
@@ -681,8 +676,9 @@ async def automatischer_bericht():
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
-            bericht_result = await generiere_rueckblick("Monats", 30, user_id)
-            bericht_inhalt = bericht_result.get("rueckblick")
+            # ▚▚▚ ANPASSUNG: user_id an generiere_rueckblick übergeben ▚▚▚
+            bericht_result = await generiere_rueckblick("Monats", 30, user_id) 
+            bericht_inhalt = bericht_result # generiere_rueckblick gibt jetzt direkten String zurück
         else:
             print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
 
@@ -694,7 +690,7 @@ async def automatischer_bericht():
         print(f"Wochenbericht-Check - Abfragebereich: {today_start_utc.isoformat()} bis {tomorrow_start_utc.isoformat()}")
 
         existing_report_response = supabase.table("long_term_memory") \
-            .select("id, thema, timestamp") \
+            .select("id", "thema", "timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
             .gte("timestamp", today_start_utc.isoformat() + 'Z') \
@@ -710,8 +706,8 @@ async def automatischer_bericht():
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
             print(f"Generiere neuen {bericht_typ} für User {user_id}...")
-            bericht_result = await generiere_rueckblick("Wochen", 7, user_id)
-            bericht_inhalt = bericht_result.get("rueckblick")
+            # ▚▚▚ ANPASSUNG: user_id an generiere_rueckblick übergeben ▚▚▚
+            bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id)
             # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
         # NEU: Nachricht, wenn Bericht bereits existiert
         else:
@@ -725,16 +721,16 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
 
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, ai_prompt, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
-    all_ziele = supabase.table("goals").select("titel, status, created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
+    all_ziele = supabase.table("goals").select("titel", "status", "created_at").gte("created_at", seit).eq("user_id", user_id).order("created_at", desc=False).execute().data
 
     profil_data = supabase.table("profile") \
-        .select("attribute, value") \
+        .select("**attribute_name**, **attribute_value**") \
         .eq("user_id", user_id) \
         .execute().data
     
     profil_text = ""
     if profil_data:
-        profil_text = "\n".join([f"- {item['attribute']}: {item['value']}" for item in profil_data])
+        profil_text = "\n".join([f"- {item['**attribute_name**']}: {item['**attribute_value**']}" for item in profil_data])
     else:
         profil_text = "Keine Profildaten vorhanden."
 
@@ -757,13 +753,13 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
 
     all_routines_res = supabase.table("routines") \
-        .select("name", "is_checked", "day", "missed_count") \
+        .select("**name**, **is_checked**, day, missed_count") \
         .eq("user_id", user_id) \
         .execute().data
     
     routinen_text = ""
     if all_routines_res:
-        routinen_text = "\n".join([f"- {r['name']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
+        routinen_text = "\n".join([f"- {r['**name**']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['**is_checked**'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
     else:
         routinen_text = "Keine Routinen vorhanden."
         
@@ -793,15 +789,8 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     
     Benutzerprofil-Details:
     {profil_text}
-
-    Alle aktuellen Routinen:
-    {routinen_text}
-
-    Inhalt des letzten {zeitraum}rückblicks (falls vorhanden):
-    {previous_report_content}
     
-    Bitte gib einen zusammenfassenden und sachlichen {zeitraum}Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
-    ```
+    Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
     ```
     """
 
@@ -825,11 +814,16 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
         "user_id": user_id # user_id auch hier speichern!
     }).execute()
 
-    return {"rueckblick": bericht}
+    return bericht
+    
+class RoutineUpdate(BaseModel):
+    id: int
+    # ▚▚▚ ANPASSUNG: 'checked' zu 'is_checked' geändert ▚▚▚
+    is_checked: bool
 
 # Endpunkt zum Abrufen des neuesten gespeicherten Berichts
 @app.get("/bericht/abrufen/{report_type_name}")
-def get_stored_report(report_type_name: str, user_id: str = "1"): # user_id kann als Standard 1 haben
+def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann als Standard 1 haben
     try:
         # Hier wird der "thema"-String genau so gesucht, wie er gespeichert wird
         # (z.B. "Wochenrückblick" oder "Monatsrückblick", ohne 's')
@@ -864,16 +858,24 @@ def get_routines(user_id: str):
     today = datetime.datetime.now().strftime("%A")
 
     # Routines abrufen für den spezifischen user_id
-    routines = supabase.table("routines").select("name, day, is_checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
+    # ▚▚▚ ANPASSUNG: '*' durch spezifische Spaltennamen ersetzt: 'name' und 'time' ▚▚▚
+    routines = supabase.table("routines").select("**name**, time, day, **is_checked**, missed_count").eq("day", today).eq("user_id", user_id).execute().data
+    # ▚▚▚ ENDE ANPASSUNG ▚▚▚
 
     # Übergebe `checked`-Status für jede Routine
     return {"routines": routines}
 
+class RoutineUpdate(BaseModel):
+    id: int
+    # ▚▚▚ ANPASSUNG: 'checked' zu 'is_checked' geändert ▚▚▚
+    is_checked: bool
+    user_id: str # Hinzugefügt, um den Benutzer zu identifizieren
+
 # Routinenstatus aktualisieren
-@app.post("/routines/update/{user_id}")
-def update_routine_status(update: RoutineUpdate, user_id: str):
+@app.post("/routines/update")
+def update_routine_status(update: RoutineUpdate):
     try:
-        supabase.table("routines").update({"is_checked": update.is_checked}).eq("id", update.id).eq("user_id", user_id).execute()
+        supabase.table("routines").update({"**is_checked**": update.**is_checked**}).eq("id", update.id).eq("user_id", update.user_id).execute()
         return {"status": "success"}
     except Exception as e:
         print(f"Fehler beim Aktualisieren der Routine: {e}")
@@ -917,7 +919,7 @@ def create_memory(memory_input: MemoryInput, user_id: str):
             "user_id": user_id,
             "thema": memory_input.thema,
             "inhalt": memory_input.inhalt,
-            "timestamp": datetime.datetime.utcnow().isoformat() + 'Z'
+            "timestamp": datetime.datetime.utcnow().isoformat()
         }).execute()
         return {"status": "success", "message": "Erinnerung erfolgreich gespeichert."}
     except Exception as e:
@@ -937,20 +939,20 @@ def create_profile(profile_data: ProfileData, user_id: str):
             existing_entry = supabase.table("profile") \
                 .select("id") \
                 .eq("user_id", user_id) \
-                .eq("attribute", attribute) \
+                .eq("**attribute_name**", attribute) \
                 .execute().data
             
             if existing_entry:
                 # Aktualisiere den Wert des bestehenden Attributs
                 supabase.table("profile") \
-                    .update({"value": value}) \
+                    .update({"**attribute_value**": value}) \
                     .eq("id", existing_entry[0]["id"]) \
                     .execute()
                 print(f"Profil-Attribut '{attribute}' für User '{user_id}' aktualisiert.")
             else:
                 # Füge neues Attribut hinzu
                 supabase.table("profile") \
-                    .insert({"user_id": user_id, "attribute": attribute, "value": value}) \
+                    .insert({"user_id": user_id, "**attribute_name**": attribute, "**attribute_value**": value}) \
                     .execute()
                 print(f"Profil-Attribut '{attribute}' für User '{user_id}' erstellt.")
         return {"status": "success", "message": "Profil erfolgreich verarbeitet."}
