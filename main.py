@@ -752,7 +752,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
 
     all_routines_res = supabase.table("routines") \
-        .select("name, checked, day, missed_count") \
+        .select("task, checked, day, missed_count") \
         .eq("user_id", user_id) \
         .execute().data
     
