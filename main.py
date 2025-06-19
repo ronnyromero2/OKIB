@@ -326,7 +326,7 @@ async def start_interaction(user_id: str):
 
         # Laden aller Routinen aus der 'routines'-Tabelle für eine Gesamtübersicht
         all_user_routines = supabase.table("routines") \
-            .select("name, day, checked, missed_count") \
+            .select("task, day, checked, missed_count") \
             .eq("user_id", user_id) \
             .limit(10) \
             .execute().data
@@ -334,7 +334,7 @@ async def start_interaction(user_id: str):
         routines_overview_context = ""
         if all_user_routines:
             routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([
-                f"- {str(r.get('name', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
+                f"- {str(r.get('task', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
                 for r in all_user_routines
             ])
         else:
@@ -343,7 +343,7 @@ async def start_interaction(user_id: str):
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         unfulfilled_routines = supabase.table("routines") \
-            .select("name, missed_count") \
+            .select("task, missed_count") \
             .eq("day", today) \
             .eq("checked", False) \
             .eq("user_id", user_id) \
@@ -351,8 +351,8 @@ async def start_interaction(user_id: str):
 
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
         routine_texts = [
-            str(r.get("name", '')) for r in unfulfilled_routines 
-            if r.get("missed_count", 0) >= 3 and r.get("name") is not None
+            str(r.get("task", '')) for r in unfulfilled_routines 
+            if r.get("missed_count", 0) >= 3 and r.get("task") is not None
         ]
         routine_context_today = ", ".join(routine_texts)
 
@@ -528,7 +528,7 @@ async def chat(user_id: str, chat_input: ChatInput):
             
             if profile_attributes_data:
                 user_profile_details = {item["attribute_name"]: item["attribute_value"] for item in profile_attributes_data}
-                profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for name, value in user_profile_details.items()])
+                profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for task, value in user_profile_details.items()])
         except Exception as e:
             print(f"Fehler beim Laden des Profils: {e}")
 
@@ -536,10 +536,10 @@ async def chat(user_id: str, chat_input: ChatInput):
         routines_text = "Keine Routinen definiert." # Standardwert
         try:
             today = datetime.datetime.now().strftime("%A")
-            routines_response = supabase.table("routines").select("name, checked, day, missed_count").eq("user_id", user_id).execute()
+            routines_response = supabase.table("routines").select("task, checked, day, missed_count").eq("user_id", user_id).execute()
             routines = routines_response.data
             if routines:
-                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['name']} (Tag: {r['day']}, Erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
+                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['task']} (Tag: {r['day']}, Erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
         except Exception as e:
             print(f"Fehler beim Abrufen der Routinen: {e}")
         
