@@ -758,7 +758,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     
     routinen_text = ""
     if all_routines_res:
-        routinen_text = "\n".join([f"- {r['name']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
+        routinen_text = "\n".join([f"- {r['task']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
     else:
         routinen_text = "Keine Routinen vorhanden."
         
