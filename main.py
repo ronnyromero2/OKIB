@@ -858,7 +858,7 @@ def get_routines(user_id: str):
 
     # Routines abrufen für den spezifischen user_id
     # ▚▚▚ ANPASSUNG: '*' durch spezifische Spaltennamen ersetzt: 'name' und 'time' ▚▚▚
-    routines = supabase.table("routines").select("name, time, day, checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
+    routines = supabase.table("routines").select("id, task, time, day, checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
     # ▚▚▚ ENDE ANPASSUNG ▚▚▚
 
     # Übergebe `checked`-Status für jede Routine
