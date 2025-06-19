@@ -249,7 +249,7 @@ async function sendChat() {
     const res = await fetch(`${API_URL}/chat/1`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ id: routineId, user_id: "1", checked: isChecked })
     });
 
     const data = await res.json();
