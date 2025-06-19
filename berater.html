@@ -246,7 +246,7 @@ async function sendChat() {
   resBox.innerHTML += `<div class='message'><strong>👤:</strong> ${message}</div>`;
   
   try {
-    const res = await fetch(`${API_URL}/chat`, {
+    const res = await fetch(${API_URL}/chat/1, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message })
