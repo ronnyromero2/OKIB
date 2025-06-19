@@ -71,8 +71,7 @@ class GoalUpdate(BaseModel):
 
 class RoutineUpdate(BaseModel):
     id: int
-    # ▚▚▚ ANPASSUNG: 'checked' zu 'is_checked' geändert ▚▚▚
-    is_checked: bool
+    checked: bool
     user_id: str
 
 class ProfileData(BaseModel):
@@ -327,7 +326,7 @@ async def start_interaction(user_id: str):
 
         # Laden aller Routinen aus der 'routines'-Tabelle für eine Gesamtübersicht
         all_user_routines = supabase.table("routines") \
-            .select("name, day, is_checked, missed_count") \
+            .select("name, day, checked, missed_count") \
             .eq("user_id", user_id) \
             .limit(10) \
             .execute().data
@@ -335,7 +334,7 @@ async def start_interaction(user_id: str):
         routines_overview_context = ""
         if all_user_routines:
             routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([
-                f"- {str(r.get('name', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('is_checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
+                f"- {str(r.get('name', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
                 for r in all_user_routines
             ])
         else:
@@ -346,7 +345,7 @@ async def start_interaction(user_id: str):
         unfulfilled_routines = supabase.table("routines") \
             .select("name, missed_count") \
             .eq("day", today) \
-            .eq("is_checked", False) \
+            .eq("checked", False) \
             .eq("user_id", user_id) \
             .execute().data
 
@@ -537,10 +536,10 @@ async def chat(user_id: str, chat_input: ChatInput):
         routines_text = "Keine Routinen definiert." # Standardwert
         try:
             today = datetime.datetime.now().strftime("%A")
-            routines_response = supabase.table("routines").select("name, is_checked, day, missed_count").eq("user_id", user_id).execute()
+            routines_response = supabase.table("routines").select("name, checked, day, missed_count").eq("user_id", user_id).execute()
             routines = routines_response.data
             if routines:
-                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['name']} (Tag: {r['day']}, Erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
+                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['name']} (Tag: {r['day']}, Erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
         except Exception as e:
             print(f"Fehler beim Abrufen der Routinen: {e}")
         
@@ -753,13 +752,13 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
 
     all_routines_res = supabase.table("routines") \
-        .select("name, is_checked, day, missed_count") \
+        .select("name, checked, day, missed_count") \
         .eq("user_id", user_id) \
         .execute().data
     
     routinen_text = ""
     if all_routines_res:
-        routinen_text = "\n".join([f"- {r['name']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['is_checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
+        routinen_text = "\n".join([f"- {r['name']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
     else:
         routinen_text = "Keine Routinen vorhanden."
         
@@ -818,8 +817,8 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     
 class RoutineUpdate(BaseModel):
     id: int
-    # ▚▚▚ ANPASSUNG: 'checked' zu 'is_checked' geändert ▚▚▚
-    is_checked: bool
+    # ▚▚▚ ANPASSUNG: 'checked' zu 'checked' geändert ▚▚▚
+    checked: bool
 
 # Endpunkt zum Abrufen des neuesten gespeicherten Berichts
 @app.get("/bericht/abrufen/{report_type_name}")
@@ -859,7 +858,7 @@ def get_routines(user_id: str):
 
     # Routines abrufen für den spezifischen user_id
     # ▚▚▚ ANPASSUNG: '*' durch spezifische Spaltennamen ersetzt: 'name' und 'time' ▚▚▚
-    routines = supabase.table("routines").select("name, time, day, is_checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
+    routines = supabase.table("routines").select("name, time, day, checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
     # ▚▚▚ ENDE ANPASSUNG ▚▚▚
 
     # Übergebe `checked`-Status für jede Routine
@@ -867,15 +866,15 @@ def get_routines(user_id: str):
 
 class RoutineUpdate(BaseModel):
     id: int
-    # ▚▚▚ ANPASSUNG: 'checked' zu 'is_checked' geändert ▚▚▚
-    is_checked: bool
+    # ▚▚▚ ANPASSUNG: 'checked' zu 'checked' geändert ▚▚▚
+    checked: bool
     user_id: str # Hinzugefügt, um den Benutzer zu identifizieren
 
 # Routinenstatus aktualisieren
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
     try:
-        supabase.table("routines").update({"is_checked": update.is_checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
+        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
         return {"status": "success"}
     except Exception as e:
         print(f"Fehler beim Aktualisieren der Routine: {e}")
