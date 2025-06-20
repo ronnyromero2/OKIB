@@ -157,7 +157,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
                 supabase.table("profile").update({"attribute_value": value, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}).eq("user_id", user_id).eq("attribute_name", key).execute()
             else:
                 # Neuen Eintrag hinzufügen
-                supabase.table("profile").insert({"user_id": user_id, "attribute_name": key, "attribute_value": value, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}).execute()
+                supabase.table("profile").upsert({"user_id": user_id, "attribute_name": key, "attribute_value": value, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}).execute()
 
         if new_extracted_profile:
             insert_data = [
