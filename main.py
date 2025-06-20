@@ -82,16 +82,10 @@ class ProfileData(BaseModel):
     interessen: Optional[str] = None
     
 # Funktion zur Extraktion und Speicherung von erweiterten Profildetails im EAV-Modell
-async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_historie: list):
+async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str, ai_response: str, ai_prompt: str):
     print(f"Starte dynamische Profil-Extraktion und Speicherung für User {user_id}...")
-    recent_history_for_extraction = gespraechs_historie[-10:] if len(gespraechs_historie) > 10 else gespraechs_historie[:]
+    print(f"Analysiere aktuelle Nachricht: '{user_input}'")
     
-    if not recent_history_for_extraction:
-        print("Keine relevante Gesprächshistorie für Profil-Extraktion vorhanden.")
-        return
-
-    history_text = "\n".join([f"User: {g['user_input']} | AI: {g['ai_response']}" for g in recent_history_for_extraction])
-
     # Bestehendes dynamisches Profil aus der 'profile'-Tabelle abrufen
     # Die 'profile'-Tabelle ist jetzt unsere EAV-Tabelle
     current_dynamic_profile_response = supabase.table("profile") \
@@ -129,13 +123,14 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
     """
 
     user_prompt = f"""
-    Hier ist die aktuelle Gesprächshistorie:
-
-    {history_text}
-
-    Bereits bekanntes dynamisches Profil: {json.dumps(existing_dynamic_profile, ensure_ascii=False)}
+    Kontext der aktuellen Unterhaltung:
+    AI-Einstiegsfrage: "{ai_prompt}"
+    User-Eingabe: "{user_input}"
+    AI-Antwort: "{ai_response}"
     
-    Gib das vollständige, aktualisierte dynamische Profil als JSON-Objekt zurück.
+    Bereits bekanntes Profil: {json.dumps(existing_dynamic_profile, ensure_ascii=False)}
+    
+    Extrahiere neue persönliche Informationen aus dem User-Input und gib das vollständige, aktualisierte Profil als JSON-Objekt zurück.
     """
 
     try:
@@ -623,16 +618,13 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Nachricht in Historie speichern
         await _save_conversation_entry(user_id, user_message, ai_response_content, "")
         
-        # Holen Sie sich die gesamte Konversationshistorie, um sie an die Extraktionsfunktion zu übergeben
-        # Dies ist notwendig, da extrahiere_und_speichere_profil_details auf die gesamte Historie zugreift.
-        all_conversation_history_for_profile = supabase.table("conversation_history") \
-            .select("user_input", "ai_response", "ai_prompt") \
-            .eq("user_id", user_id) \
-            .order("timestamp", desc=False) \
-            .limit(20) \
-            .execute().data
+        # Die letzte ai_prompt aus der Historie holen
+        last_ai_prompt = ""
+        if gespraechs_historie:
+            last_entry = gespraechs_historie[-1]
+            last_ai_prompt = last_entry.get('ai_prompt', '')
         
-        await extrahiere_und_speichere_profil_details(user_id, all_conversation_history_for_profile)
+        await extrahiere_und_speichere_profil_details(user_id, user_message, ai_response_content, last_ai_prompt)
 
         return {"response": ai_response_content}
 
