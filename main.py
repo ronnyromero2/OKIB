@@ -352,7 +352,8 @@ async def start_interaction(user_id: str):
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
         routine_texts = [
             str(r.get("task", '')) for r in unfulfilled_routines 
-            if r.get("missed_count", 0) >= 3 and r.get("task") is not None
+            missed_count = r.get("missed_count")
+            if missed_count is not None and missed_count >= 3 and r.get("task") is not None
         ]
         routine_context_today = ", ".join(routine_texts)
 
