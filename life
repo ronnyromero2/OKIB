@@ -103,6 +103,10 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     Deine Aufgabe ist es, ein detailliertes Langzeitprofil des Benutzers aufzubauen und kontinuierlich zu erweitern.
     
     WICHTIG: Du sollst AKTIV nach NEUEN Informationen suchen und NEUE Kategorien erstellen!
+    AUSGABEFORMAT - SEHR WICHTIG:
+    - Verwende IMMER reine Strings als Werte, NIEMALS Arrays
+    - Beispiel: "Hobbys": "Laufen, Kochen, Lesen" (NICHT ["Laufen", "Kochen"])
+    - Alle Werte als Text formatieren
     
     REGELN:
     1. Analysiere JEDEN Gesprächsteil nach neuen, relevanten Informationen
@@ -149,8 +153,16 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
 
         print(f"Extrahierte Profildaten von GPT für User {user_id}: {new_extracted_profile}")
 
+        # Temporäre Kategorien ausschließen
+        EXCLUDED_CATEGORIES = ['Aktuelles_Datum']
+
         # Vergleichen und Aktualisieren der Daten in der 'profile' Tabelle (EAV-Modell)
         for key, value in new_extracted_profile.items():
+            # Temporäre Infos überspringen
+            if key in EXCLUDED_CATEGORIES:
+                print(f"Überspringe temporäre Kategorie: {key}")
+                continue
+                
             # Prüfen ob Eintrag schon existiert
             existing = supabase.table("profile").select("*").eq("user_id", user_id).eq("attribute_name", key).execute().data
             
@@ -571,6 +583,10 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Systemnachricht zusammenstellen
         system_message = f"""
         Du bist ein persönlicher, anspruchsvoller und konstruktiver Mentor und Therapeut. Dein Ziel ist es, dem Nutzer realistisch, prägnant und umsetzbar zu helfen.
+
+        WICHTIGE INFORMATIONEN:
+        - Heutiges Datum: {datetime.datetime.now().strftime('%d. %B %Y')}
+        - Aktueller Wochentag: {datetime.datetime.now().strftime('%A')}
 
         Nutze folgende Informationen für direkt handlungsorientierte Ratschläge:
 
