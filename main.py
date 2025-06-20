@@ -159,13 +159,6 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
                 # Neuen Eintrag hinzufügen
                 supabase.table("profile").upsert({"user_id": user_id, "attribute_name": key, "attribute_value": value, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}).execute()
 
-        if new_extracted_profile:
-            insert_data = [
-                {"user_id": user_id, "attribute_name": k, "attribute_value": v, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}
-                for k, v in new_extracted_profile.items() if v is not None # Nur Nicht-None Werte speichern
-            ]
-            if insert_data:
-                supabase.table("profile").insert(insert_data).execute()
         print(f"Dynamisches Profil für User {user_id} erfolgreich aktualisiert.")
 
     except json.JSONDecodeError as e:
@@ -537,7 +530,7 @@ async def chat(user_id: str, chat_input: ChatInput):
             
             if profile_attributes_data:
                 user_profile_details = {item["attribute_name"]: item["attribute_value"] for item in profile_attributes_data}
-                profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for task, value in user_profile_details.items()])
+                profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for name, value in user_profile_details.items()])
         except Exception as e:
             print(f"Fehler beim Laden des Profils: {e}")
 
