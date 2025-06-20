@@ -106,18 +106,25 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
     
     system_prompt = f"""
     Du bist ein spezialisierter Assistent, der wichtige persönliche Informationen und Vorlieben des Benutzers aus Gesprächen extrahiert.
-    Deine Aufgabe ist es, ein detailliertes Langzeitprofil des Benutzers aufzubauen und inkrementell zu aktualisieren.
-    Extrahiere alle relevanten und konsistenten Erkenntnisse über den Benutzer, ignoriere unwichtige, temporäre oder irrelevante Details.
-    Denke daran, dass nur Informationen wichtig sind, die das System nutzen kann, um zukünftige Interaktionen zu personalisieren oder besser auf den Benutzer einzugehen (z.B. Vorlieben, Ziele, relevante persönliche Umstände).
+    Deine Aufgabe ist es, ein detailliertes Langzeitprofil des Benutzers aufzubauen und kontinuierlich zu erweitern.
     
-    Du erhältst eine aktuelle Gesprächshistorie und ein JSON-Objekt mit bereits bekannten dynamischen Profilinformationen des Benutzers.
-    Analysiere die neuen Gesprächssegmente. Wenn neue relevante Informationen gefunden werden oder sich bestehende ändern, aktualisiere das bereitgestellte JSON-Objekt entsprechend.
-    Wenn eine Information gelöscht oder als falsch identifiziert wird, entferne den Schlüssel aus dem JSON-Objekt.
-    Gib immer das vollständige, aktualisierte JSON-Objekt zurück, auch wenn keine Änderungen vorgenommen wurden.
-
-    Beispiele für relevante Informationen sind Schlüsselwörter wie "Beruf", "Beziehungsziel", "Prioritäten", "Hobbys", "Interessen", "Urlaubsziel", "Lieblingsessen", "persönliche Ziele", "Familienstand", "aktuelle Herausforderungen", "Softwarepräferenzen", "Lernziele", etc.
-    Verwende prägnante, aussagekräftige Schlüsselnamen (z.B. "Interessen" statt "Was mag der Nutzer machen").
-
+    WICHTIG: Du sollst AKTIV nach NEUEN Informationen suchen und NEUE Kategorien erstellen!
+    
+    REGELN:
+    1. Analysiere JEDEN Gesprächsteil nach neuen, relevanten Informationen
+    2. Erstelle NEUE Kategorien für jede neue Information (z.B. "Lieblingsspeise", "Musik", "Reisepläne_August")
+    3. Behalte bestehende Kategorien bei, wenn sie weiterhin relevant sind
+    4. Aktualisiere bestehende Werte bei neuen/anderen Informationen
+    5. Ignoriere nur wirklich temporäre Dinge (wie "heute bin ich müde")
+    
+    NEUE KATEGORIEN-BEISPIELE:
+    - Lieblingsspeise, Kochvorlieben, Musik, Hobbys, Reisepläne_spezifisch
+    - Arbeitsbereiche, Sprachen, Filme/Serien, Sport, Wohnsituation
+    - Haustiere, Freunde, Familie, Gesundheit, Finanzen, etc.
+    
+    Du erhältst eine aktuelle Gesprächshistorie und bereits bekannte Profilinformationen.
+    Gib das VOLLSTÄNDIGE, ERWEITERTE JSON-Objekt zurück - mit allen alten UND neuen Kategorien.
+    
     Antworte NUR mit dem JSON-Objekt.
     """
 
@@ -139,7 +146,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, gespraechs_histo
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"}, # Explizit JSON-Format anfordern
-            temperature=0.0 # Geringe Temperatur für präzise Extraktion
+            temperature=0.3
         )
         
         extracted_data_str = response.choices[0].message.content
