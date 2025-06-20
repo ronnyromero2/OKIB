@@ -634,12 +634,22 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Nachricht in Historie speichern
         await _save_conversation_entry(user_id, user_message, ai_response_content, "")
         
-        # Die letzte ai_prompt aus der Historie holen
+        # Die vorherige ai_prompt aus der Historie holen
         last_ai_prompt = ""
-        if gespraechs_historie:
-            last_entry = gespraechs_historie[-1]
-            last_ai_prompt = last_entry.get('ai_prompt', '')
-        
+        try:
+            # Hole die letzte ai_prompt aus der Datenbank
+            last_prompt_response = supabase.table("conversation_history") \
+                .select("ai_prompt") \
+                .eq("user_id", user_id) \
+                .order("timestamp", desc=True) \
+                .limit(1) \
+                .execute()
+            
+            if last_prompt_response.data:
+                last_ai_prompt = last_prompt_response.data[0].get('ai_prompt', '')
+        except Exception as e:
+            print(f"Fehler beim Abrufen der letzten ai_prompt: {e}")
+                
         await extrahiere_und_speichere_profil_details(user_id, user_message, ai_response_content, last_ai_prompt)
 
         return {"response": ai_response_content}
