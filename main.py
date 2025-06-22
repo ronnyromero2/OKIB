@@ -874,7 +874,7 @@ def get_routines(user_id: str):
 
     try:
         # 🆕 SCHRITT 1: Alle Routinen für heute abrufen (mit last_checked_date)
-        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date").eq("day", today).eq("user_id", user_id).execute().data
+        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
         
         # 🆕 SCHRITT 2: Reset-Logik für jeden Routine-Eintrag
         for routine in routines:
@@ -888,17 +888,19 @@ def get_routines(user_id: str):
                 
                 # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
                 if not is_checked:
-                missed_dates = routine.get('missed_dates') or []
-                missed_dates.append(current_date)
-                supabase.table("routines").update({
-                    "checked": False,
-                    "missed_dates": missed_dates,
-                    "last_checked_date": current_date
-                }).eq("id", routine_id).execute()
+                    missed_dates = routine.get('missed_dates') or []
+                    missed_dates.append(current_date)
+                    print(f"Routine {routine_id} war NICHT gecheckt -> missed_dates: {missed_dates}")
+                    
+                    supabase.table("routines").update({
+                        "checked": False,
+                        "missed_dates": missed_dates,
+                        "last_checked_date": current_date
+                    }).eq("id", routine_id).execute()
                     
                     # Lokale Daten aktualisieren
                     routine['checked'] = False
-                    routine['missed_count'] = new_missed_count
+                    routine['missed_dates'] = missed_dates
                 else:
                     # Routine war unchecked -> nur last_checked_date aktualisieren
                     supabase.table("routines").update({
@@ -913,7 +915,7 @@ def get_routines(user_id: str):
     except Exception as e:
         print(f"Fehler beim Abrufen/Reset der Routinen: {e}")
         # Fallback ohne last_checked_date
-        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
+        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
         return {"routines": routines}
         
 @app.post("/routines/update")
