@@ -832,11 +832,6 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
 
     return bericht
     
-class RoutineUpdate(BaseModel):
-    id: int
-    # ▚▚▚ ANPASSUNG: 'checked' zu 'checked' geändert ▚▚▚
-    checked: bool
-
 # Endpunkt zum Abrufen des neuesten gespeicherten Berichts
 @app.get("/bericht/abrufen/{report_type_name}")
 def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann als Standard 1 haben
@@ -869,18 +864,15 @@ def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann a
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen des Berichts.")
 
 # Routinen abrufen
-@app.get("/routines/{user_id}") # user_id im Pfad hinzufügen
-def get_routines(user_id: str):
-    today = datetime.datetime.now().strftime("%A")
-
-    # Routines abrufen für den spezifischen user_id
-    # ▚▚▚ ANPASSUNG: '*' durch spezifische Spaltennamen ersetzt: 'name' und 'time' ▚▚▚
-    routines = supabase.table("routines").select("id, task, time, day, checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
-    # ▚▚▚ ENDE ANPASSUNG ▚▚▚
-
-    # Übergebe `checked`-Status für jede Routine
-    return {"routines": routines}
-
+@app.post("/routines/update")
+def update_routine_status(update: RoutineUpdate):
+    try:
+        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Fehler beim Aktualisieren der Routine: {e}")
+        return {"status": "error", "message": str(e)}
+        
 class RoutineUpdate(BaseModel):
     id: int
     # ▚▚▚ ANPASSUNG: 'checked' zu 'checked' geändert ▚▚▚
