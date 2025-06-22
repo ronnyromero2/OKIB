@@ -864,26 +864,68 @@ def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann a
         raise HTTPException(status_code=500, detail="Fehler beim Abrufen des Berichts.")
 
 # Routinen abrufen
-@app.post("/routines/update")
-def update_routine_status(update: RoutineUpdate):
-    try:
-        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
-        return {"status": "success"}
-    except Exception as e:
-        print(f"Fehler beim Aktualisieren der Routine: {e}")
-        return {"status": "error", "message": str(e)}
-        
-class RoutineUpdate(BaseModel):
-    id: int
-    # ▚▚▚ ANPASSUNG: 'checked' zu 'checked' geändert ▚▚▚
-    checked: bool
-    user_id: str # Hinzugefügt, um den Benutzer zu identifizieren
+@app.get("/routines/{user_id}")
+def get_routines(user_id: str):
+    today = datetime.datetime.now().strftime("%A")
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-# Routinenstatus aktualisieren
+    try:
+        # 🆕 SCHRITT 1: Alle Routinen für heute abrufen (mit last_checked_date)
+        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date").eq("day", today).eq("user_id", user_id).execute().data
+        
+        # 🆕 SCHRITT 2: Reset-Logik für jeden Routine-Eintrag
+        for routine in routines:
+            routine_id = routine['id']
+            last_checked = routine.get('last_checked_date')
+            is_checked = routine.get('checked', False)
+            
+            # 🎯 RESET-BEDINGUNG: Wenn last_checked_date nicht heute ist (oder NULL)
+            if last_checked != current_date:
+                print(f"Routine {routine_id} ({routine['task']}) - Reset erforderlich. Letzter Check: {last_checked}, Heute: {current_date}")
+                
+                # Wenn Routine checked war, aber nicht heute -> missed_count erhöhen
+                if is_checked:
+                    new_missed_count = routine.get('missed_count', 0) + 1
+                    print(f"Routine {routine_id} war gecheckt, aber nicht heute -> missed_count: {new_missed_count}")
+                    
+                    # Update: checked=False, missed_count++, last_checked_date=heute
+                    supabase.table("routines").update({
+                        "checked": False,
+                        "missed_count": new_missed_count,
+                        "last_checked_date": current_date
+                    }).eq("id", routine_id).execute()
+                    
+                    # Lokale Daten aktualisieren
+                    routine['checked'] = False
+                    routine['missed_count'] = new_missed_count
+                else:
+                    # Routine war unchecked -> nur last_checked_date aktualisieren
+                    supabase.table("routines").update({
+                        "last_checked_date": current_date
+                    }).eq("id", routine_id).execute()
+                    
+                routine['last_checked_date'] = current_date
+
+        print(f"Routinen für {today} (User {user_id}) erfolgreich abgerufen und resettet.")
+        return {"routines": routines}
+        
+    except Exception as e:
+        print(f"Fehler beim Abrufen/Reset der Routinen: {e}")
+        # Fallback ohne last_checked_date
+        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count").eq("day", today).eq("user_id", user_id).execute().data
+        return {"routines": routines}
+        
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
     try:
-        supabase.table("routines").update({"checked": update.checked}).eq("id", update.id).eq("user_id", update.user_id).execute()
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        
+        # Update checked-Status UND last_checked_date
+        supabase.table("routines").update({
+            "checked": update.checked,
+            "last_checked_date": current_date
+        }).eq("id", update.id).eq("user_id", update.user_id).execute()
+        
         return {"status": "success"}
     except Exception as e:
         print(f"Fehler beim Aktualisieren der Routine: {e}")
