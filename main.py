@@ -871,13 +871,20 @@ def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann a
 def get_routines(user_id: str):
     today = datetime.datetime.now().strftime("%A")
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
+    yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
     try:
         # 🆕 SCHRITT 1: Alle Routinen für heute abrufen (mit last_checked_date)
-        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
+        today_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
+        yesterday_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates").eq("day", yesterday).eq("user_id", user_id).execute().data
+        all_routines = []
         
         # 🆕 SCHRITT 2: Reset-Logik für jeden Routine-Eintrag
-        for routine in routines:
+        for routine in today_routines:
+            routine_copy = routine.copy()
+            routine_copy['date'] = current_date
+            routine_copy['display_date'] = 'heute'
             routine_id = routine['id']
             last_checked = routine.get('last_checked_date')
             is_checked = routine.get('checked', False)
@@ -887,52 +894,97 @@ def get_routines(user_id: str):
                 print(f"Routine {routine_id} ({routine['task']}) - Reset erforderlich. Letzter Check: {last_checked}, Heute: {current_date}")
                 
                 # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
-                if not is_checked:
-                    missed_dates = routine.get('missed_dates') or []
-                    missed_dates.append(current_date)
-                    print(f"Routine {routine_id} war NICHT gecheckt -> missed_dates: {missed_dates}")
-                    
-                    supabase.table("routines").update({
-                        "checked": False,
-                        "missed_dates": missed_dates,
-                        "last_checked_date": current_date
-                    }).eq("id", routine_id).execute()
-                    
-                    # Lokale Daten aktualisieren
-                    routine['checked'] = False
-                    routine['missed_dates'] = missed_dates
-                else:
-                    # Routine war unchecked -> nur last_checked_date aktualisieren
-                    supabase.table("routines").update({
-                        "last_checked_date": current_date
-                    }).eq("id", routine_id).execute()
-                    
+                # Reset ohne missed_dates zu ändern (48h Kulanz)
+                supabase.table("routines").update({
+                    "checked": False,
+                    "last_checked_date": current_date
+                }).eq("id", routine_id).execute()
+                
+                # Lokale Daten aktualisieren
+                routine['checked'] = False
+                
+                routine_copy['checked'] = False
+                routine_copy['last_checked_date'] = current_date    
                 routine['last_checked_date'] = current_date
-
+            routine_copy['checked'] = routine.get('checked', False)
+            routine_copy['last_checked_date'] = routine.get('last_checked_date')
+            all_routines.append(routine_copy)
+        
+        # Verarbeite GESTERN-Routinen (nur unerledigte)
+        for routine in yesterday_routines:
+            last_checked = routine.get('last_checked_date')
+            is_checked = routine.get('checked', False)
+            
+            # Nur anzeigen wenn NICHT gecheckt wurde gestern
+            if last_checked != yesterday_date or not is_checked:
+                routine_copy = routine.copy()
+                routine_copy['date'] = yesterday_date
+                routine_copy['display_date'] = 'gestern'
+                routine_copy['checked'] = False  # Immer unchecked anzeigen
+                all_routines.append(routine_copy)
+                
+                # Prüfe ob diese Routine vorgestern auch schon nicht gecheckt war
+                day_before_yesterday = (datetime.datetime.now() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
+                
+                # Nur zu missed_dates hinzufügen wenn 48h vorbei sind (vorgestern nicht gecheckt)
+                if last_checked and last_checked <= day_before_yesterday:
+                    missed_dates = routine.get('missed_dates') or []
+                    if yesterday_date not in missed_dates:
+                        missed_dates.append(yesterday_date)
+                        print(f"Routine {routine['id']} - 48h Kulanz abgelaufen, zu missed_dates hinzugefügt")
+                        supabase.table("routines").update({
+                            "missed_dates": missed_dates
+                        }).eq("id", routine['id']).execute()
+        
+        # Sortiere: heute zuerst, dann gestern
+        all_routines.sort(key=lambda x: x['date'], reverse=True)
+                
         print(f"Routinen für {today} (User {user_id}) erfolgreich abgerufen und resettet.")
-        return {"routines": routines}
+        return {"routines": all_routines}
         
     except Exception as e:
         print(f"Fehler beim Abrufen/Reset der Routinen: {e}")
         # Fallback ohne last_checked_date
-        routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
-        return {"routines": routines}
+        all_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
+        return {"routines": all_routines}
         
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
-    try:
-        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        
-        # Update checked-Status UND last_checked_date
-        supabase.table("routines").update({
-            "checked": update.checked,
-            "last_checked_date": current_date
-        }).eq("id", update.id).eq("user_id", update.user_id).execute()
-        
-        return {"status": "success"}
-    except Exception as e:
-        print(f"Fehler beim Aktualisieren der Routine: {e}")
-        return {"status": "error", "message": str(e)}
+   try:
+       current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+       yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+
+       # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt
+       routine_data = supabase.table("routines").select("day").eq("id", update.id).eq("user_id", update.user_id).execute().data
+
+       if not routine_data:
+           return {"status": "error", "message": "Routine nicht gefunden"}
+
+       routine = routine_data[0]
+       routine_day = routine['day']
+
+       # Bestimme ob es sich um eine Heute- oder Gestern-Routine handelt
+       today_weekday = datetime.datetime.now().strftime("%A")
+       yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
+
+       if routine_day == today_weekday:
+           target_date = current_date
+       elif routine_day == yesterday_weekday:
+           target_date = yesterday_date
+       else:
+           return {"status": "error", "message": "Routine gehört weder zu heute noch zu gestern"}
+       
+       # Update checked-Status UND last_checked_date
+       supabase.table("routines").update({
+           "checked": update.checked,
+           "last_checked_date": target_date
+       }).eq("id", update.id).eq("user_id", update.user_id).execute()
+       
+       print(f"Routine {update.id} für {target_date} auf checked={update.checked} gesetzt")
+       return {"status": "success"}
+   except Exception as e:
+       print(f"Fehler beim Aktualisieren der Routine: {e}")
+       return {"status": "error", "message": str(e)}
 
 # Ziele abrufen
 @app.get("/goals/{user_id}") # user_id im Pfad hinzufügen
