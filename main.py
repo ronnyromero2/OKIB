@@ -883,11 +883,11 @@ def get_routines(user_id: str):
             if last_checked != current_date:
                 print(f"Routine {routine_id} ({routine['task']}) - Reset erforderlich. Letzter Check: {last_checked}, Heute: {current_date}")
                 
-                # Wenn Routine checked war, aber nicht heute -> missed_count erhöhen
-                if is_checked:
+                # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
+                if not is_checked:
                     current_missed_count = routine.get('missed_count') or 0
                     new_missed_count = current_missed_count + 1
-                    print(f"Routine {routine_id} war gecheckt, aber nicht heute -> missed_count: {new_missed_count}")
+                    print(f"Routine {routine_id} war nicht gecheckt -> missed_count: {new_missed_count}")
                     
                     # Update: checked=False, missed_count++, last_checked_date=heute
                     supabase.table("routines").update({
