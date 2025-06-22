@@ -366,10 +366,13 @@ async def start_interaction(user_id: str):
             .execute().data
 
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
-        routine_texts = [
-            str(r.get("task", '')) for r in unfulfilled_routines 
-            if (r.get("missed_count") or 0) >= 3 and r.get("task") is not None
-        ]
+        five_weeks_ago = (datetime.datetime.now() - datetime.timedelta(weeks=5)).strftime("%Y-%m-%d")
+        routine_texts = []
+        for r in unfulfilled_routines:
+            missed_dates = r.get("missed_dates") or []
+            recent_missed = [d for d in missed_dates if d >= five_weeks_ago]
+            if len(recent_missed) >= 3 and r.get("task") is not None:
+                routine_texts.append(str(r.get("task", '')))
         routine_context_today = ", ".join(routine_texts)
 
         print("Wiederholt unerfüllte Routinen:", routine_context_today)
@@ -885,16 +888,13 @@ def get_routines(user_id: str):
                 
                 # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
                 if not is_checked:
-                    current_missed_count = routine.get('missed_count') or 0
-                    new_missed_count = current_missed_count + 1
-                    print(f"Routine {routine_id} war nicht gecheckt -> missed_count: {new_missed_count}")
-                    
-                    # Update: checked=False, missed_count++, last_checked_date=heute
-                    supabase.table("routines").update({
-                        "checked": False,
-                        "missed_count": new_missed_count,
-                        "last_checked_date": current_date
-                    }).eq("id", routine_id).execute()
+                missed_dates = routine.get('missed_dates') or []
+                missed_dates.append(current_date)
+                supabase.table("routines").update({
+                    "checked": False,
+                    "missed_dates": missed_dates,
+                    "last_checked_date": current_date
+                }).eq("id", routine_id).execute()
                     
                     # Lokale Daten aktualisieren
                     routine['checked'] = False
