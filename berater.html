@@ -175,53 +175,74 @@ function toggleErkenntnisse() {
   }
 
 async function loadRoutines() {
-  const routinenBox = document.getElementById("routinen");
-  routinenBox.innerHTML = "Lade Routinen...";
-
-  try {
-    // HIER wird USER_ID zur URL hinzugefügt!
-    const res = await fetch(`${API_URL}/routines/${USER_ID}`);
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
-    const data = await res.json();
-    routinenBox.innerHTML = "";
-
-    if (data.routines && data.routines.length > 0) {
-      data.routines.forEach((routine) => {
-        const routineDiv = document.createElement("div");
-        routineDiv.classList.add("routine");
-
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = routine.checked;
-        checkbox.id = `routine_${routine.id}`;
-
-        checkbox.addEventListener("change", function () {
-          const isChecked = checkbox.checked;
-          updateRoutineStatus(routine.id, isChecked);
-          routineDiv.classList.toggle("done", isChecked);
-        });
-
-        const label = document.createElement("label");
-        label.htmlFor = `routine_${routine.id}`;
-        label.textContent = routine.task;
-
-        if (routine.checked) {
-          routineDiv.classList.add("done");
-        }
-
-        routineDiv.appendChild(checkbox);
-        routineDiv.appendChild(label);
-        routinenBox.appendChild(routineDiv);
-      });
-    } else {
-      routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
-    }
-  } catch (error) {
-    console.error("Fehler beim Laden der Routinen:", error);
-    routinenBox.innerText = "Fehler beim Laden der Routinen. Bitte versuche es später noch einmal.";
-  }
+  const routinenBox = document.getElementById("routinen");
+  routinenBox.innerHTML = "Lade Routinen...";
+  try {
+    // HIER wird USER_ID zur URL hinzugefügt!
+    const res = await fetch(`${API_URL}/routines/${USER_ID}`);
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    const data = await res.json();
+    routinenBox.innerHTML = "";
+    
+    if (data.routines && data.routines.length > 0) {
+      // Gruppiere Routinen nach display_date
+      const routinesByDate = {};
+      data.routines.forEach((routine) => {
+        const displayDate = routine.display_date || 'unbekannt';
+        if (!routinesByDate[displayDate]) {
+          routinesByDate[displayDate] = [];
+        }
+        routinesByDate[displayDate].push(routine);
+      });
+      
+      // Zeige Routinen gruppiert nach Datum an
+      ['heute', 'gestern'].forEach(dateKey => {
+        if (routinesByDate[dateKey] && routinesByDate[dateKey].length > 0) {
+          // Datum-Header
+          const dateHeader = document.createElement('h4');
+          dateHeader.textContent = dateKey.charAt(0).toUpperCase() + dateKey.slice(1) + ':';
+          dateHeader.style.marginTop = '15px';
+          dateHeader.style.marginBottom = '8px';
+          dateHeader.style.fontWeight = 'bold';
+          routinenBox.appendChild(dateHeader);
+          
+          // Routinen für dieses Datum
+          routinesByDate[dateKey].forEach((routine) => {
+            const routineDiv = document.createElement("div");
+            routineDiv.classList.add("routine");
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = routine.checked;
+            checkbox.id = `routine_${routine.id}`;
+            checkbox.addEventListener("change", function () {
+              const isChecked = checkbox.checked;
+              updateRoutineStatus(routine.id, isChecked);
+              setTimeout(() => loadRoutines(), 500);
+              routineDiv.classList.toggle("done", isChecked);
+              // Neu laden nach Update
+              setTimeout(() => loadRoutines(), 500);
+            });
+            const label = document.createElement("label");
+            label.htmlFor = `routine_${routine.id}`;
+            label.textContent = routine.task;
+            if (routine.checked) {
+              routineDiv.classList.add("done");
+            }
+            routineDiv.appendChild(checkbox);
+            routineDiv.appendChild(label);
+            routinenBox.appendChild(routineDiv);
+          });
+        }
+      });
+    } else {
+      routinenBox.innerText = "Heute stehen keine speziellen Aufgaben an.";
+    }
+  } catch (error) {
+    console.error("Fehler beim Laden der Routinen:", error);
+    routinenBox.innerText = "Fehler beim Laden der Routinen. Bitte versuche es später noch einmal.";
+  }
 }
 
 async function updateRoutineStatus(routineId, isChecked) {
@@ -230,7 +251,7 @@ async function updateRoutineStatus(routineId, isChecked) {
     await fetch(`${API_URL}/routines/update`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: routineId, checked: isChecked })
+      body: JSON.stringify({ id: routineId, checked: isChecked, user_id: USER_ID })
     });
   } catch (error) {
     console.error("Fehler beim Aktualisieren des Routine-Status:", error);
