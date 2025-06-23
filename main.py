@@ -80,6 +80,33 @@ class ProfileData(BaseModel):
     hobby: Optional[str] = None
     beruf: Optional[str] = None
     interessen: Optional[str] = None
+
+class TodoInput(BaseModel):
+    title: str
+    description: str = ""
+    priority: str = "medium"  # low, medium, high
+    due_date: Optional[str] = None  # YYYY-MM-DD
+    category: str = "allgemein"
+    is_recurring: bool = False
+    recurrence_type: Optional[str] = None  # "monthly_first", "monthly_15th", "every_2_months", "every_3_months", "yearly"
+    recurrence_day: Optional[int] = None  # Tag im Monat (1-31)
+
+class TodoUpdate(BaseModel):
+    id: Union[int, str]
+    completed: bool
+    user_id: Union[int, str]
+
+class TodoStatusUpdate(BaseModel):
+    id: Union[int, str]
+    status: str  # "open", "in_progress", "completed", "archived"
+    
+class TodoEdit(BaseModel):
+    id: Union[int, str]
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[str] = None
+    category: Optional[str] = None
     
 # Funktion zur Extraktion und Speicherung von erweiterten Profildetails im EAV-Modell
 async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str, ai_response: str, ai_prompt: str):
@@ -221,6 +248,103 @@ async def get_recent_entry_questions(user_id: str):
     questions = [q["ai_prompt"] for q in recent_prompts.data if q["ai_prompt"]]
     print("Letzte 8 Einstiegsfragen (aus ai_prompt):", questions)
     return questions
+
+def calculate_next_due_date(recurrence_type: str, recurrence_day: int = None, last_completed: str = None):
+    """Berechnet das nächste Fälligkeitsdatum für wiederkehrende To-Dos"""
+    today = datetime.datetime.now()
+    
+    if recurrence_type == "monthly_first":
+        # Jeden ersten des Monats
+        next_month = today.replace(day=1)
+        if today.day >= 1:  # Wenn heute schon nach dem 1. ist
+            if next_month.month == 12:
+                next_month = next_month.replace(year=next_month.year + 1, month=1)
+            else:
+                next_month = next_month.replace(month=next_month.month + 1)
+        return next_month.strftime("%Y-%m-%d")
+    
+    elif recurrence_type == "monthly_15th":
+        # Jeden 15. des Monats
+        next_date = today.replace(day=15)
+        if today.day >= 15:  # Wenn heute schon nach dem 15. ist
+            if next_date.month == 12:
+                next_date = next_date.replace(year=next_date.year + 1, month=1)
+            else:
+                next_date = next_date.replace(month=next_date.month + 1)
+        return next_date.strftime("%Y-%m-%d")
+    
+    elif recurrence_type == "monthly_custom" and recurrence_day:
+        # Bestimmter Tag im Monat
+        try:
+            next_date = today.replace(day=recurrence_day)
+            if today.day >= recurrence_day:
+                if next_date.month == 12:
+                    next_date = next_date.replace(year=next_date.year + 1, month=1)
+                else:
+                    next_date = next_date.replace(month=next_date.month + 1)
+            return next_date.strftime("%Y-%m-%d")
+        except ValueError:
+            # Tag existiert nicht in diesem Monat (z.B. 31. Februar)
+            return None
+    
+    elif recurrence_type == "every_2_months":
+        # Alle 2 Monate
+        next_date = today
+        if next_date.month <= 10:
+            next_date = next_date.replace(month=next_date.month + 2)
+        else:
+            next_date = next_date.replace(year=next_date.year + 1, month=next_date.month - 10)
+        return next_date.strftime("%Y-%m-%d")
+    
+    elif recurrence_type == "every_3_months":
+        # Alle 3 Monate (quartalsweise)
+        next_date = today
+        if next_date.month <= 9:
+            next_date = next_date.replace(month=next_date.month + 3)
+        else:
+            next_date = next_date.replace(year=next_date.year + 1, month=next_date.month - 9)
+        return next_date.strftime("%Y-%m-%d")
+    
+    elif recurrence_type == "yearly":
+        # Jährlich
+        next_date = today.replace(year=today.year + 1)
+        return next_date.strftime("%Y-%m-%d")
+    
+    return None
+
+def create_recurring_todo_instance(original_todo, user_id: str):
+    """Erstellt eine neue Instanz eines wiederkehrenden To-Dos"""
+    next_due = calculate_next_due_date(
+        original_todo['recurrence_type'], 
+        original_todo.get('recurrence_day')
+    )
+    
+    if next_due:
+        new_todo = {
+            "user_id": user_id,
+            "title": original_todo['title'],
+            "description": original_todo['description'],
+            "priority": original_todo['priority'],
+            "due_date": next_due,
+            "category": original_todo['category'],
+            "status": "open",
+            "completed": False,
+            "is_recurring": True,
+            "recurrence_type": original_todo['recurrence_type'],
+            "recurrence_day": original_todo.get('recurrence_day'),
+            "parent_todo_id": original_todo['id'],
+            "created_at": datetime.datetime.utcnow().isoformat() + 'Z'
+        }
+        
+        try:
+            result = supabase.table("todos").insert(new_todo).execute()
+            print(f"Neue wiederkehrende To-Do Instanz erstellt: {original_todo['title']} für {next_due}")
+            return result.data[0] if result.data else None
+        except Exception as e:
+            print(f"Fehler beim Erstellen der wiederkehrenden To-Do Instanz: {e}")
+            return None
+    
+    return None
 
 # Einstiegsfrage bei neuer Interaktion
 @app.get("/start_interaction/{user_id}")
@@ -561,6 +685,23 @@ async def chat(user_id: str, chat_input: ChatInput):
                 routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['task']} (Tag: {r['day']}, Erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
         except Exception as e:
             print(f"Fehler beim Abrufen der Routinen: {e}")
+       
+        # To-Dos laden
+        todos_text = "Keine To-Dos definiert."
+        try:
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            open_todos = supabase.table("todos").select("title, priority, due_date, category, status").eq("user_id", user_id).in_("status", ["open", "in_progress"]).limit(10).execute().data
+            overdue_todos = supabase.table("todos").select("title, priority, due_date, category").eq("user_id", user_id).lt("due_date", today).neq("status", "completed").neq("status", "archived").execute().data
+            
+            if open_todos or overdue_todos:
+                todos_parts = []
+                if open_todos:
+                    todos_parts.append("Offene To-Dos:\n" + "\n".join([f"- {t['title']} (Priorität: {t['priority']}, Fällig: {t.get('due_date', 'Kein Datum')}, Kategorie: {t['category']})" for t in open_todos]))
+                if overdue_todos:
+                    todos_parts.append("Überfällige To-Dos:\n" + "\n".join([f"- {t['title']} (Fällig seit: {t['due_date']}, Priorität: {t['priority']})" for t in overdue_todos]))
+                todos_text = "\n\n".join(todos_parts)
+        except Exception as e:
+            print(f"Fehler beim Abrufen der To-Dos: {e}")
         
         # Langzeitgedächtnis laden
         memory_text = "Keine spezifischen Langzeit-Erkenntnisse gespeichert." # Standardwert
@@ -598,6 +739,9 @@ async def chat(user_id: str, chat_input: ChatInput):
         
         Deine heutigen Routinen:
         {routines_text}
+
+        Deine aktuellen To-Dos:
+        {todos_text}
 
         Langzeitgedächtnis / Wichtige Erkenntnisse:
         {memory_text}
@@ -1070,3 +1214,233 @@ def create_profile(profile_data: ProfileData, user_id: str):
     except Exception as e:
         print(f"Fehler beim Speichern des Profils: {e}")
         return {"status": "error", "message": str(e)}
+
+@app.get("/todos/{user_id}")
+def get_todos(user_id: str, status: str = None, category: str = None):
+    """Alle To-Dos eines Users abrufen mit optionalen Filtern"""
+    try:
+        query = supabase.table("todos").select("*").eq("user_id", user_id)
+        
+        if status:
+            query = query.eq("status", status)
+        if category:
+            query = query.eq("category", category)
+            
+        todos = query.order("created_at", desc=True).execute().data
+        
+        # Gruppiere nach Status für bessere Übersicht
+        grouped_todos = {
+            "open": [],
+            "in_progress": [],
+            "completed": [],
+            "overdue": []
+        }
+        
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        
+        for todo in todos:
+            todo_status = todo.get('status', 'open')
+            due_date = todo.get('due_date')
+            
+            # Prüfe auf überfällige To-Dos
+            if due_date and due_date < today and todo_status not in ['completed', 'archived']:
+                grouped_todos["overdue"].append(todo)
+            else:
+                if todo_status in grouped_todos:
+                    grouped_todos[todo_status].append(todo)
+                else:
+                    grouped_todos["open"].append(todo)
+        
+        return {"todos": grouped_todos, "total": len(todos)}
+        
+    except Exception as e:
+        print(f"Fehler beim Abrufen der To-Dos: {e}")
+        return {"todos": {"open": [], "in_progress": [], "completed": [], "overdue": []}, "total": 0}
+
+@app.post("/todos/{user_id}")
+def create_todo(todo_input: TodoInput, user_id: str):
+    """Neues To-Do erstellen"""
+    try:
+        todo_data = todo_input.model_dump()
+        todo_data["user_id"] = user_id
+        todo_data["status"] = "open"
+        todo_data["completed"] = False
+        todo_data["created_at"] = datetime.datetime.utcnow().isoformat() + 'Z'
+        
+        # Für wiederkehrende To-Dos: Wenn kein due_date gesetzt, berechne das erste
+        if todo_input.is_recurring and todo_input.recurrence_type and not todo_input.due_date:
+            next_due = calculate_next_due_date(todo_input.recurrence_type, todo_input.recurrence_day)
+            todo_data["due_date"] = next_due
+        
+        result = supabase.table("todos").insert(todo_data).execute()
+        return {"status": "success", "message": "To-Do erfolgreich erstellt", "todo": result.data[0] if result.data else None}
+        
+    except Exception as e:
+        print(f"Fehler beim Erstellen des To-Dos: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/todos/update/{user_id}")
+def update_todo_completion(update: TodoUpdate, user_id: str):
+    """To-Do als erledigt/unerledigt markieren"""
+    todo_id = str(update.id)
+    user_id = str(update.user_id)
+    
+    try:
+        # Hole To-Do Daten um zu prüfen ob es wiederkehrend ist
+        todo_data = supabase.table("todos").select("*").eq("id", todo_id).eq("user_id", user_id).execute().data
+        
+        if not todo_data:
+            return {"status": "error", "message": "To-Do nicht gefunden"}
+        
+        todo = todo_data[0]
+        
+        # Update des aktuellen To-Dos
+        update_data = {
+            "completed": update.completed,
+            "status": "completed" if update.completed else "open",
+            "completed_at": datetime.datetime.utcnow().isoformat() + 'Z' if update.completed else None
+        }
+        
+        supabase.table("todos").update(update_data).eq("id", todo_id).eq("user_id", user_id).execute()
+        
+        # Wenn To-Do als erledigt markiert und wiederkehrend ist, erstelle neue Instanz
+        if update.completed and todo.get('is_recurring') and todo.get('recurrence_type'):
+            create_recurring_todo_instance(todo, user_id)
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"Fehler beim Aktualisieren des To-Dos: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/todos/status/{user_id}")
+def update_todo_status(update: TodoStatusUpdate, user_id: str):
+    """To-Do Status ändern (open, in_progress, completed, archived)"""
+    todo_id = str(update.id)
+    
+    try:
+        update_data = {"status": update.status}
+        
+        if update.status == "completed":
+            update_data["completed"] = True
+            update_data["completed_at"] = datetime.datetime.utcnow().isoformat() + 'Z'
+        elif update.status in ["open", "in_progress"]:
+            update_data["completed"] = False
+            update_data["completed_at"] = None
+        
+        supabase.table("todos").update(update_data).eq("id", todo_id).eq("user_id", user_id).execute()
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"Fehler beim Aktualisieren des To-Do Status: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.put("/todos/{todo_id}/{user_id}")
+def edit_todo(todo_id: str, user_id: str, todo_edit: TodoEdit):
+    """To-Do bearbeiten"""
+    try:
+        update_data = {k: v for k, v in todo_edit.model_dump(exclude_unset=True).items() if v is not None and k != 'id'}
+        
+        if update_data:
+            update_data["updated_at"] = datetime.datetime.utcnow().isoformat() + 'Z'
+            supabase.table("todos").update(update_data).eq("id", todo_id).eq("user_id", user_id).execute()
+        
+        return {"status": "success", "message": "To-Do erfolgreich aktualisiert"}
+        
+    except Exception as e:
+        print(f"Fehler beim Bearbeiten des To-Dos: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/todos/{todo_id}/{user_id}")
+def delete_todo(todo_id: str, user_id: str):
+    """To-Do löschen"""
+    try:
+        supabase.table("todos").delete().eq("id", todo_id).eq("user_id", user_id).execute()
+        return {"status": "success", "message": "To-Do erfolgreich gelöscht"}
+        
+    except Exception as e:
+        print(f"Fehler beim Löschen des To-Dos: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/todos/categories/{user_id}")
+def get_todo_categories(user_id: str):
+    """Alle verwendeten Kategorien eines Users abrufen"""
+    try:
+        categories = supabase.table("todos").select("category").eq("user_id", user_id).execute().data
+        unique_categories = list(set([cat['category'] for cat in categories if cat['category']]))
+        return {"categories": unique_categories}
+        
+    except Exception as e:
+        print(f"Fehler beim Abrufen der Kategorien: {e}")
+        return {"categories": ["allgemein"]}
+
+@app.get("/todos/stats/{user_id}")
+def get_todo_stats(user_id: str):
+    """To-Do Statistiken für Dashboard"""
+    try:
+        all_todos = supabase.table("todos").select("status, priority, due_date, completed").eq("user_id", user_id).execute().data
+        
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        
+        stats = {
+            "total": len(all_todos),
+            "open": len([t for t in all_todos if t.get('status') == 'open']),
+            "in_progress": len([t for t in all_todos if t.get('status') == 'in_progress']),
+            "completed": len([t for t in all_todos if t.get('status') == 'completed']),
+            "overdue": len([t for t in all_todos if t.get('due_date') and t.get('due_date') < today and t.get('status') not in ['completed', 'archived']]),
+            "due_today": len([t for t in all_todos if t.get('due_date') == today and t.get('status') not in ['completed', 'archived']]),
+            "high_priority": len([t for t in all_todos if t.get('priority') == 'high' and t.get('status') not in ['completed', 'archived']])
+        }
+        
+        return {"stats": stats}
+        
+    except Exception as e:
+        print(f"Fehler beim Abrufen der To-Do Statistiken: {e}")
+        return {"stats": {"total": 0, "open": 0, "in_progress": 0, "completed": 0, "overdue": 0, "due_today": 0, "high_priority": 0}}
+
+# 4. Automatisches Archivieren alter To-Dos:
+
+@app.post("/todos/cleanup/{user_id}")
+def cleanup_completed_todos(user_id: str, days_old: int = 30):
+    """Archiviert abgeschlossene To-Dos die älter als X Tage sind"""
+    try:
+        cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y-%m-%d")
+        
+        # Markiere alte erledigte To-Dos als archiviert
+        result = supabase.table("todos").update({
+            "status": "archived"
+        }).eq("user_id", user_id).eq("status", "completed").lt("completed_at", cutoff_date).execute()
+        
+        archived_count = len(result.data) if result.data else 0
+        return {"status": "success", "archived_count": archived_count, "message": f"{archived_count} To-Dos archiviert"}
+        
+    except Exception as e:
+        print(f"Fehler beim Archivieren der To-Dos: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/todos/completed/{user_id}")
+def get_completed_todos(user_id: str, limit: int = 20):
+    """Zeigt die letzten erledigten To-Dos zur Übersicht"""
+    try:
+        completed_todos = supabase.table("todos").select("title, completed_at, category, priority").eq("user_id", user_id).eq("status", "completed").order("completed_at", desc=True).limit(limit).execute().data
+        return {"completed_todos": completed_todos}
+    except Exception as e:
+        print(f"Fehler beim Abrufen erledigter To-Dos: {e}")
+        return {"completed_todos": []}
+
+@app.delete("/todos/completed/{user_id}")
+def delete_old_completed_todos(user_id: str, days_old: int = 90):
+    """Löscht sehr alte erledigte To-Dos permanent (z.B. nach 3 Monaten)"""
+    try:
+        cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).isoformat() + 'Z'
+        
+        # Lösche nur normale (nicht-wiederkehrende) To-Dos die sehr alt sind
+        result = supabase.table("todos").delete().eq("user_id", user_id).eq("status", "completed").eq("is_recurring", False).lt("completed_at", cutoff_date).execute()
+        
+        deleted_count = len(result.data) if result.data else 0
+        return {"status": "success", "deleted_count": deleted_count, "message": f"{deleted_count} alte To-Dos permanent gelöscht"}
+        
+    except Exception as e:
+        print(f"Fehler beim Löschen alter To-Dos: {e}")
+        return {"status": "error", "message": str(e)}
+
