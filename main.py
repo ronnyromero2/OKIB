@@ -1,12 +1,12 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi import HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 import os
 import datetime
 import random
@@ -73,9 +73,9 @@ class GoalUpdate(BaseModel):
     status: str
 
 class RoutineUpdate(BaseModel):
-    id: str
+    id: Union[int, str]
     checked: bool
-    user_id: str
+    user_id: Union[int, str]
     
     class Config:
         # Debug: Zeige alle Validierungsfehler an
@@ -967,20 +967,25 @@ async def debug_requests(request, call_next):
         
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
+    # Konvertiere zu Strings für Supabase
+    routine_id = str(update.id)
+    user_id = str(update.user_id)
+    
     # DEBUG: Logge die eingehenden Daten
     print(f"DEBUG - Eingehende Daten: {update}")
     print(f"DEBUG - update.id: {update.id} (Type: {type(update.id)})")
     print(f"DEBUG - update.checked: {update.checked} (Type: {type(update.checked)})")
     print(f"DEBUG - update.user_id: {update.user_id} (Type: {type(update.user_id)})")
+    print(f"DEBUG - Konvertierte IDs: routine_id={routine_id}, user_id={user_id}")
     
     try:
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt
-        print(f"DEBUG - Suche Routine mit ID: {update.id} für User: {update.user_id}")
+        print(f"DEBUG - Suche Routine mit ID: {routine_id} für User: {user_id}")
         
-        routine_data = supabase.table("routines").select("day").eq("id", update.id).eq("user_id", update.user_id).execute().data
+        routine_data = supabase.table("routines").select("day").eq("id", routine_id).eq("user_id", user_id).execute().data
 
         print(f"DEBUG - Gefundene Routine-Daten: {routine_data}")
 
@@ -1013,10 +1018,10 @@ def update_routine_status(update: RoutineUpdate):
         result = supabase.table("routines").update({
             "checked": update.checked,
             "last_checked_date": target_date
-        }).eq("id", update.id).eq("user_id", update.user_id).execute()
+        }).eq("id", routine_id).eq("user_id", user_id).execute()
         
         print(f"DEBUG - Supabase Update Result: {result}")
-        print(f"Routine {update.id} für {target_date} auf checked={update.checked} gesetzt")
+        print(f"Routine {routine_id} für {target_date} auf checked={update.checked} gesetzt")
         return {"status": "success"}
         
     except Exception as e:
