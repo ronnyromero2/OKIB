@@ -12,9 +12,6 @@ import datetime
 import random
 import json
 
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
 load_dotenv()
 
 # API-Keys
@@ -77,11 +74,6 @@ class RoutineUpdate(BaseModel):
     checked: bool
     user_id: Union[int, str]
     
-    class Config:
-        # Debug: Zeige alle Validierungsfehler an
-        str_strip_whitespace = True
-        validate_assignment = True
-
 class ProfileData(BaseModel):
     # Fügen Sie hier die Attribute hinzu, die Sie im Benutzerprofil speichern möchten
     # und die von der Funktion extrahiert werden (z.B. durch InterviewAntwort)
@@ -956,14 +948,6 @@ def get_routines(user_id: str):
         all_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
         return {"routines": all_routines}
 
-@app.middleware("http")
-async def debug_requests(request, call_next):
-    if request.url.path == "/routines/update":
-        body = await request.body()
-        print(f"DEBUG RAW REQUEST BODY: {body}")
-        print(f"DEBUG CONTENT TYPE: {request.headers.get('content-type')}")
-    response = await call_next(request)
-    return response
         
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
@@ -971,26 +955,15 @@ def update_routine_status(update: RoutineUpdate):
     routine_id = str(update.id)
     user_id = str(update.user_id)
     
-    # DEBUG: Logge die eingehenden Daten
-    print(f"DEBUG - Eingehende Daten: {update}")
-    print(f"DEBUG - update.id: {update.id} (Type: {type(update.id)})")
-    print(f"DEBUG - update.checked: {update.checked} (Type: {type(update.checked)})")
-    print(f"DEBUG - update.user_id: {update.user_id} (Type: {type(update.user_id)})")
-    print(f"DEBUG - Konvertierte IDs: routine_id={routine_id}, user_id={user_id}")
     
     try:
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
-        # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt
-        print(f"DEBUG - Suche Routine mit ID: {routine_id} für User: {user_id}")
-        
+        # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt     
         routine_data = supabase.table("routines").select("day").eq("id", routine_id).eq("user_id", user_id).execute().data
 
-        print(f"DEBUG - Gefundene Routine-Daten: {routine_data}")
-
         if not routine_data:
-            print("DEBUG - Routine nicht gefunden!")
             return {"status": "error", "message": "Routine nicht gefunden"}
 
         routine = routine_data[0]
@@ -1000,33 +973,23 @@ def update_routine_status(update: RoutineUpdate):
         today_weekday = datetime.datetime.now().strftime("%A")
         yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
 
-        print(f"DEBUG - routine_day: {routine_day}")
-        print(f"DEBUG - today_weekday: {today_weekday}")
-        print(f"DEBUG - yesterday_weekday: {yesterday_weekday}")
-
         if routine_day == today_weekday:
             target_date = current_date
         elif routine_day == yesterday_weekday:
             target_date = yesterday_date
         else:
-            print(f"DEBUG - Routine gehört weder zu heute ({today_weekday}) noch zu gestern ({yesterday_weekday})")
             return {"status": "error", "message": "Routine gehört weder zu heute noch zu gestern"}
-        
-        print(f"DEBUG - target_date: {target_date}")
-        
+              
         # Update checked-Status UND last_checked_date
         result = supabase.table("routines").update({
             "checked": update.checked,
             "last_checked_date": target_date
         }).eq("id", routine_id).eq("user_id", user_id).execute()
         
-        print(f"DEBUG - Supabase Update Result: {result}")
         print(f"Routine {routine_id} für {target_date} auf checked={update.checked} gesetzt")
         return {"status": "success"}
         
     except Exception as e:
-        print(f"DEBUG - Exception aufgetreten: {e}")
-        print(f"DEBUG - Exception Type: {type(e)}")
         return {"status": "error", "message": str(e)}
         
 # Ziele abrufen
