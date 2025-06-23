@@ -178,7 +178,6 @@ async function loadRoutines() {
   const routinenBox = document.getElementById("routinen");
   routinenBox.innerHTML = "Lade Routinen...";
   try {
-    // HIER wird USER_ID zur URL hinzugefügt!
     const res = await fetch(`${API_URL}/routines/${USER_ID}`);
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
@@ -216,14 +215,35 @@ async function loadRoutines() {
             checkbox.type = "checkbox";
             checkbox.checked = routine.checked;
             checkbox.id = `routine_${routine.id}`;
-            checkbox.addEventListener("change", function () {
+            
+            // 🔧 FIX: Entferne die doppelten loadRoutines() Aufrufe
+            checkbox.addEventListener("change", async function () {
               const isChecked = checkbox.checked;
-              updateRoutineStatus(routine.id, isChecked);
-              setTimeout(() => loadRoutines(), 500);
+              
+              // Visual feedback sofort
               routineDiv.classList.toggle("done", isChecked);
-              // Neu laden nach Update
-              setTimeout(() => loadRoutines(), 500);
+              checkbox.disabled = true; // Verhindere weitere Klicks während Update
+              
+              try {
+                await updateRoutineStatus(routine.id, isChecked);
+                
+                // 🎯 SPEZIALFALL: Nur bei Gestern-Routinen die gecheckt werden, Reload
+                if (routine.display_date === 'gestern' && isChecked) {
+                  // Gestern-Routine wurde erledigt → soll verschwinden
+                  setTimeout(() => loadRoutines(), 200);
+                }
+                // Für alle anderen Fälle: KEIN Reload!
+                
+              } catch (error) {
+                // Bei Fehler: Checkbox zurücksetzen
+                checkbox.checked = !isChecked;
+                routineDiv.classList.toggle("done", !isChecked);
+                console.error("Update fehlgeschlagen:", error);
+              } finally {
+                checkbox.disabled = false;
+              }
             });
+            
             const label = document.createElement("label");
             label.htmlFor = `routine_${routine.id}`;
             label.textContent = routine.task;
@@ -246,18 +266,29 @@ async function loadRoutines() {
 }
 
 async function updateRoutineStatus(routineId, isChecked) {
-  try {
-    // Hier ist der POST-Endpunkt für Routinen, dieser hatte keine user_id im Pfad
-    await fetch(`${API_URL}/routines/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: routineId, checked: isChecked, user_id: USER_ID })
-    });
-  } catch (error) {
-    console.error("Fehler beim Aktualisieren des Routine-Status:", error);
-  }
+  try {
+    const response = await fetch(`${API_URL}/routines/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: routineId, checked: isChecked, user_id: USER_ID })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    if (result.status !== 'success') {
+      throw new Error(result.message || 'Update fehlgeschlagen');
+    }
+    
+    console.log(`✅ Routine ${routineId} erfolgreich aktualisiert`);
+    
+  } catch (error) {
+    console.error("Fehler beim Aktualisieren des Routine-Status:", error);
+    throw error; // Fehler weiterwerfen für Error Handling im Event Listener
+  }
 }
-
 async function sendChat() {
   const input = document.getElementById("chatInput");
   const message = input.value;
