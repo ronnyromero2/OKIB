@@ -12,6 +12,9 @@ import datetime
 import random
 import json
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 load_dotenv()
 
 # API-Keys
@@ -73,6 +76,11 @@ class RoutineUpdate(BaseModel):
     id: str
     checked: bool
     user_id: str
+    
+    class Config:
+        # Debug: Zeige alle Validierungsfehler an
+        str_strip_whitespace = True
+        validate_assignment = True
 
 class ProfileData(BaseModel):
     # Fügen Sie hier die Attribute hinzu, die Sie im Benutzerprofil speichern möchten
@@ -947,6 +955,15 @@ def get_routines(user_id: str):
         # Fallback ohne last_checked_date
         all_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
         return {"routines": all_routines}
+
+@app.middleware("http")
+async def debug_requests(request, call_next):
+    if request.url.path == "/routines/update":
+        body = await request.body()
+        print(f"DEBUG RAW REQUEST BODY: {body}")
+        print(f"DEBUG CONTENT TYPE: {request.headers.get('content-type')}")
+    response = await call_next(request)
+    return response
         
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
