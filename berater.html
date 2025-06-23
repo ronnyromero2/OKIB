@@ -25,6 +25,19 @@
       background: #222;
       color: #fff;
     }
+    .todo-item {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 5px;
+      padding-left: 0;
+      margin-bottom: 5px;
+    }
+  
+    .todo-item.done label {
+      text-decoration: line-through;
+      color: #888;
+    }
     button {
       background: #444;
       cursor: pointer;
@@ -110,7 +123,12 @@ input[type="checkbox"] {
   <h2>Deine heutigen Routinen:</h2>
   <div id="routinen" style="text-align: left;">Wird geladen...</div>
 </div>
-
+  
+<div class="section" style="text-align: left;">
+  <h2>Deine To-Dos:</h2>
+  <div id="todos" style="text-align: left;">Wird geladen...</div>
+</div>
+  
   <div class="section">
     <h2>Dein Chat:</h2>
     <div id="chatBox" class="response"></div>
@@ -483,9 +501,103 @@ function toggleSection(id) {
   }
 }
 
+// === TO-DO FUNKTIONEN ===
+async function loadTodos() {
+  const todosBox = document.getElementById("todos");
+  todosBox.innerHTML = "Lade To-Dos...";
+  
+  try {
+    const res = await fetch(`${API_URL}/todos/${USER_ID}`);
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    
+    const data = await res.json();
+    todosBox.innerHTML = "";
+    
+    const openTodos = [
+      ...(data.todos.open || []),
+      ...(data.todos.in_progress || []),
+      ...(data.todos.overdue || [])
+    ];
+    
+    if (openTodos.length > 0) {
+      openTodos.forEach((todo) => {
+        const todoDiv = document.createElement("div");
+        todoDiv.classList.add("todo-item");
+        
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = todo.completed || false;
+        checkbox.id = `todo_${todo.id}`;
+        
+        checkbox.addEventListener("change", async function () {
+          const isChecked = checkbox.checked;
+          todoDiv.classList.toggle("done", isChecked);
+          checkbox.disabled = true;
+          
+          try {
+            await updateTodoStatus(todo.id, isChecked);
+          } catch (error) {
+            checkbox.checked = !isChecked;
+            todoDiv.classList.toggle("done", !isChecked);
+            console.error("To-Do Update fehlgeschlagen:", error);
+          } finally {
+            checkbox.disabled = false;
+          }
+        });
+        
+        const label = document.createElement("label");
+        label.htmlFor = `todo_${todo.id}`;
+        
+        const priorityEmoji = todo.priority === 'high' ? '🔴 ' : 
+                            todo.priority === 'medium' ? '🟡 ' : '🟢 ';
+        
+        let dueDateText = '';
+        if (todo.due_date) {
+          const today = new Date().toISOString().split('T')[0];
+          if (todo.due_date < today) {
+            dueDateText = ' ⚠️ Überfällig';
+          } else if (todo.due_date === today) {
+            dueDateText = ' 📅 Heute fällig';
+          }
+        }
+        
+        label.textContent = `${priorityEmoji}${todo.title}${dueDateText}`;
+        
+        if (todo.completed) todoDiv.classList.add("done");
+        
+        todoDiv.appendChild(checkbox);
+        todoDiv.appendChild(label);
+        todosBox.appendChild(todoDiv);
+      });
+    } else {
+      todosBox.innerText = "Alle To-Dos erledigt! 🎉";
+    }
+    
+  } catch (error) {
+    console.error("Fehler beim Laden der To-Dos:", error);
+    todosBox.innerText = "Fehler beim Laden der To-Dos.";
+  }
+}
+
+async function updateTodoStatus(todoId, isCompleted) {
+  const response = await fetch(`${API_URL}/todos/update/${USER_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: todoId, completed: isCompleted, user_id: USER_ID })
+  });
+  
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  
+  const result = await response.json();
+  if (result.status !== 'success') {
+    throw new Error(result.message || 'Update fehlgeschlagen');
+  }
+}
+  
   window.addEventListener('DOMContentLoaded', () => {
     loadRoutines();
     ladeZiele();
+    loadTodos();
     stelleEinstiegsfrage();
     zeigeAutomatischenBericht();
   });
