@@ -950,42 +950,63 @@ def get_routines(user_id: str):
         
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
-   try:
-       current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-       yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    # DEBUG: Logge die eingehenden Daten
+    print(f"DEBUG - Eingehende Daten: {update}")
+    print(f"DEBUG - update.id: {update.id} (Type: {type(update.id)})")
+    print(f"DEBUG - update.checked: {update.checked} (Type: {type(update.checked)})")
+    print(f"DEBUG - update.user_id: {update.user_id} (Type: {type(update.user_id)})")
+    
+    try:
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
-       # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt
-       routine_data = supabase.table("routines").select("day").eq("id", update.id).eq("user_id", update.user_id).execute().data
+        # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt
+        print(f"DEBUG - Suche Routine mit ID: {update.id} für User: {update.user_id}")
+        
+        routine_data = supabase.table("routines").select("day").eq("id", update.id).eq("user_id", update.user_id).execute().data
 
-       if not routine_data:
-           return {"status": "error", "message": "Routine nicht gefunden"}
+        print(f"DEBUG - Gefundene Routine-Daten: {routine_data}")
 
-       routine = routine_data[0]
-       routine_day = routine['day']
+        if not routine_data:
+            print("DEBUG - Routine nicht gefunden!")
+            return {"status": "error", "message": "Routine nicht gefunden"}
 
-       # Bestimme ob es sich um eine Heute- oder Gestern-Routine handelt
-       today_weekday = datetime.datetime.now().strftime("%A")
-       yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
+        routine = routine_data[0]
+        routine_day = routine['day']
 
-       if routine_day == today_weekday:
-           target_date = current_date
-       elif routine_day == yesterday_weekday:
-           target_date = yesterday_date
-       else:
-           return {"status": "error", "message": "Routine gehört weder zu heute noch zu gestern"}
-       
-       # Update checked-Status UND last_checked_date
-       supabase.table("routines").update({
-           "checked": update.checked,
-           "last_checked_date": target_date
-       }).eq("id", update.id).eq("user_id", update.user_id).execute()
-       
-       print(f"Routine {update.id} für {target_date} auf checked={update.checked} gesetzt")
-       return {"status": "success"}
-   except Exception as e:
-       print(f"Fehler beim Aktualisieren der Routine: {e}")
-       return {"status": "error", "message": str(e)}
+        # Bestimme ob es sich um eine Heute- oder Gestern-Routine handelt
+        today_weekday = datetime.datetime.now().strftime("%A")
+        yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
 
+        print(f"DEBUG - routine_day: {routine_day}")
+        print(f"DEBUG - today_weekday: {today_weekday}")
+        print(f"DEBUG - yesterday_weekday: {yesterday_weekday}")
+
+        if routine_day == today_weekday:
+            target_date = current_date
+        elif routine_day == yesterday_weekday:
+            target_date = yesterday_date
+        else:
+            print(f"DEBUG - Routine gehört weder zu heute ({today_weekday}) noch zu gestern ({yesterday_weekday})")
+            return {"status": "error", "message": "Routine gehört weder zu heute noch zu gestern"}
+        
+        print(f"DEBUG - target_date: {target_date}")
+        
+        # Update checked-Status UND last_checked_date
+        result = supabase.table("routines").update({
+            "checked": update.checked,
+            "last_checked_date": target_date
+        }).eq("id", update.id).eq("user_id", update.user_id).execute()
+        
+        print(f"DEBUG - Supabase Update Result: {result}")
+        print(f"Routine {update.id} für {target_date} auf checked={update.checked} gesetzt")
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"DEBUG - Exception aufgetreten: {e}")
+        print(f"DEBUG - Exception Type: {type(e)}")
+        return {"status": "error", "message": str(e)}
+        
 # Ziele abrufen
 @app.get("/goals/{user_id}") # user_id im Pfad hinzufügen
 def get_goals(user_id: str):
