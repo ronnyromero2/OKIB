@@ -70,7 +70,7 @@ class GoalUpdate(BaseModel):
     status: str
 
 class RoutineUpdate(BaseModel):
-    id: int
+    id: str
     checked: bool
     user_id: str
 
