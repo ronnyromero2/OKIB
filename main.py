@@ -825,13 +825,29 @@ async def chat(user_id: str, chat_input: ChatInput):
         raise HTTPException(status_code=500, detail="Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal.")
 
 def extract_todo_intent(message: str) -> bool:
-    """Erkennt To-Do Intents"""
     patterns = [
-        r'(?:erstelle|neue|neues|mach|add).*?(?:to-?do|aufgabe|task)',
-        r'(?:ich muss|sollte|möchte|will).*?(?:machen|erledigen|kaufen)',
-        r'(?:erinnere|reminder).*?(?:mich|an)',
-        r'(?:termin|appointment|meeting).*?(?:vereinbaren|machen)',
-        r'(?:unbedingt).*?(?:muss|sollte)',
+        # Täglich
+        r'(?:täglich|jeden tag|daily)',
+        
+        # Wöchentlich
+        r'(?:wöchentlich|jede woche|weekly)',
+        r'(?:jeden|jede)\s+(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)',
+        
+        # Monatlich
+        r'(?:monatlich|jeden monat|monthly)',
+        r'(?:jeden)\s+(?:\d+\.)\s+(?:des monats|tag)',  # "jeden 15. des Monats"
+        r'(?:jeden ersten|jeden letzten)\s+(?:tag des monats)',
+        
+        # Mehrmonatig
+        r'(?:alle)\s+(?:\d+)\s+(?:monate|wochen)',  # "alle 2 Monate"
+        
+        # Jährlich
+        r'(?:jährlich|jedes jahr|yearly|annually)',
+        r'(?:jeden)\s+(?:\d+\.)\s+(?:januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)',
+        
+        # Allgemein
+        r'(?:routine|gewohnheit|habit)',
+        r'(?:regelmäßig|wiederkehrend)',
     ]
     return any(re.search(pattern, message.lower()) for pattern in patterns)
 
@@ -904,7 +920,6 @@ async def create_routine_from_chat(user_id: str, message: str):
     
     routine_data = {
         "task": task,
-        "frequency": frequency,
         "checked": False
     }
     
