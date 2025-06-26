@@ -607,7 +607,14 @@ async def chat(user_id: str, chat_input: ChatInput):
     if extract_routine_intent(user_message):
         try:
             task, frequency = await create_routine_from_chat(user_id, user_message)
-            frequency_text = {'daily': 'täglich', 'weekly': 'wöchentlich'}.get(frequency, 'täglich')
+            frequency_text = {
+                'daily': 'täglich', 
+                'weekly': 'wöchentlich',
+                'monthly': 'monatlich',
+                'biweekly': 'alle zwei Wochen',
+                'triweekly': 'alle drei Wochen',
+                'fourweekly': 'alle vier Wochen'
+            }.get(frequency, frequency)
             
             response = f"✅ Ich habe eine neue Routine '{task}' erstellt, Wiederholung {frequency_text}."
             
@@ -968,13 +975,23 @@ async def create_routine_from_chat(user_id: str, message: str):
         day = "sunday"
     elif any(word in message.lower() for word in ['wöchentlich', 'jede woche', 'weekly']):
         frequency = "weekly"
-    elif re.search(r'alle\s+(?:zwei|drei|vier)\s+(?:wochen|tage)', message.lower()):
+    elif re.search(r'alle\s+(?:zwei|2)\s+wochen', message.lower()):
         frequency = "biweekly"
+        day = str(datetime.datetime.now().day)  # Heute als Starttag
+    elif re.search(r'alle\s+(?:drei|3)\s+wochen', message.lower()):
+        frequency = "triweekly"
+        day = str(datetime.datetime.now().day)
+    elif re.search(r'alle\s+(?:vier|4)\s+wochen', message.lower()):
+        frequency = "fourweekly"
+        day = str(datetime.datetime.now().day)
     
     # Berechne next_due_date basierend auf frequency
     next_due = None
     if frequency == "monthly":
         next_due = calculate_next_due_date(f"monthly_custom", int(day) if day.isdigit() else None)
+    elif frequency in ["biweekly", "triweekly", "fourweekly"]:
+        weeks = {"biweekly": 2, "triweekly": 3, "fourweekly": 4}[frequency]
+        next_due = (datetime.datetime.now() + datetime.timedelta(weeks=weeks)).strftime("%Y-%m-%d")
     
     routine_data = {
         "task": task,
@@ -992,6 +1009,7 @@ async def create_routine_from_chat(user_id: str, message: str):
             "type": frequency,
             "day_of_month": day if frequency == "monthly" else None,
             "day_of_week": day if frequency == "weekly" else None
+            "interval_weeks": {"biweekly": 2, "triweekly": 3, "fourweekly": 4}.get(frequency)
         }
     }
     
