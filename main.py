@@ -11,6 +11,7 @@ import os
 import datetime
 import random
 import json
+import re
 
 load_dotenv()
 
@@ -602,6 +603,34 @@ async def start_interaction(user_id: str):
 @app.post("/chat/{user_id}")
 async def chat(user_id: str, chat_input: ChatInput):
     user_message = chat_input.message
+    # 🔥 TASK DETECTION: Prüfe auf To-Do/Routine Erstellung
+    if extract_todo_intent(user_message):
+        try:
+            title, priority, due_date = await create_todo_from_chat(user_id, user_message)
+            priority_text = {'high': 'Hoch', 'medium': 'Medium', 'low': 'Niedrig'}.get(priority, 'Medium')
+            
+            response = f"✅ Ich habe ein neues To-Do '{title}' erstellt mit Relevanz {priority_text}"
+            if due_date:
+                due_formatted = datetime.datetime.fromisoformat(due_date).strftime('%d.%m.%Y')
+                response += f", fällig am {due_formatted}"
+            response += "."
+            
+            return {"response": response, "created_todo": True}
+        except Exception as e:
+            print(f"Fehler beim Erstellen des To-Dos: {e}")
+            return {"response": "❌ Fehler beim Erstellen des To-Dos. Bitte versuche es erneut.", "created_todo": False}
+    
+    if extract_routine_intent(user_message):
+        try:
+            task, frequency = await create_routine_from_chat(user_id, user_message)
+            frequency_text = {'daily': 'täglich', 'weekly': 'wöchentlich'}.get(frequency, 'täglich')
+            
+            response = f"✅ Ich habe eine neue Routine '{task}' erstellt, Wiederholung {frequency_text}."
+            
+            return {"response": response, "created_routine": True}
+        except Exception as e:
+            print(f"Fehler beim Erstellen der Routine: {e}")
+            return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
     try:
         # Konversationshistorie der letzten 5 Nachrichten abrufen
         try:
@@ -789,11 +818,102 @@ async def chat(user_id: str, chat_input: ChatInput):
                 
         await extrahiere_und_speichere_profil_details(user_id, user_message, ai_response_content, last_ai_prompt)
 
-        return {"response": ai_response_content}
+        return {"response": ai_response_content, "created_todo": False, "created_routine": False}
 
     except Exception as e:
         print(f"Fehler in der Chat-Funktion: {e}")
         raise HTTPException(status_code=500, detail="Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal.")
+
+def extract_todo_intent(message: str) -> bool:
+    """Erkennt To-Do Intents"""
+    patterns = [
+        r'(?:erstelle|neue|neues|mach|add).*?(?:to-?do|aufgabe|task)',
+        r'(?:ich muss|sollte|möchte|will).*?(?:machen|erledigen)',
+        r'(?:erinnere|reminder).*?(?:mich|an)',
+        r'(?:termin|appointment|meeting).*?(?:vereinbaren|machen)',
+    ]
+    return any(re.search(pattern, message.lower()) for pattern in patterns)
+
+def extract_routine_intent(message: str) -> bool:
+    """Erkennt Routine Intents"""
+    patterns = [
+        r'(?:täglich|jeden tag|daily)',
+        r'(?:wöchentlich|jede woche|weekly)',
+        r'(?:jeden|jede).*?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)',
+        r'(?:routine|gewohnheit|habit)',
+    ]
+    return any(re.search(pattern, message.lower()) for pattern in patterns)
+
+def extract_title_from_message(message: str) -> str:
+    """Extrahiert Aufgaben-Titel"""
+    clean = re.sub(r'^(?:ich muss|sollte|möchte|will|erstelle|neue|neues|mach|add|erinnere mich)?\s*(?:to-?do|aufgabe|task|daran)?\s*:?\s*', '', message, flags=re.IGNORECASE)
+    clean = re.sub(r'\s+(?:heute|morgen|täglich|wöchentlich|jeden|jede).*$', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'\b(?:wichtig|urgent|dringend|dass|das|ich|mich|an)\b', '', clean, flags=re.IGNORECASE)
+    return clean.strip() or "Neue Aufgabe"
+
+def extract_priority(message: str) -> str:
+    """Extrahiert Priorität"""
+    if any(word in message.lower() for word in ['wichtig', 'urgent', 'dringend', 'sofort', 'unbedingt']):
+        return 'high'
+    elif any(word in message.lower() for word in ['später', 'niedrig', 'unwichtig']):
+        return 'low'
+    return 'medium'
+
+def extract_due_date(message: str) -> str:
+    """Extrahiert Fälligkeitsdatum"""
+    today = datetime.datetime.now().date()
+    if 'heute' in message.lower():
+        return today.isoformat()
+    elif 'morgen' in message.lower():
+        return (today + datetime.timedelta(days=1)).isoformat()
+    elif 'übermorgen' in message.lower():
+        return (today + datetime.timedelta(days=2)).isoformat()
+    return None
+
+async def create_todo_from_chat(user_id: str, message: str):
+    """Erstellt To-Do aus Chat-Message"""
+    title = extract_title_from_message(message)
+    priority = extract_priority(message)
+    due_date = extract_due_date(message)
+    
+    todo_data = {
+        "title": title,
+        "priority": priority,
+        "due_date": due_date,
+        "category": "chat_erstellt",
+        "status": "open"
+    }
+    
+    result = supabase.table("todos").insert({
+        "user_id": user_id,
+        **todo_data
+    }).execute()
+    
+    return title, priority, due_date
+
+async def create_routine_from_chat(user_id: str, message: str):
+    """Erstellt Routine aus Chat-Message"""
+    task = extract_title_from_message(message)
+    
+    frequency = "daily"
+    if any(word in message.lower() for word in ['wöchentlich', 'jede woche', 'weekly']):
+        frequency = "weekly"
+    elif re.search(r'jeden\s+(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)', message.lower()):
+        frequency = "weekly"
+    
+    routine_data = {
+        "task": task,
+        "frequency": frequency,
+        "active": True,
+        "checked": False
+    }
+    
+    result = supabase.table("routines").insert({
+        "user_id": user_id,
+        **routine_data
+    }).execute()
+    
+    return task, frequency
         
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
