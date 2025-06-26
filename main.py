@@ -826,6 +826,16 @@ async def chat(user_id: str, chat_input: ChatInput):
 
 def extract_todo_intent(message: str) -> bool:
     patterns = [
+        r'(?:erstelle|neue|neues|mach|add).*?(?:to-?do|aufgabe|task)',
+        r'(?:ich muss|sollte|möchte|will).*?(?:machen|erledigen|kaufen|putzen)',
+        r'(?:erinnere|reminder).*?(?:mich|an)',
+        r'(?:routine).*?(?:einrichten|erstellen)',
+        r'(?:unbedingt).*?(?:muss|sollte)',
+    ]
+    return any(re.search(pattern, message.lower()) for pattern in patterns)
+
+def extract_routine_intent(message: str) -> bool:
+    patterns = [
         # Täglich
         r'(?:täglich|jeden tag|daily)',
         
@@ -833,13 +843,16 @@ def extract_todo_intent(message: str) -> bool:
         r'(?:wöchentlich|jede woche|weekly)',
         r'(?:jeden|jede)\s+(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)',
         
+        # Mehrwöchig
+        r'(?:alle)\s+(?:zwei|drei|vier)\s+(?:wochen|tage)',
+        
         # Monatlich
         r'(?:monatlich|jeden monat|monthly)',
-        r'(?:jeden)\s+(?:\d+\.)\s+(?:des monats|tag)',  # "jeden 15. des Monats"
+        r'(?:jeden)\s+(?:\d+\.)\s+(?:des monats|tag)',
         r'(?:jeden ersten|jeden letzten)\s+(?:tag des monats)',
         
         # Mehrmonatig
-        r'(?:alle)\s+(?:\d+)\s+(?:monate|wochen)',  # "alle 2 Monate"
+        r'(?:alle)\s+(?:\d+)\s+(?:monate|wochen)',
         
         # Jährlich
         r'(?:jährlich|jedes jahr|yearly|annually)',
@@ -848,16 +861,6 @@ def extract_todo_intent(message: str) -> bool:
         # Allgemein
         r'(?:routine|gewohnheit|habit)',
         r'(?:regelmäßig|wiederkehrend)',
-    ]
-    return any(re.search(pattern, message.lower()) for pattern in patterns)
-
-def extract_routine_intent(message: str) -> bool:
-    """Erkennt Routine Intents"""
-    patterns = [
-        r'(?:täglich|jeden tag|daily)',
-        r'(?:wöchentlich|jede woche|weekly)',
-        r'(?:jeden|jede).*?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)',
-        r'(?:routine|gewohnheit|habit)',
     ]
     return any(re.search(pattern, message.lower()) for pattern in patterns)
 
@@ -929,15 +932,6 @@ async def create_routine_from_chat(user_id: str, message: str):
     }).execute()
     
     return task, frequency
-    
-def extract_routine_intent(message: str) -> bool:
-    patterns = [
-        r'(?:täglich|jeden tag|daily)',
-        r'(?:wöchentlich|jede woche|weekly)',
-        r'(?:jeden|jede)\s+(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)',  # ← Hier \s+ hinzufügen
-        r'(?:routine|gewohnheit|habit)',
-    ]
-    return any(re.search(pattern, message.lower()) for pattern in patterns)
     
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
