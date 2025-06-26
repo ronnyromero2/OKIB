@@ -927,34 +927,72 @@ async def create_routine_from_chat(user_id: str, message: str):
     
     # Standard day setzen
     day = "monday"  # Default
-    
-    # Spezifische Tage erkennen
-    if re.search(r'montag', message.lower()): day = "monday"
-    elif re.search(r'dienstag', message.lower()): day = "tuesday"
-    elif re.search(r'mittwoch', message.lower()): day = "wednesday"
-    elif re.search(r'donnerstag', message.lower()): day = "thursday"
-    elif re.search(r'freitag', message.lower()): day = "friday"
-    elif re.search(r'samstag', message.lower()): day = "saturday"
-    elif re.search(r'sonntag', message.lower()): day = "sunday"
-    
     frequency = "daily"
-    if any(word in message.lower() for word in ['monatlich', 'jeden monat', 'monthly', 'ersten des monats']):
+    
+    # Monatliche Routinen ZUERST prüfen (höhere Priorität)
+    if re.search(r'(?:immer\s+)?(?:am|jeden)\s+ersten', message.lower()):
         frequency = "monthly"
-        day = "1"  # Erster Tag des Monats
+        day = "1"
+    elif re.search(r'(?:am|jeden)\s+letzten', message.lower()):
+        frequency = "monthly"
+        day = "last"  # Spezieller Marker für letzten Tag
+    elif re.search(r'(?:am|jeden)\s+(\d+)\.?\s*(?:des monats|tag)?', message.lower()):
+        match = re.search(r'(?:am|jeden)\s+(\d+)', message.lower())
+        if match:
+            frequency = "monthly"
+            day = match.group(1)
+    elif any(word in message.lower() for word in ['monatlich', 'jeden monat', 'monthly']):
+        frequency = "monthly"
+        day = "1"
+    # Wöchentliche Routinen
+    elif re.search(r'montag', message.lower()): 
+        frequency = "weekly"
+        day = "monday"
+    elif re.search(r'dienstag', message.lower()): 
+        frequency = "weekly"
+        day = "tuesday"
+    elif re.search(r'mittwoch', message.lower()): 
+        frequency = "weekly"
+        day = "wednesday"
+    elif re.search(r'donnerstag', message.lower()): 
+        frequency = "weekly"
+        day = "thursday"
+    elif re.search(r'freitag', message.lower()): 
+        frequency = "weekly"
+        day = "friday"
+    elif re.search(r'samstag', message.lower()): 
+        frequency = "weekly"
+        day = "saturday"
+    elif re.search(r'sonntag', message.lower()): 
+        frequency = "weekly"
+        day = "sunday"
     elif any(word in message.lower() for word in ['wöchentlich', 'jede woche', 'weekly']):
         frequency = "weekly"
     elif re.search(r'alle\s+(?:zwei|drei|vier)\s+(?:wochen|tage)', message.lower()):
         frequency = "biweekly"
     
+    # Berechne next_due_date basierend auf frequency
+    next_due = None
+    if frequency == "monthly":
+        next_due = calculate_next_due_date(f"monthly_custom", int(day) if day.isdigit() else None)
+    
     routine_data = {
         "task": task,
         "checked": False,
-        "day": day,
-        "time": None,  # ← Hinzufügen
-        "last_checked_date": None,  # ← Hinzufügen
-        "user_id": user_id,  # ← Direkt hier
-        "missed_count": 0,  # ← Hinzufügen
-        "missed_dates": []  # ← Hinzufügen (jsonb array)
+        "day": day,  # Bei monthly: Tag des Monats, bei weekly: Wochentag
+        "time": None,
+        "last_checked_date": None,
+        "user_id": user_id,
+        "missed_count": 0,
+        "missed_dates": [],
+        "frequency": frequency,  # NEU
+        "recurrence_day": int(day) if frequency == "monthly" and day.isdigit() else None,  # NEU
+        "next_due_date": next_due,  # NEU
+        "recurrence_details": {  # NEU
+            "type": frequency,
+            "day_of_month": day if frequency == "monthly" else None,
+            "day_of_week": day if frequency == "weekly" else None
+        }
     }
     
     result = supabase.table("routines").insert(routine_data).execute()
@@ -1183,11 +1221,56 @@ def get_routines(user_id: str):
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
     yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    today_day_of_month = datetime.datetime.now().day
 
     try:
         # 🆕 SCHRITT 1: Alle Routinen für heute abrufen (mit last_checked_date)
-        today_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
-        yesterday_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates").eq("day", yesterday).eq("user_id", user_id).execute().data
+
+        # Hole ALLE Routinen des Users (inkl. frequency)
+        all_user_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates, frequency, recurrence_day").eq("user_id", user_id).execute().data
+        
+        # Filtere für heute relevante Routinen
+        today_routines = []
+        yesterday_routines = []
+        
+        for routine in all_user_routines:
+            frequency = routine.get('frequency', 'daily')
+            
+            # Tägliche Routinen - immer für heute
+            if frequency == 'daily':
+                today_routines.append(routine)
+            
+            # Wöchentliche Routinen - nur am richtigen Wochentag
+            elif frequency == 'weekly' and routine.get('day') == today:
+                today_routines.append(routine)
+            
+            # Monatliche Routinen - nur am richtigen Tag des Monats
+            elif frequency == 'monthly':
+                routine_day = routine.get('recurrence_day') or int(routine.get('day', 1))
+                if routine_day == today_day_of_month:
+                    today_routines.append(routine)
+                # Letzter Tag des Monats
+                elif routine.get('day') == 'last':
+                    last_day = (datetime.datetime.now().replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
+                    if datetime.datetime.now().day == last_day.day:
+                        today_routines.append(routine)
+            
+            # Gestern-Routinen analog
+            if frequency == 'weekly' and routine.get('day') == yesterday:
+                yesterday_routines.append(routine)
+            # NEU: Monatliche Routinen von gestern
+            elif frequency == 'monthly':
+                yesterday_day_of_month = (datetime.datetime.now() - datetime.timedelta(days=1)).day
+                routine_day = routine.get('recurrence_day') or int(routine.get('day', 1))
+                if routine_day == yesterday_day_of_month:
+                    yesterday_routines.append(routine)
+                # Letzter Tag des vorherigen Monats
+                elif routine.get('day') == 'last':
+                    yesterday_date_obj = datetime.datetime.now() - datetime.timedelta(days=1)
+                    last_day_prev = (yesterday_date_obj.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
+                    if yesterday_date_obj.day == last_day_prev.day:
+                        yesterday_routines.append(routine)
+
         all_routines = []
         
         # 🆕 SCHRITT 2: Reset-Logik für jeden Routine-Eintrag
