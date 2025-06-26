@@ -923,7 +923,7 @@ async def create_routine_from_chat(user_id: str, message: str):
     
     routine_data = {
         "task": task,
-        "checked": False
+        "checked": False,
         "day": None
     }
     
