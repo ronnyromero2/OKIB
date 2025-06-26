@@ -951,7 +951,7 @@ async def create_routine_from_chat(user_id: str, message: str):
         "checked": False,
         "day": day,
         "time": None,  # ← Hinzufügen
-        "last_checked": None,  # ← Hinzufügen
+        "last_checked_date": None,  # ← Hinzufügen
         "user_id": user_id,  # ← Direkt hier
         "missed_count": 0,  # ← Hinzufügen
         "missed_dates": []  # ← Hinzufügen (jsonb array)
