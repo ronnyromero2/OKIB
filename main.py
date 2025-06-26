@@ -917,44 +917,44 @@ async def create_todo_from_chat(user_id: str, message: str):
     return title, priority, due_date
 
 async def create_routine_from_chat(user_id: str, message: str):
-   """Erstellt Routine aus Chat-Message"""
-   task = extract_title_from_message(message)
-   
-   # Standard day setzen
-   day = "monday"  # Default
-   
-   # Spezifische Tage erkennen
-   if re.search(r'montag', message.lower()): day = "monday"
-   elif re.search(r'dienstag', message.lower()): day = "tuesday"
-   elif re.search(r'mittwoch', message.lower()): day = "wednesday"
-   elif re.search(r'donnerstag', message.lower()): day = "thursday"
-   elif re.search(r'freitag', message.lower()): day = "friday"
-   elif re.search(r'samstag', message.lower()): day = "saturday"
-   elif re.search(r'sonntag', message.lower()): day = "sunday"
-   
-   frequency = "daily"
-   if any(word in message.lower() for word in ['wöchentlich', 'jede woche', 'weekly']):
-       frequency = "weekly"
-   elif re.search(r'jeden\s+(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)', message.lower()):
-       frequency = "weekly"
-   elif any(word in message.lower() for word in ['monatlich', 'jeden monat', 'monthly', 'ersten des monats']):
-       frequency = "monthly"
-       day = "1"  # Erster Tag des Monats
-   elif re.search(r'alle\s+(?:zwei|drei|vier)\s+(?:wochen|tage)', message.lower()):
-       frequency = "biweekly"
-   
-   routine_data = {
-       "task": task,
-       "checked": False,
-       "day": day
-   }
-   
-   result = supabase.table("routines").insert({
-       "user_id": user_id,
-       **routine_data
-   }).execute()
-   
-   return task, frequency
+    """Erstellt Routine aus Chat-Message"""
+    task = extract_title_from_message(message)
+    
+    # Standard day setzen
+    day = "monday"  # Default
+    
+    # Spezifische Tage erkennen
+    if re.search(r'montag', message.lower()): day = "monday"
+    elif re.search(r'dienstag', message.lower()): day = "tuesday"
+    elif re.search(r'mittwoch', message.lower()): day = "wednesday"
+    elif re.search(r'donnerstag', message.lower()): day = "thursday"
+    elif re.search(r'freitag', message.lower()): day = "friday"
+    elif re.search(r'samstag', message.lower()): day = "saturday"
+    elif re.search(r'sonntag', message.lower()): day = "sunday"
+    
+    frequency = "daily"
+    if any(word in message.lower() for word in ['monatlich', 'jeden monat', 'monthly', 'ersten des monats']):
+        frequency = "monthly"
+        day = "1"  # Erster Tag des Monats
+    elif any(word in message.lower() for word in ['wöchentlich', 'jede woche', 'weekly']):
+        frequency = "weekly"
+    elif re.search(r'alle\s+(?:zwei|drei|vier)\s+(?:wochen|tage)', message.lower()):
+        frequency = "biweekly"
+    
+    routine_data = {
+        "task": task,
+        "checked": False,
+        "day": day,
+        "time": None,  # ← Hinzufügen
+        "last_checked": None,  # ← Hinzufügen
+        "user_id": user_id,  # ← Direkt hier
+        "missed_count": 0,  # ← Hinzufügen
+        "missed_dates": []  # ← Hinzufügen (jsonb array)
+    }
+    
+    result = supabase.table("routines").insert(routine_data).execute()
+    
+    return task, frequency
     
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
