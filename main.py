@@ -1008,7 +1008,7 @@ async def create_routine_from_chat(user_id: str, message: str):
         "recurrence_details": {  # NEU
             "type": frequency,
             "day_of_month": day if frequency == "monthly" else None,
-            "day_of_week": day if frequency == "weekly" else None
+            "day_of_week": day if frequency == "weekly" else None,
             "interval_weeks": {"biweekly": 2, "triweekly": 3, "fourweekly": 4}.get(frequency)
         }
     }
