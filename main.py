@@ -604,7 +604,18 @@ async def start_interaction(user_id: str):
 async def chat(user_id: str, chat_input: ChatInput):
     user_message = chat_input.message
     # 🔥 TASK DETECTION: Prüfe auf To-Do/Routine Erstellung
-    if extract_todo_intent(user_message):
+    if extract_routine_intent(user_message):
+        try:
+            task, frequency = await create_routine_from_chat(user_id, user_message)
+            frequency_text = {'daily': 'täglich', 'weekly': 'wöchentlich'}.get(frequency, 'täglich')
+            
+            response = f"✅ Ich habe eine neue Routine '{task}' erstellt, Wiederholung {frequency_text}."
+            
+            return {"response": response, "created_routine": True}
+        except Exception as e:
+            print(f"Fehler beim Erstellen der Routine: {e}")
+            return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
+    elif extract_todo_intent(user_message):
         try:
             title, priority, due_date = await create_todo_from_chat(user_id, user_message)
             priority_text = {'high': 'Hoch', 'medium': 'Medium', 'low': 'Niedrig'}.get(priority, 'Medium')
@@ -619,18 +630,6 @@ async def chat(user_id: str, chat_input: ChatInput):
         except Exception as e:
             print(f"Fehler beim Erstellen des To-Dos: {e}")
             return {"response": "❌ Fehler beim Erstellen des To-Dos. Bitte versuche es erneut.", "created_todo": False}
-    
-    if extract_routine_intent(user_message):
-        try:
-            task, frequency = await create_routine_from_chat(user_id, user_message)
-            frequency_text = {'daily': 'täglich', 'weekly': 'wöchentlich'}.get(frequency, 'täglich')
-            
-            response = f"✅ Ich habe eine neue Routine '{task}' erstellt, Wiederholung {frequency_text}."
-            
-            return {"response": response, "created_routine": True}
-        except Exception as e:
-            print(f"Fehler beim Erstellen der Routine: {e}")
-            return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
     try:
         # Konversationshistorie der letzten 5 Nachrichten abrufen
         try:
@@ -855,11 +854,16 @@ def extract_routine_intent(message: str) -> bool:
     return any(re.search(pattern, message.lower()) for pattern in patterns)
 
 def extract_todo_intent(message: str) -> bool:
+    # Wenn Zeitintervalle → Routine, nicht To-Do
+    if any(re.search(p, message.lower()) for p in [
+        r'(?:alle|jeden|täglich|wöchentlich|monatlich)',
+        r'(?:zwei|drei|vier)\s+(?:wochen|tage|monate)'
+    ]):
+        return False
+    
     patterns = [
         r'(?:erstelle|neue|neues|mach|add).*?(?:to-?do|aufgabe|task)',
-        r'(?:ich muss|sollte|möchte|will).*?(?:machen|erledigen|kaufen|putzen)',
-        r'(?:erinnere|reminder).*?(?:mich|an)',
-        r'(?:routine).*?(?:einrichten|erstellen)',
+        r'(?:ich muss|sollte|möchte|will).*?(?:kaufen|erledigen)',  # Zeitangaben entfernt
         r'(?:unbedingt).*?(?:muss|sollte)',
     ]
     return any(re.search(pattern, message.lower()) for pattern in patterns)
