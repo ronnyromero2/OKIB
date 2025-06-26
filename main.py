@@ -824,16 +824,6 @@ async def chat(user_id: str, chat_input: ChatInput):
         print(f"Fehler in der Chat-Funktion: {e}")
         raise HTTPException(status_code=500, detail="Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal.")
 
-def extract_todo_intent(message: str) -> bool:
-    patterns = [
-        r'(?:erstelle|neue|neues|mach|add).*?(?:to-?do|aufgabe|task)',
-        r'(?:ich muss|sollte|möchte|will).*?(?:machen|erledigen|kaufen|putzen)',
-        r'(?:erinnere|reminder).*?(?:mich|an)',
-        r'(?:routine).*?(?:einrichten|erstellen)',
-        r'(?:unbedingt).*?(?:muss|sollte)',
-    ]
-    return any(re.search(pattern, message.lower()) for pattern in patterns)
-
 def extract_routine_intent(message: str) -> bool:
     patterns = [
         # Täglich
@@ -861,6 +851,16 @@ def extract_routine_intent(message: str) -> bool:
         # Allgemein
         r'(?:routine|gewohnheit|habit)',
         r'(?:regelmäßig|wiederkehrend)',
+    ]
+    return any(re.search(pattern, message.lower()) for pattern in patterns)
+
+def extract_todo_intent(message: str) -> bool:
+    patterns = [
+        r'(?:erstelle|neue|neues|mach|add).*?(?:to-?do|aufgabe|task)',
+        r'(?:ich muss|sollte|möchte|will).*?(?:machen|erledigen|kaufen|putzen)',
+        r'(?:erinnere|reminder).*?(?:mich|an)',
+        r'(?:routine).*?(?:einrichten|erstellen)',
+        r'(?:unbedingt).*?(?:muss|sollte)',
     ]
     return any(re.search(pattern, message.lower()) for pattern in patterns)
 
@@ -924,6 +924,7 @@ async def create_routine_from_chat(user_id: str, message: str):
     routine_data = {
         "task": task,
         "checked": False
+        "day": None
     }
     
     result = supabase.table("routines").insert({
