@@ -1301,22 +1301,23 @@ def get_routines(user_id: str):
             is_checked = routine.get('checked', False)
             
             # 🎯 RESET-BEDINGUNG: Wenn last_checked_date nicht heute ist (oder NULL)
-            if last_checked != current_date:
-                print(f"Routine {routine_id} ({routine['task']}) - Reset erforderlich. Letzter Check: {last_checked}, Heute: {current_date}")
-                
-                # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
-                # Reset ohne missed_dates zu ändern (48h Kulanz)
-                supabase.table("routines").update({
-                    "checked": False,
-                    "last_checked_date": current_date
-                }).eq("id", routine_id).execute()
-                
-                # Lokale Daten aktualisieren
-                routine['checked'] = False
-                
-                routine_copy['checked'] = False
-                routine_copy['last_checked_date'] = current_date    
-                routine['last_checked_date'] = current_date
+            if last_checked != current_date and last_checked is not None:
+                if last_checked < current_date:  # Nur wenn letzter Check VOR heute war
+                    print(f"Routine {routine_id} ({routine['task']}) - Reset erforderlich. Letzter Check: {last_checked}, Heute: {current_date}")
+                    
+                    # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
+                    # Reset ohne missed_dates zu ändern (48h Kulanz)
+                    supabase.table("routines").update({
+                        "checked": False,
+                        "last_checked_date": current_date
+                    }).eq("id", routine_id).execute()
+                    
+                    # Lokale Daten aktualisieren
+                    routine['checked'] = False
+                    
+                    routine_copy['checked'] = False
+                    routine_copy['last_checked_date'] = current_date    
+                    routine['last_checked_date'] = current_date
             routine_copy['checked'] = routine.get('checked', False)
             routine_copy['last_checked_date'] = routine.get('last_checked_date')
             all_routines.append(routine_copy)
