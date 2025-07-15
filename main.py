@@ -1365,38 +1365,45 @@ def get_routines(user_id: str):
         # Fallback ohne last_checked_date
         all_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
         return {"routines": all_routines}
-
         
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
     # Konvertiere zu Strings für Supabase
     routine_id = str(update.id)
     user_id = str(update.user_id)
-    
-    
+        
     try:
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt     
-        routine_data = supabase.table("routines").select("day").eq("id", routine_id).eq("user_id", user_id).execute().data
+        routine_data = supabase.table("routines").select("day, frequency, recurrence_day").eq("id", routine_id).eq("user_id", user_id).execute().data
 
         if not routine_data:
             return {"status": "error", "message": "Routine nicht gefunden"}
 
         routine = routine_data[0]
-        routine_day = routine['day']
-
-        # Bestimme ob es sich um eine Heute- oder Gestern-Routine handelt
-        today_weekday = datetime.datetime.now().strftime("%A")
-        yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
-
-        if routine_day == today_weekday:
-            target_date = current_date
-        elif routine_day == yesterday_weekday:
-            target_date = yesterday_date
+        frequency = routine.get('frequency', 'daily')
+        
+        # Bestimme target_date basierend auf frequency
+        if frequency == 'daily':
+            target_date = current_date  # Tägliche Routinen = heute
+        elif frequency == 'weekly':
+            # Für wöchentliche Routinen: bisherige Logik
+            routine_day = routine['day']
+            today_weekday = datetime.datetime.now().strftime("%A")
+            yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
+            
+            if routine_day == today_weekday:
+                target_date = current_date
+            elif routine_day == yesterday_weekday:
+                target_date = yesterday_date
+            else:
+                return {"status": "error", "message": "Wöchentliche Routine gehört weder zu heute noch zu gestern"}
+        elif frequency == 'monthly':
+            target_date = current_date  # Monatliche Routinen = heute
         else:
-            return {"status": "error", "message": "Routine gehört weder zu heute noch zu gestern"}
+            target_date = current_date  # Fallback
               
         # Update checked-Status UND last_checked_date
         result = supabase.table("routines").update({
