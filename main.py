@@ -1299,6 +1299,12 @@ def get_routines(user_id: str):
             routine_id = routine['id']
             last_checked = routine.get('last_checked_date')
             is_checked = routine.get('checked', False)
+
+            # DEBUG-AUSGABEN HIER HINZUFÜGEN:
+            print(f"DEBUG - Routine {routine_id}: last_checked='{last_checked}', current_date='{current_date}'")
+            print(f"DEBUG - Bedingung 1: {last_checked != current_date}")
+            print(f"DEBUG - Bedingung 2: {last_checked is not None}")
+            print(f"DEBUG - Bedingung 3: {last_checked < current_date if last_checked else 'N/A'}")
             
             # 🎯 RESET-BEDINGUNG: Wenn last_checked_date nicht heute ist (oder NULL)
             if last_checked != current_date and last_checked is not None:
