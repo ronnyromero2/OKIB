@@ -527,44 +527,23 @@ async def start_interaction(user_id: str):
             context_for_gpt += routines_overview_context    
             context_for_gpt += routine_context_today    
 
-            fallback_topics = ["Langfristige Ziele", "Bestehende Routinen", "Neue Routinen", "Selbstreflexion", "Freizeitgestaltung",
-                               "Umgang mit Herausforderungen", "Lernprozesse", "Beziehungen pflegen",
-                               "Umgang mit Energie und Erholung", "Persönliche Werte", "Zukunftsvisionen",
-                               "Umgang mit Ängsten oder Sorgen", "Erfolge feiern"]
-            topic_suggestions = ", ".join(fallback_topics)
-
             prompt = f"""
-            Du bist eine offene Freundin, die ein Gespräch mit mir starten will. Formuliere EINE einzige, konkrete, lockere und personalisierte Frage, entweder basierend auf dem bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) oder zu einem ganz neuen Thema, das noch nie besprochen wurde.
-            Frage z.B. zu Meinungen und Interessen aus allen möglichen Bereichen, je präziser desto besser. Du willst mehr über den Benutzer erfahren, aber ihn nicht durch zu komplizierte Fragen überfordern.
-            Vermeide zusammengesetzte Fragen oder Fragen, die mit 'und' verbunden sind.
-            **Halte die Frage sehr kurz, idealerweise in einem Satz.**
-            Vermeide die letzten vier Einstiegsfragen:
-
-            {", ".join(recent_ai_prompts_to_avoid)}
+            Du bist ein kreativer, neugieriger Gesprächspartner. Deine Aufgabe: Stelle EINE einzige, kurze Frage.
             
-            **Beispiel für motivierende, spezifische Fragen (im Stil deiner Rolle):**
-            - Aus welchem Themenbereich soll das nächste Buch sein, das Du liest?
-            - Was macht Dir morgens schlechte Laune?
-            - Wo machst Du gerne Urlaub?
-            - Was würdest Du mit einem Lottogewinn machen?
-
-            Mögliche Themenbereiche:
- 
-            {"; ".join(topic_suggestions)}
-    
-            Beispiele für Themenkategorien:
-            - Persönliches Wachstum und Selbstreflexion
-            - Vergangene Erfolge oder Misserfolge und deren Lehren
-            - Umgang mit Stress oder schwierigen Emotionen
-            - Kreativität und Selbstausdruck
-            - Zukünftige Ängste oder Hoffnungen
-            - Entscheidungsfindung und Risikobereitschaft
-            - Rolle von Spiritualität oder Sinnhaftigkeit im Leben
-            - Beziehungen (außerhalb des Beziehungsziels)
-            - Umgang mit Geld und Finanzen
-            - Umfeld und Lebensgestaltung
-            Frage aber auch nach anderen Themen.
-            Nutze den oben bereitgestellten Kontext (Historie, Berichte, Ziele, Routinen) für die Personalisierung der Frage.
+            REGELN:
+            1. Schaue zuerst auf das Benutzerprofil und die Historie — was weißt du bereits? Frag nach etwas, das du noch NICHT weißt.
+            2. Diese Fragen wurden bereits gestellt — stelle sie NIEMALS nochmal oder ähnlich:
+            {chr(10).join(f"- {q}" for q in recent_ai_prompts_to_avoid)}
+            3. Verbiete dir selbst folgende Themen komplett: Lieblingsessen, Lieblingsmusik, Lieblingsfilm, Lieblingsbuch, Urlaubsziele, Lottogewinn.
+            4. Sei konkret und persönlich, nicht allgemein. Nicht "Wie gehst du mit Stress um?" sondern z.B. "Was machst du als erstes, wenn ein Arbeitstag richtig schiefläuft?"
+            5. Frag nach echten Erlebnissen, konkreten Momenten oder ehrlichen Meinungen — nicht nach Präferenzen oder Lieblingsthemen.
+            6. Die Frage soll maximal 1 Satz lang sein.
+            
+            Benutzerprofil (was du bereits weißt):
+            {user_profile_context}
+            
+            Bisherige Gesprächsthemen:
+            {context_for_gpt}
             """
             
         print("GPT Prompt:", prompt)
@@ -574,7 +553,7 @@ async def start_interaction(user_id: str):
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=60,
-                temperature=0.7
+                temperature=0.9
             )
 
             frage = response.choices[0].message.content.strip()
