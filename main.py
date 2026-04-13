@@ -502,31 +502,144 @@ async def start_interaction(user_id: str):
 
         print("Wiederholt unerfüllte Routinen:", routine_context_today)
 
-        # 5% Wahrscheinlichkeit für Simulation/Universum-Perspektive
-        simulate_universe = random.random() < 0.05
+# Modus-Auswahl per Zufall
+        roll = random.random()
 
-        # GPT-Anfrage vorbereiten
-        if simulate_universe:
+        if roll < 0.05:
+            mode = "universum"
+        elif roll < 0.20:
+            mode = "insight"
+        elif roll < 0.30:
+            mode = "rueckblick"
+        elif roll < 0.40:
+            mode = "ziel_check"
+        elif roll < 0.50:
+            mode = "routine_reflexion"
+        elif roll < 0.57:
+            mode = "provokation"
+        else:
+            mode = "normal"
+
+        print(f"Einstiegs-Modus: {mode}")
+
+        # Kontext für GPT aufbauen
+        context_for_gpt = "\nUser-Historie (letzte 30 Nachrichten):\n" + "\n".join(messages)
+        if recent_ai_prompts_to_avoid:
+            context_for_gpt += "\nKürzlich gestellte Fragen des Beraters:\n" + ", ".join(recent_ai_prompts_to_avoid)
+        context_for_gpt += user_profile_context
+        context_for_gpt += "\nAktuelle Berichte:\n" + reports_context
+        context_for_gpt += goals_context
+        context_for_gpt += routines_overview_context
+        context_for_gpt += routine_context_today
+
+        if mode == "universum":
             prompt = f"""
             Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
             Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
             Vermeide die letzten acht Einstiegsfragen:
-
             {", ".join(recent_ai_prompts_to_avoid)}
-
             Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
             """
-        else:
-            context_for_gpt = "\nUser-Historie (letzte 30 Nachrichten):\n" + "\n".join(messages)
-            if recent_ai_prompts_to_avoid:
-                context_for_gpt += "\nKürzlich gestellte Fragen des Beraters:\n" + ", ".join(recent_ai_prompts_to_avoid)
-                
-            context_for_gpt += user_profile_context
-            context_for_gpt += "\nAktuelle Berichte:\n" + reports_context
-            context_for_gpt += goals_context            
-            context_for_gpt += routines_overview_context    
-            context_for_gpt += routine_context_today    
 
+        elif mode == "insight":
+            insights = supabase.table("long_term_memory") \
+                .select("thema, inhalt") \
+                .eq("user_id", user_id) \
+                .not_.in_("thema", ["Wochenrückblick", "Monatsrückblick", "Jahresrückblick"]) \
+                .order("timestamp", desc=True) \
+                .limit(20) \
+                .execute().data
+
+            if insights:
+                insight = random.choice(insights)
+                prompt = f"""
+                Du bist ein persönlicher Mentor. Der Nutzer hat folgende Erkenntnis einmal festgehalten:
+                Thema: "{insight['thema']}"
+                Inhalt: "{insight['inhalt']}"
+                
+                Greife diese Erkenntnis heute auf. Frag nach, wie es damit steht, ob sie sich bestätigt hat oder ob sich etwas verändert hat.
+                Maximal 1-2 Sätze. Nicht wiederholen was in den letzten Fragen schon stand:
+                {", ".join(recent_ai_prompts_to_avoid)}
+                """
+            else:
+                mode = "normal"  # Fallback wenn keine Insights vorhanden
+
+        elif mode == "rueckblick":
+            # Lade die letzten 8 Wochenberichte, 20 Monatsberichte und alle Jahresberichte
+            wochen_berichte = supabase.table("long_term_memory") \
+                .select("thema, inhalt, timestamp") \
+                .eq("user_id", user_id) \
+                .eq("thema", "Wochenrückblick") \
+                .order("timestamp", desc=True) \
+                .limit(8) \
+                .execute().data
+
+            monats_berichte = supabase.table("long_term_memory") \
+                .select("thema, inhalt, timestamp") \
+                .eq("user_id", user_id) \
+                .eq("thema", "Monatsrückblick") \
+                .order("timestamp", desc=True) \
+                .limit(20) \
+                .execute().data
+
+            jahres_berichte = supabase.table("long_term_memory") \
+                .select("thema, inhalt, timestamp") \
+                .eq("user_id", user_id) \
+                .eq("thema", "Jahresrückblick") \
+                .order("timestamp", desc=True) \
+                .execute().data
+
+            alle_rueckblicke = wochen_berichte + monats_berichte + jahres_berichte
+
+            if alle_rueckblicke:
+                gewählter_bericht = random.choice(alle_rueckblicke)
+                prompt = f"""
+                Du bist ein persönlicher Mentor. Hier ist ein früherer Rückblick des Nutzers:
+                Typ: "{gewählter_bericht['thema']}"
+                Inhalt: "{gewählter_bericht['inhalt']}"
+                
+                Greife ein konkretes Thema, Muster oder eine Herausforderung aus diesem Rückblick auf und stelle eine kurze, 
+                direkte Anschlussfrage — hat sich etwas verändert, was ist daraus geworden?
+                Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
+                {", ".join(recent_ai_prompts_to_avoid)}
+                """
+            else:
+                mode = "normal"  # Fallback wenn keine Berichte vorhanden
+
+        elif mode == "ziel_check":
+            prompt = f"""
+            Du bist ein persönlicher Mentor. Der Nutzer hat folgende offene Ziele:
+            {goals_context}
+            
+            Wähle EIN konkretes Ziel aus und frage direkt nach dem aktuellen Stand — kurz und präzise, maximal 1 Satz.
+            Nicht wiederholen was schon in den letzten Fragen stand:
+            {", ".join(recent_ai_prompts_to_avoid)}
+            """
+
+        elif mode == "routine_reflexion":
+            prompt = f"""
+            Du bist ein persönlicher Mentor. Hier ist eine Übersicht der Routinen des Nutzers:
+            {routines_overview_context}
+            
+            Greife eine Routine auf — entweder eine die oft verpasst wird, oder eine die gut läuft — und frage nach dem Warum.
+            Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
+            {", ".join(recent_ai_prompts_to_avoid)}
+            """
+
+        elif mode == "provokation":
+            prompt = f"""
+            Du bist ein direkter, provokanter Mentor. Stelle dem Nutzer eine unbequeme, herausfordernde These oder Frage 
+            basierend auf dem was du über ihn weißt. Ziel ist produktive Selbstreflexion, nicht Beleidigung.
+            Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
+            {", ".join(recent_ai_prompts_to_avoid)}
+            
+            Was du über den Nutzer weißt:
+            {user_profile_context}
+            {goals_context}
+            {routines_overview_context}
+            """
+
+        else:  # normal
             prompt = f"""
             Du bist ein kreativer, neugieriger Gesprächspartner. Deine Aufgabe: Stelle EINE einzige, kurze Frage.
             
@@ -545,7 +658,15 @@ async def start_interaction(user_id: str):
             Bisherige Gesprächsthemen:
             {context_for_gpt}
             """
-            
+
+        # Fallback-Prompt falls mode auf "normal" zurückgefallen ist
+        if mode == "normal" and 'prompt' not in dir():
+            prompt = f"""
+            Du bist ein kreativer, neugieriger Gesprächspartner. Stelle EINE kurze, persönliche Frage.
+            Vermeide: {", ".join(recent_ai_prompts_to_avoid)}
+            Benutzerprofil: {user_profile_context}
+            """
+
         print("GPT Prompt:", prompt)
 
         try:
@@ -577,7 +698,7 @@ async def start_interaction(user_id: str):
         except Exception as e:
             print(f"Fehler bei der GPT-Anfrage: {e}")
             return {"frage": "Es gab ein Problem beim Generieren der Einstiegsfrage. Was möchtest du heute besprechen?"}
-
+            
 # Chat-Funktion
 @app.post("/chat/{user_id}")
 async def chat(user_id: str, chat_input: ChatInput):
