@@ -57,9 +57,6 @@ def serve_html():
 class ChatInput(BaseModel):
     message: str
     
-class InterviewAntwort(BaseModel):
-    antwort: str
-
 class MemoryInput(BaseModel):
     thema: str
     inhalt: str
@@ -79,8 +76,6 @@ class RoutineUpdate(BaseModel):
     user_id: Union[int, str]
     
 class ProfileData(BaseModel):
-    # Fügen Sie hier die Attribute hinzu, die Sie im Benutzerprofil speichern möchten
-    # und die von der Funktion extrahiert werden (z.B. durch InterviewAntwort)
     hobby: Optional[str] = None
     beruf: Optional[str] = None
     interessen: Optional[str] = None
@@ -694,7 +689,7 @@ async def start_interaction(user_id: str):
                     "timestamp": datetime.datetime.utcnow().isoformat()
                 }).execute()
             except Exception as e:
-                print(f"Fehler beim Speichern der dynamischen Interviewfrage als AI-Prompt: {e}")
+                print(f"Fehler beim Speichern der Einstiegsfrage: {e}")
 
             return {"frage": frage}
 
@@ -858,7 +853,7 @@ async def chat(user_id: str, chat_input: ChatInput):
             if h.get('ai_response'):
                 history_messages.append(f"Berater: {h['ai_response']}")
             if h.get('ai_prompt'):
-                history_messages.append(f"Interviewfrage: {h['ai_prompt']}")
+                history_messages.append(f"Einstiegsfrage: {h['ai_prompt']}")
 
         history_text = "\n".join(history_messages) if history_messages else "Bisher keine frühere Konversationshistorie."
         
@@ -1233,7 +1228,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
             if g.get('ai_response'):
                 formatted_gespraeche.append(f"Berater: {g['ai_response']}")
             if g.get('ai_prompt'):
-                formatted_gespraeche.append(f"Interviewfrage: {g['ai_prompt']}")
+                formatted_gespraeche.append(f"Einstiegsfrage: {g['ai_prompt']}")
         gespraeche_text_for_prompt += "\n".join(formatted_gespraeche)
     else:
         gespraeche_text_for_prompt = "Es gab keine relevanten Gespräche in diesem Zeitraum."
