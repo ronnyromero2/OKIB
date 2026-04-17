@@ -200,7 +200,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     except Exception as e:
         print(f"FEHLER bei der Profil-Extraktion oder Speicherung in extrahiere_und_speichere_profil_details: {e}")
 
-# Zusammenfassung um Token zu sparen (mit gpt-3.5-turbo)
+# Zusammenfassung um Token zu sparen (mit gpt-4o-mini)
 def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, prompt_context: str = "wichtige Punkte und Muster"):
     if not text_to_summarize.strip():
         return "" # Nichts zusammenfassen, wenn der Text leer ist
@@ -214,7 +214,7 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
     """
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "Du bist ein hilfreicher Assistent, der lange Texte zusammenfassen kann."},
                 {"role": "user", "content": summary_prompt}
