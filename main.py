@@ -1135,11 +1135,9 @@ async def automatischer_bericht():
         existing_report_data = existing_report_response.data
         
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
-        if not existing_report_data: # Prüfung auf leere Liste ist korrekt
-            # ▚▚▚ ANPASSUNG: user_id an generiere_rueckblick übergeben ▚▚▚
-            bericht_result = await generiere_rueckblick("Monats", 30, user_id) 
-            bericht_inhalt = bericht_result # generiere_rueckblick gibt jetzt direkten String zurück
-        else:
+        if not existing_report_data:
+            bericht_result = await generiere_rueckblick("Monats", 30, user_id)
+            bericht_inhalt = bericht_result
 
     # Wochenbericht prüfen und ggf. generieren
     elif wochentag_utc == 6: # Sonntag (im deutschen Kontext, basierend auf UTC)
@@ -1160,12 +1158,8 @@ async def automatischer_bericht():
         
 
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
-        if not existing_report_data: # Prüfung auf leere Liste ist korrekt
-            # ▚▚▚ ANPASSUNG: user_id an generiere_rueckblick übergeben ▚▚▚
+        if not existing_report_data:
             bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id)
-            # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
-        # NEU: Nachricht, wenn Bericht bereits existiert
-        else:
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
