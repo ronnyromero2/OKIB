@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from openai import OpenAI
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union, Literal
 import os
 import datetime
 import random
@@ -64,7 +64,7 @@ class MemoryInput(BaseModel):
 class Goal(BaseModel):
     titel: str
     status: str = "offen"
-    deadline: str = ""
+    deadline: Optional[str] = None
 
 class GoalUpdate(BaseModel):
     id: int
@@ -83,7 +83,7 @@ class ProfileData(BaseModel):
 class TodoInput(BaseModel):
     title: str
     description: str = ""
-    priority: str = "medium"  # low, medium, high
+    priority: Literal["low", "medium", "high"] = "medium"
     due_date: Optional[str] = None  # YYYY-MM-DD
     category: str = "allgemein"
     is_recurring: bool = False
