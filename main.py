@@ -165,7 +165,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o", # GPT-4o ist gut für JSON-Extraktion
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -181,23 +181,16 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
 
         # Temporäre Kategorien ausschließen
         EXCLUDED_CATEGORIES = ['Aktuelles_Datum']
+        now = datetime.datetime.utcnow().isoformat() + 'Z'
 
-        # Vergleichen und Aktualisieren der Daten in der 'profile' Tabelle (EAV-Modell)
-        for key, value in new_extracted_profile.items():
-            # Temporäre Infos überspringen
-            if key in EXCLUDED_CATEGORIES:
-                print(f"Überspringe temporäre Kategorie: {key}")
-                continue
-                
-            # Prüfen ob Eintrag schon existiert
-            existing = supabase.table("profile").select("*").eq("user_id", user_id).eq("attribute_name", key).execute().data
-            
-            if existing:
-                # Update bestehenden Eintrag
-                supabase.table("profile").update({"attribute_value": value, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}).eq("user_id", user_id).eq("attribute_name", key).execute()
-            else:
-                # Neuen Eintrag hinzufügen
-                supabase.table("profile").upsert({"user_id": user_id, "attribute_name": key, "attribute_value": value, "last_updated": datetime.datetime.utcnow().isoformat() + 'Z'}).execute()
+        records = [
+            {"user_id": user_id, "attribute_name": key, "attribute_value": value, "last_updated": now}
+            for key, value in new_extracted_profile.items()
+            if key not in EXCLUDED_CATEGORIES
+        ]
+
+        if records:
+            supabase.table("profile").upsert(records).execute()
 
         print(f"Dynamisches Profil für User {user_id} erfolgreich aktualisiert.")
 
