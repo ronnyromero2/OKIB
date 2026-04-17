@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi import HTTPException
@@ -15,10 +15,14 @@ import re
 
 load_dotenv()
 
-# API-Keys
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
+if not OPENAI_API_KEY or not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("Fehlende Umgebungsvariablen – bitte .env prüfen (OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY)")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 async def _save_conversation_entry(user_id: str, user_input: Optional[str], ai_response: Optional[str], ai_prompt: Optional[str]):
