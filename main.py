@@ -109,8 +109,6 @@ class TodoEdit(BaseModel):
     
 # Funktion zur Extraktion und Speicherung von erweiterten Profildetails im EAV-Modell
 async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str, ai_response: str, ai_prompt: str):
-    print(f"Starte dynamische Profil-Extraktion und Speicherung für User {user_id}...")
-    print(f"Analysiere aktuelle Nachricht: '{user_input}'")
     
     # Bestehendes dynamisches Profil aus der 'profile'-Tabelle abrufen
     # Die 'profile'-Tabelle ist jetzt unsere EAV-Tabelle
@@ -177,7 +175,6 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
         extracted_data_str = response.choices[0].message.content
         new_extracted_profile: Dict[str, str] = json.loads(extracted_data_str)
 
-        print(f"Extrahierte Profildaten von GPT für User {user_id}: {new_extracted_profile}")
 
         # Temporäre Kategorien ausschließen
         EXCLUDED_CATEGORIES = ['Aktuelles_Datum']
@@ -192,7 +189,6 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
         if records:
             supabase.table("profile").upsert(records).execute()
 
-        print(f"Dynamisches Profil für User {user_id} erfolgreich aktualisiert.")
 
     except json.JSONDecodeError as e:
         print(f"FEHLER beim Parsen der JSON-Antwort von GPT in extrahiere_und_speichere_profil_details: {e}")
@@ -238,7 +234,6 @@ async def get_recent_entry_questions(user_id: str):
         .execute()
     
     questions = [q["ai_prompt"] for q in recent_prompts.data if q["ai_prompt"]]
-    print("Letzte 8 Einstiegsfragen (aus ai_prompt):", questions)
     return questions
 
 def calculate_next_due_date(recurrence_type: str, recurrence_day: int = None, last_completed: str = None):
@@ -330,7 +325,6 @@ def create_recurring_todo_instance(original_todo, user_id: str):
         
         try:
             result = supabase.table("todos").insert(new_todo).execute()
-            print(f"Neue wiederkehrende To-Do Instanz erstellt: {original_todo['title']} für {next_due}")
             return result.data[0] if result.data else None
         except Exception as e:
             print(f"Fehler beim Erstellen der wiederkehrenden To-Do Instanz: {e}")
@@ -367,7 +361,6 @@ async def start_interaction(user_id: str):
             messages.append(f"Berater (Frage): {ai_prompt_msg}")
 
     # Konsolen-Log zur Überprüfung der Nachrichten
-    print("Letzte 30 Nachrichten:", messages)
 
     # Wenn keine Nachrichten vorhanden sind (erste Interaktion)
     if not messages:
@@ -491,7 +484,6 @@ async def start_interaction(user_id: str):
                 routine_texts.append(str(r.get("task", '')))
         routine_context_today = ", ".join(routine_texts)
 
-        print("Wiederholt unerfüllte Routinen:", routine_context_today)
 
 # Modus-Auswahl per Zufall
         roll = random.random()
@@ -511,7 +503,6 @@ async def start_interaction(user_id: str):
         else:
             mode = "normal"
 
-        print(f"Einstiegs-Modus: {mode}")
 
         # Kontext für GPT aufbauen
         context_for_gpt = "\nUser-Historie (letzte 30 Nachrichten):\n" + "\n".join(messages)
@@ -658,7 +649,6 @@ async def start_interaction(user_id: str):
             Benutzerprofil: {user_profile_context}
             """
 
-        print("GPT Prompt:", prompt)
 
         try:
             response = client.chat.completions.create(
@@ -1120,9 +1110,6 @@ async def automatischer_bericht():
     wochentag_utc = heute_utc.weekday() # Montag = 0, Sonntag = 6 (UTC-basiert)
     
     # Debug-Ausgaben für den Start
-    print(f"\n--- Start 'automatischer_bericht' ---")
-    print(f"Aktuelle Server-UTC-Zeit: {heute_utc.isoformat()}")
-    print(f"Aktueller Wochentag (0=Mo, 6=So) in UTC: {wochentag_utc}")
 
     bericht_typ = None
     bericht_inhalt = None
@@ -1135,7 +1122,6 @@ async def automatischer_bericht():
         start_of_month_utc = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         # Ende des aktuellen Monats (UTC) - 1 Mikrosekunde vor dem nächsten Monat
         end_of_month_utc = (start_of_month_utc.replace(month=start_of_month_utc.month % 12 + 1, day=1) - datetime.timedelta(microseconds=1))
-        print(f"Monatsbericht-Check - Abfragebereich: {start_of_month_utc.isoformat()} bis {end_of_month_utc.isoformat()}")
   
         existing_report_response = supabase.table("long_term_memory") \
             .select("id, thema, timestamp") \
@@ -1147,24 +1133,19 @@ async def automatischer_bericht():
         
         # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
         existing_report_data = existing_report_response.data
-        print(f"Monatsbericht-Check - Supabase Roh-Response: {existing_report_response}")
-        print(f"Monatsbericht-Check - Gefundene Berichte: {existing_report_data}")
         
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
-            print(f"Generiere neuen {bericht_typ} für User {user_id}...")
             # ▚▚▚ ANPASSUNG: user_id an generiere_rueckblick übergeben ▚▚▚
             bericht_result = await generiere_rueckblick("Monats", 30, user_id) 
             bericht_inhalt = bericht_result # generiere_rueckblick gibt jetzt direkten String zurück
         else:
-            print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
 
     # Wochenbericht prüfen und ggf. generieren
     elif wochentag_utc == 6: # Sonntag (im deutschen Kontext, basierend auf UTC)
         bericht_typ = "Wochenrückblick"
         today_start_utc = heute_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow_start_utc = today_start_utc + datetime.timedelta(days=1)
-        print(f"Wochenbericht-Check - Abfragebereich: {today_start_utc.isoformat()} bis {tomorrow_start_utc.isoformat()}")
 
         existing_report_response = supabase.table("long_term_memory") \
             .select("id", "thema", "timestamp") \
@@ -1177,19 +1158,14 @@ async def automatischer_bericht():
         # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
         existing_report_data = existing_report_response.data
         
-        print(f"Wochenbericht-Check - Supabase Roh-Response: {existing_report_response}")
-        print(f"Wochenbericht-Check - Gefundene Berichte: {existing_report_data}")
 
         # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data: # Prüfung auf leere Liste ist korrekt
-            print(f"Generiere neuen {bericht_typ} für User {user_id}...")
             # ▚▚▚ ANPASSUNG: user_id an generiere_rueckblick übergeben ▚▚▚
             bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id)
             # generiere_rueckblick speichert den Bericht bereits, daher hier keine weitere Speicherung
         # NEU: Nachricht, wenn Bericht bereits existiert
         else:
-            print(f"{bericht_typ} für User {user_id} wurde heute bereits generiert. Überspringe Generierung.")
-    print(f"--- Ende 'automatischer_bericht' ---\n")
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
@@ -1313,10 +1289,8 @@ def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann a
             .execute().data
         
         if report_data:
-            print(f"Bericht '{report_type_name}' für User {user_id} gefunden.")
             return {"inhalt": report_data[0]["inhalt"]}
         else:
-            print(f"Kein Bericht '{report_type_name}' für User {user_id} gefunden.")
             return {"inhalt": f"Kein {report_type_name} verfügbar. Er wird {report_type_name.lower().replace('rückblick', '')}s generiert."}
     except HTTPException as http_exc:
         raise http_exc # HTTPExceptions weiterleiten
@@ -1393,15 +1367,10 @@ def get_routines(user_id: str):
             is_checked = routine.get('checked', False)
 
             # DEBUG-AUSGABEN HIER HINZUFÜGEN:
-            print(f"DEBUG - Routine {routine_id}: last_checked='{last_checked}', current_date='{current_date}'")
-            print(f"DEBUG - Bedingung 1: {last_checked != current_date}")
-            print(f"DEBUG - Bedingung 2: {last_checked is not None}")
-            print(f"DEBUG - Bedingung 3: {last_checked < current_date if last_checked else 'N/A'}")
             
             # 🎯 RESET-BEDINGUNG: Wenn last_checked_date nicht heute ist (oder NULL)
             if last_checked != current_date and last_checked is not None:
                 if last_checked < current_date:  # Nur wenn letzter Check VOR heute war
-                    print(f"Routine {routine_id} ({routine['task']}) - Reset erforderlich. Letzter Check: {last_checked}, Heute: {current_date}")
                     
                     # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
                     # Reset ohne missed_dates zu ändern (48h Kulanz)
@@ -1441,7 +1410,6 @@ def get_routines(user_id: str):
                     missed_dates = routine.get('missed_dates') or []
                     if yesterday_date not in missed_dates:
                         missed_dates.append(yesterday_date)
-                        print(f"Routine {routine['id']} - 48h Kulanz abgelaufen, zu missed_dates hinzugefügt")
                         supabase.table("routines").update({
                             "missed_dates": missed_dates
                         }).eq("id", routine['id']).execute()
@@ -1449,7 +1417,6 @@ def get_routines(user_id: str):
         # Sortiere: heute zuerst, dann gestern
         all_routines.sort(key=lambda x: x['date'], reverse=True)
                 
-        print(f"Routinen für {today} (User {user_id}) erfolgreich abgerufen und resettet.")
         return {"routines": all_routines}
         
     except Exception as e:
@@ -1503,7 +1470,6 @@ def update_routine_status(update: RoutineUpdate):
             "last_checked_date": target_date
         }).eq("id", routine_id).eq("user_id", user_id).execute()
         
-        print(f"Routine {routine_id} für {target_date} auf checked={update.checked} gesetzt")
         return {"status": "success"}
         
     except Exception as e:
@@ -1576,13 +1542,11 @@ def create_profile(profile_data: ProfileData, user_id: str):
                     .update({"attribute_value": value}) \
                     .eq("id", existing_entry[0]["id"]) \
                     .execute()
-                print(f"Profil-Attribut '{attribute}' für User '{user_id}' aktualisiert.")
             else:
                 # Füge neues Attribut hinzu
                 supabase.table("profile") \
                     .insert({"user_id": user_id, "attribute_name": attribute, "attribute_value": value}) \
                     .execute()
-                print(f"Profil-Attribut '{attribute}' für User '{user_id}' erstellt.")
         return {"status": "success", "message": "Profil erfolgreich verarbeitet."}
     except Exception as e:
         print(f"Fehler beim Speichern des Profils: {e}")
