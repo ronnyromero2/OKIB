@@ -565,10 +565,10 @@ async function loadTodos() {
         let dueDateHtml = '';
         if (todo.due_date) {
           const formatted = todo.due_date.split('-').reverse().join('.');
-          dueDateHtml = `<span style="padding-left: 2em;">📅 ${formatted}</span>`;
+          dueDateHtml = `<span style="margin-left: auto; padding-left: 1.5em; white-space: nowrap;">📅 ${formatted}</span>`;
         }
 
-        label.style.cssText = `display: flex; max-width: 500px; ${itemColor} ${fontWeight}`;
+        label.style.cssText = `display: flex; width: 420px; ${itemColor} ${fontWeight}`;
         label.innerHTML = `<span>${priorityEmoji}${todo.title}</span>${dueDateHtml}`;
         
         if (todo.completed) todoDiv.classList.add("done");
