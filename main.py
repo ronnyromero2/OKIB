@@ -818,7 +818,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Langzeitgedächtnis laden
         memory_text = "Keine spezifischen Langzeit-Erkenntnisse gespeichert." # Standardwert
         try:
-            memory = supabase.table("long_term_memory").select("thema", "inhalt").order("timestamp", desc=True).limit(10).execute().data
+            memory = supabase.table("long_term_memory").select("thema", "inhalt").eq("user_id", user_id).order("timestamp", desc=True).limit(10).execute().data
             if memory:
                 memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory])
         except Exception as e:
