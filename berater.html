@@ -517,7 +517,7 @@ async function loadTodos() {
       ...(data.todos.open || []),
       ...(data.todos.in_progress || []),
       ...(data.todos.overdue || [])
-    ];
+    ].sort((a, b) => (a.due_date || '9999') > (b.due_date || '9999') ? 1 : -1);
     
     if (openTodos.length > 0) {
       openTodos.forEach((todo) => {
@@ -548,30 +548,25 @@ async function loadTodos() {
         const label = document.createElement("label");
         label.htmlFor = `todo_${todo.id}`;
         
-        const priorityEmoji = todo.priority === 'high' ? '🔴 ' : 
-                            todo.priority === 'medium' ? '🟡 ' : '🟢 ';
-        
-        let dueDateText = '';
-        let dueDateColor = '';
+        const today = new Date().toISOString().split('T')[0];
+        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+        const isOverdue = todo.due_date && todo.due_date < today;
+
+        const priorityEmoji = isOverdue ? '💀 ' : (todo.priority === 'high' ? '🔴 ' : '');
+
+        let dueDateHtml = '';
         if (todo.due_date) {
-          const today = new Date().toISOString().split('T')[0];
-          const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
           const formatted = todo.due_date.split('-').reverse().join('.');
-          if (todo.due_date < today) {
-            dueDateText = ` ❌ 📅 ${formatted}`;
-            dueDateColor = 'color: white;';
-          } else if (todo.due_date === today) {
-            dueDateText = ` 📅 ${formatted}`;
-            dueDateColor = 'color: red;';
-          } else if (todo.due_date === tomorrow) {
-            dueDateText = ` 📅 ${formatted}`;
-            dueDateColor = 'color: orange;';
-          } else {
-            dueDateText = ` 📅 ${formatted}`;
-          }
+          let color = '';
+          if (isOverdue) color = 'color: white;';
+          else if (todo.due_date === today) color = 'color: red;';
+          else if (todo.due_date === tomorrow) color = 'color: orange;';
+          dueDateHtml = `<span style="margin-left: auto; padding-left: 1em; ${color}">📅 ${formatted}</span>`;
         }
 
-        label.innerHTML = `${priorityEmoji}${todo.title}<span style="${dueDateColor}">${dueDateText}</span>`;
+        label.style.display = 'flex';
+        label.style.width = '100%';
+        label.innerHTML = `<span>${priorityEmoji}${todo.title}</span>${dueDateHtml}`;
         
         if (todo.completed) todoDiv.classList.add("done");
         
