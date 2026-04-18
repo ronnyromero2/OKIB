@@ -954,55 +954,22 @@ def extract_todo_intent(message: str) -> bool:
     ]
     return any(re.search(pattern, message.lower()) for pattern in patterns)
 
-def extract_title_from_message(message: str) -> str:
-    """Extrahiert Aufgaben-Titel"""
-    clean = re.sub(r'^(?:ich muss|sollte|möchte|will|erstelle|neue|neues|mach|add|erinnere mich)?\s*(?:ein\s+)?(?:to-?do|aufgabe|task|daran)?\s*:?\s*', '', message, flags=re.IGNORECASE)
-    clean = re.sub(r',?\s*(?:am\s+)?\d{1,2}\.\d{1,2}\.\d{2,4}.*$', '', clean)
-    clean = re.sub(r',?\s*(?:nächsten?\s+)?(?:heute|morgen|übermorgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|täglich|wöchentlich|jeden|jede).*$', '', clean, flags=re.IGNORECASE)
-    clean = re.sub(r',?\s*(?:relevanz|priorität)\s*(?:hoch|mittel|niedrig|high|medium|low).*$', '', clean, flags=re.IGNORECASE)
-    clean = re.sub(r'\b(?:wichtig|urgent|dringend|dass|das|ich|mich|an)\b', '', clean, flags=re.IGNORECASE)
-    return clean.strip() or "Neue Aufgabe"
-
-def extract_priority(message: str) -> str:
-    """Extrahiert Priorität"""
-    if any(word in message.lower() for word in ['wichtig', 'urgent', 'dringend', 'sofort', 'unbedingt', 'hoch', 'high']):
-        return 'high'
-    elif any(word in message.lower() for word in ['später', 'niedrig', 'unwichtig', 'low']):
-        return 'low'
-    return 'medium'
-
-def extract_due_date(message: str) -> str:
-    """Extrahiert Fälligkeitsdatum"""
-    today = datetime.datetime.now().date()
-    msg = message.lower()
-    if 'heute' in msg:
-        return today.isoformat()
-    elif 'übermorgen' in msg:
-        return (today + datetime.timedelta(days=2)).isoformat()
-    elif 'morgen' in msg:
-        return (today + datetime.timedelta(days=1)).isoformat()
-
-    datum_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{2,4})', message)
-    if datum_match:
-        tag, monat, jahr = datum_match.groups()
-        if len(jahr) == 2:
-            jahr = "20" + jahr
-        return f"{jahr}-{monat.zfill(2)}-{tag.zfill(2)}"
-
-    wochentage = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag', 'sonntag']
-    for i, tag in enumerate(wochentage):
-        if tag in msg:
-            tage_bis = (i - today.weekday()) % 7
-            if tage_bis == 0:
-                tage_bis = 7
-            return (today + datetime.timedelta(days=tage_bis)).isoformat()
-    return None
-
 async def create_todo_from_chat(user_id: str, message: str):
-    """Erstellt To-Do aus Chat-Message"""
-    title = extract_title_from_message(message)
-    priority = extract_priority(message)
-    due_date = extract_due_date(message)
+    """Erstellt To-Do aus Chat-Message via GPT"""
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{
+            "role": "user",
+            "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Titel, Fälligkeitsdatum (YYYY-MM-DD oder null) und Priorität (low/medium/high). Nachricht: '{message}'. Antworte nur mit JSON: {{\"title\": \"...\", \"due_date\": \"...\", \"priority\": \"...\"}}"
+        }],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
+    data = json.loads(response.choices[0].message.content)
+    title = data.get("title", "Neue Aufgabe")
+    due_date = data.get("due_date") or None
+    priority = data.get("priority", "medium")
     
     todo_data = {
         "user_id": user_id,
