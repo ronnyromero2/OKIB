@@ -956,8 +956,8 @@ def extract_todo_intent(message: str) -> bool:
 
 def extract_title_from_message(message: str) -> str:
     """Extrahiert Aufgaben-Titel"""
-    clean = re.sub(r'^(?:ich muss|sollte|möchte|will|erstelle|neue|neues|mach|add|erinnere mich)?\s*(?:to-?do|aufgabe|task|daran)?\s*:?\s*', '', message, flags=re.IGNORECASE)
-    clean = re.sub(r'\s+(?:heute|morgen|täglich|wöchentlich|jeden|jede).*$', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'^(?:ich muss|sollte|möchte|will|erstelle|neue|neues|mach|add|erinnere mich)?\s*(?:ein\s+)?(?:to-?do|aufgabe|task|daran)?\s*:?\s*', '', message, flags=re.IGNORECASE)
+    clean = re.sub(r',?\s*(?:nächsten?\s+)?(?:heute|morgen|übermorgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|täglich|wöchentlich|jeden|jede).*$', '', clean, flags=re.IGNORECASE)
     clean = re.sub(r'\b(?:wichtig|urgent|dringend|dass|das|ich|mich|an)\b', '', clean, flags=re.IGNORECASE)
     return clean.strip() or "Neue Aufgabe"
 
@@ -972,12 +972,21 @@ def extract_priority(message: str) -> str:
 def extract_due_date(message: str) -> str:
     """Extrahiert Fälligkeitsdatum"""
     today = datetime.datetime.now().date()
-    if 'heute' in message.lower():
+    msg = message.lower()
+    if 'heute' in msg:
         return today.isoformat()
-    elif 'morgen' in message.lower():
-        return (today + datetime.timedelta(days=1)).isoformat()
-    elif 'übermorgen' in message.lower():
+    elif 'übermorgen' in msg:
         return (today + datetime.timedelta(days=2)).isoformat()
+    elif 'morgen' in msg:
+        return (today + datetime.timedelta(days=1)).isoformat()
+
+    wochentage = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag', 'sonntag']
+    for i, tag in enumerate(wochentage):
+        if tag in msg:
+            tage_bis = (i - today.weekday()) % 7
+            if tage_bis == 0:
+                tage_bis = 7
+            return (today + datetime.timedelta(days=tage_bis)).isoformat()
     return None
 
 async def create_todo_from_chat(user_id: str, message: str):
