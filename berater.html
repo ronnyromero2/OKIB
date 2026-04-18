@@ -558,13 +558,13 @@ async function loadTodos() {
           const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
           const formatted = todo.due_date.split('-').reverse().join('.');
           if (todo.due_date < today) {
-            dueDateText = ` ❌ ${formatted}`;
+            dueDateText = ` ❌ 📅 ${formatted}`;
             dueDateColor = 'color: white;';
           } else if (todo.due_date === today) {
-            dueDateText = ` ${formatted}`;
+            dueDateText = ` 📅 ${formatted}`;
             dueDateColor = 'color: red;';
           } else if (todo.due_date === tomorrow) {
-            dueDateText = ` ${formatted}`;
+            dueDateText = ` 📅 ${formatted}`;
             dueDateColor = 'color: orange;';
           } else {
             dueDateText = ` 📅 ${formatted}`;
