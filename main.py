@@ -357,10 +357,8 @@ async def start_interaction(user_id: str):
             messages.append(f"AI: {ai_msg}")
 
         # Hinzufügen von ai_prompts zur Historie (damit sie bei Vermeidung berücksichtigt werden)
-        if ai_prompt_msg is not None and ai_prompt_msg.strip() != "": # <--- DIESER BLOCK IST NEU
+        if ai_prompt_msg is not None and ai_prompt_msg.strip() != "":
             messages.append(f"Berater (Frage): {ai_prompt_msg}")
-
-    # Konsolen-Log zur Überprüfung der Nachrichten
 
     # Wenn keine Nachrichten vorhanden sind (erste Interaktion)
     if not messages:
@@ -382,8 +380,6 @@ async def start_interaction(user_id: str):
         return {"frage": frage_text}
 
     else:
-        frage = ""
-        
         # Letzte 8 Einstiegsfragen abrufen
         recent_ai_prompts_to_avoid_raw = await get_recent_entry_questions(user_id)
         recent_ai_prompts_to_avoid = [
@@ -642,7 +638,7 @@ async def start_interaction(user_id: str):
             """
 
         # Fallback-Prompt falls mode auf "normal" zurückgefallen ist
-        if mode == "normal" and 'prompt' not in dir():
+        if mode == "normal" and 'prompt' not in locals():
             prompt = f"""
             Du bist ein kreativer, neugieriger Gesprächspartner. Stelle EINE kurze, persönliche Frage.
             Vermeide: {", ".join(recent_ai_prompts_to_avoid)}
