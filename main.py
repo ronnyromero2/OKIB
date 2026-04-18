@@ -243,7 +243,7 @@ def calculate_next_due_date(recurrence_type: str, recurrence_day: int = None, la
     if recurrence_type == "monthly_first":
         # Jeden ersten des Monats
         next_month = today.replace(day=1)
-        if today.day >= 1:  # Wenn heute schon nach dem 1. ist
+        if today.day > 1:
             if next_month.month == 12:
                 next_month = next_month.replace(year=next_month.year + 1, month=1)
             else:
