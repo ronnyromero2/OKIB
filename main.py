@@ -933,7 +933,7 @@ async def create_todo_from_chat(user_id: str, message: str):
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Titel (kurz und prägnant, max. 4 Wörter, korrektes Deutsch mit Großschreibung und Umlauten), Fälligkeitsdatum (YYYY-MM-DD oder null) und Priorität (low/medium/high). Nachricht: '{message}'. Antworte nur mit JSON: {{\"title\": \"...\", \"due_date\": \"...\", \"priority\": \"...\"}}"
+            "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Arzttermin buchen' statt 'ich muss einen Arzt anrufen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Fälligkeitsdatum (YYYY-MM-DD oder null) und Priorität (low/medium/high). Nachricht: '{message}'. Antworte nur mit JSON: {{\"title\": \"...\", \"due_date\": \"...\", \"priority\": \"...\"}}"
         }],
         response_format={"type": "json_object"},
         temperature=0
