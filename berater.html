@@ -552,16 +552,26 @@ async function loadTodos() {
                             todo.priority === 'medium' ? '🟡 ' : '🟢 ';
         
         let dueDateText = '';
+        let dueDateColor = '';
         if (todo.due_date) {
           const today = new Date().toISOString().split('T')[0];
+          const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+          const formatted = todo.due_date.split('-').reverse().join('.');
           if (todo.due_date < today) {
-            dueDateText = ' ⚠️ Überfällig';
+            dueDateText = ` ❌ ${formatted}`;
+            dueDateColor = 'color: white;';
           } else if (todo.due_date === today) {
-            dueDateText = ' 📅 Heute fällig';
+            dueDateText = ` ${formatted}`;
+            dueDateColor = 'color: red;';
+          } else if (todo.due_date === tomorrow) {
+            dueDateText = ` ${formatted}`;
+            dueDateColor = 'color: orange;';
+          } else {
+            dueDateText = ` 📅 ${formatted}`;
           }
         }
-        
-        label.textContent = `${priorityEmoji}${todo.title}${dueDateText}`;
+
+        label.innerHTML = `${priorityEmoji}${todo.title}<span style="${dueDateColor}">${dueDateText}</span>`;
         
         if (todo.completed) todoDiv.classList.add("done");
         

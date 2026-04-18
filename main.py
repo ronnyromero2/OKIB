@@ -680,26 +680,29 @@ async def start_interaction(user_id: str):
 @app.post("/chat/{user_id}")
 async def chat(user_id: str, chat_input: ChatInput):
     user_message = chat_input.message
-    # Prüfe auf To-Do/Routine Erstellung
-    if extract_routine_intent(user_message):
+
+    # Kontext für Intent-Erkennung laden
+    recent_history = supabase.table("conversation_history").select("ai_response").eq("user_id", user_id).order("timestamp", desc=True).limit(2).execute().data
+
+    intent = detect_intent(user_message, recent_history)
+
+    if intent == "routine":
         try:
             task, frequency = await create_routine_from_chat(user_id, user_message)
             frequency_text = {
-                'daily': 'täglich', 
+                'daily': 'täglich',
                 'weekly': 'wöchentlich',
                 'monthly': 'monatlich',
                 'biweekly': 'alle zwei Wochen',
                 'triweekly': 'alle drei Wochen',
                 'fourweekly': 'alle vier Wochen'
             }.get(frequency, frequency)
-            
             response = f"✅ Ich habe eine neue Routine '{task}' erstellt, Wiederholung {frequency_text}."
-            
             return {"response": response, "created_routine": True}
         except Exception as e:
             print(f"Fehler beim Erstellen der Routine: {e}")
             return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
-    elif extract_todo_intent(user_message):
+    elif intent == "todo":
         try:
             title, priority, due_date = await create_todo_from_chat(user_id, user_message)
             priority_text = {'high': 'Hoch', 'medium': 'Medium', 'low': 'Niedrig'}.get(priority, 'Medium')
@@ -908,51 +911,20 @@ async def chat(user_id: str, chat_input: ChatInput):
         print(f"Fehler in der Chat-Funktion: {e}")
         raise HTTPException(status_code=500, detail="Entschuldige, es gab ein Problem beim Verarbeiten deiner Anfrage. Bitte versuche es später noch einmal.")
 
-def extract_routine_intent(message: str) -> bool:
-    patterns = [
-        # Täglich
-        r'(?:täglich|jeden tag|daily)',
-        
-        # Wöchentlich
-        r'(?:wöchentlich|jede woche|weekly)',
-        r'(?:jeden|jede)\s+(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)',
-        
-        # Mehrwöchig
-        r'(?:alle)\s+(?:zwei|drei|vier)\s+(?:wochen|tage)',
-        
-        # Monatlich
-        r'(?:monatlich|jeden monat|monthly)',
-        r'(?:jeden)\s+(?:\d+\.)\s+(?:des monats|tag)',
-        r'(?:jeden ersten|jeden letzten)\s+(?:tag des monats)',
-        r'(?:am ersten)',
-        
-        # Mehrmonatig
-        r'(?:alle)\s+(?:\d+)\s+(?:monate|wochen)',
-        
-        # Jährlich
-        r'(?:jährlich|jedes jahr|yearly|annually)',
-        r'(?:jeden)\s+(?:\d+\.)\s+(?:januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)',
-        
-        # Allgemein
-        r'(?:routine|gewohnheit|habit)',
-        r'(?:regelmäßig|wiederkehrend)',
-    ]
-    return any(re.search(pattern, message.lower()) for pattern in patterns)
-
-def extract_todo_intent(message: str) -> bool:
-    # Wenn Zeitintervalle → Routine, nicht To-Do
-    if any(re.search(p, message.lower()) for p in [
-        r'(?:alle|jeden|täglich|wöchentlich|monatlich)',
-        r'(?:zwei|drei|vier)\s+(?:wochen|tage|monate)'
-    ]):
-        return False
-    
-    patterns = [
-        r'(?:erstelle|neue|neues|mach|add).*?(?:to-?do|aufgabe|task)',
-        r'(?:ich muss|sollte|möchte|will).*?(?:kaufen|erledigen)',  # Zeitangaben entfernt
-        r'(?:unbedingt).*?(?:muss|sollte)',
-    ]
-    return any(re.search(pattern, message.lower()) for pattern in patterns)
+def detect_intent(user_message: str, recent_history: list) -> str:
+    """Erkennt ob die Nachricht ein Todo, eine Routine oder normaler Chat ist."""
+    context = ""
+    if recent_history:
+        last = recent_history[-1]
+        if last.get("ai_response"):
+            context = f"Letzte KI-Antwort: {last['ai_response']}\n"
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos, einer wiederkehrenden Routine, oder normaler Chat? Antworte nur mit: todo, routine oder chat"}],
+        temperature=0,
+        max_tokens=10
+    )
+    return response.choices[0].message.content.strip().lower()
 
 async def create_todo_from_chat(user_id: str, message: str):
     """Erstellt To-Do aus Chat-Message via GPT"""
