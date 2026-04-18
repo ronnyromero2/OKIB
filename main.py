@@ -987,19 +987,18 @@ async def create_todo_from_chat(user_id: str, message: str):
     due_date = extract_due_date(message)
     
     todo_data = {
-        "user_id": user_id,  # ← Direkt hier
+        "user_id": user_id,
         "title": title,
-        "description": "",  # ← Hinzufügen
+        "description": "",
         "priority": priority,
         "status": "open",
         "category": "chat_erstellt",
         "due_date": due_date,
-        "completed": False,  # ← Hinzufügen
-        "completed_at": None,  # ← Hinzufügen
-        "is_recurring": False,  # ← Hinzufügen
-        "recurrence_type": None,  # ← Hinzufügen
-        "recurrence_details": None,  # ← Hinzufügen
-        "parent_todo_id": None  # ← Hinzufügen
+        "completed": False,
+        "completed_at": None,
+        "is_recurring": False,
+        "recurrence_type": None,
+        "parent_todo_id": None
     }
     
     result = supabase.table("todos").insert(todo_data).execute()
