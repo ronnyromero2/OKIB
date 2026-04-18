@@ -964,91 +964,42 @@ async def create_todo_from_chat(user_id: str, message: str):
 
 async def create_routine_from_chat(user_id: str, message: str):
     """Erstellt Routine aus Chat-Message"""
-    task = extract_title_from_message(message)
-    
-    # Standard day setzen
-    day = "monday"  # Default
-    frequency = "daily"
-    
-    # Monatliche Routinen ZUERST prüfen (höhere Priorität)
-    if re.search(r'(?:immer\s+)?(?:am|jeden)\s+ersten', message.lower()):
-        frequency = "monthly"
-        day = "1"
-    elif re.search(r'(?:am|jeden)\s+letzten', message.lower()):
-        frequency = "monthly"
-        day = "last"  # Spezieller Marker für letzten Tag
-    elif re.search(r'(?:am|jeden)\s+(\d+)\.?\s*(?:des monats|tag)?', message.lower()):
-        match = re.search(r'(?:am|jeden)\s+(\d+)', message.lower())
-        if match:
-            frequency = "monthly"
-            day = match.group(1)
-    elif any(word in message.lower() for word in ['monatlich', 'jeden monat', 'monthly']):
-        frequency = "monthly"
-        day = "1"
-    # Wöchentliche Routinen
-    elif re.search(r'montag', message.lower()): 
-        frequency = "weekly"
-        day = "monday"
-    elif re.search(r'dienstag', message.lower()): 
-        frequency = "weekly"
-        day = "tuesday"
-    elif re.search(r'mittwoch', message.lower()): 
-        frequency = "weekly"
-        day = "wednesday"
-    elif re.search(r'donnerstag', message.lower()): 
-        frequency = "weekly"
-        day = "thursday"
-    elif re.search(r'freitag', message.lower()): 
-        frequency = "weekly"
-        day = "friday"
-    elif re.search(r'samstag', message.lower()): 
-        frequency = "weekly"
-        day = "saturday"
-    elif re.search(r'sonntag', message.lower()): 
-        frequency = "weekly"
-        day = "sunday"
-    elif any(word in message.lower() for word in ['wöchentlich', 'jede woche', 'weekly']):
-        frequency = "weekly"
-    elif re.search(r'alle\s+(?:zwei|2)\s+wochen', message.lower()):
-        frequency = "biweekly"
-        day = str(datetime.datetime.now().day)  # Heute als Starttag
-    elif re.search(r'alle\s+(?:drei|3)\s+wochen', message.lower()):
-        frequency = "triweekly"
-        day = str(datetime.datetime.now().day)
-    elif re.search(r'alle\s+(?:vier|4)\s+wochen', message.lower()):
-        frequency = "fourweekly"
-        day = str(datetime.datetime.now().day)
-    
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel (kurz und prägnant, max. 4 Wörter, korrektes Deutsch mit Großschreibung und Umlauten), Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; sonst null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
+    data = json.loads(response.choices[0].message.content)
+    task = data.get("task", "Neue Routine")
+    frequency = data.get("frequency", "daily")
+    day = data.get("day") or "monday"
+
     # Berechne next_due_date basierend auf frequency
     next_due = None
     if frequency == "monthly":
-        next_due = calculate_next_due_date(f"monthly_custom", int(day) if day.isdigit() else None)
+        next_due = calculate_next_due_date("monthly_custom", int(day) if str(day).isdigit() else None)
     elif frequency in ["biweekly", "triweekly", "fourweekly"]:
         weeks = {"biweekly": 2, "triweekly": 3, "fourweekly": 4}[frequency]
         next_due = (datetime.datetime.now() + datetime.timedelta(weeks=weeks)).strftime("%Y-%m-%d")
-    
+
     routine_data = {
         "task": task,
         "checked": False,
-        "day": day,  # Bei monthly: Tag des Monats, bei weekly: Wochentag
+        "day": str(day),
         "time": None,
         "last_checked_date": None,
         "user_id": user_id,
         "missed_count": 0,
         "missed_dates": [],
-        "frequency": frequency,  # NEU
-        "recurrence_day": int(day) if frequency == "monthly" and day.isdigit() else None,  # NEU
-        "next_due_date": next_due,  # NEU
-        "recurrence_details": {  # NEU
-            "type": frequency,
-            "day_of_month": day if frequency == "monthly" else None,
-            "day_of_week": day if frequency == "weekly" else None,
-            "interval_weeks": {"biweekly": 2, "triweekly": 3, "fourweekly": 4}.get(frequency)
-        }
+        "frequency": frequency,
+        "recurrence_day": int(day) if frequency == "monthly" and str(day).isdigit() else None,
+        "next_due_date": next_due,
     }
-    
+
     result = supabase.table("routines").insert(routine_data).execute()
-    
+
     return task, frequency
     
 # Automatischer Wochen- und Monatsbericht
