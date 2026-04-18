@@ -547,25 +547,28 @@ async function loadTodos() {
         
         const label = document.createElement("label");
         label.htmlFor = `todo_${todo.id}`;
-        
+
         const today = new Date().toISOString().split('T')[0];
         const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+        const dayAfterTomorrow = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
         const isOverdue = todo.due_date && todo.due_date < today;
 
         const priorityEmoji = isOverdue ? '💀 ' : (todo.priority === 'high' ? '🔴 ' : '');
 
+        let itemColor = '';
+        let fontWeight = '';
+        if (isOverdue) { itemColor = 'color: red;'; fontWeight = 'font-weight: bold;'; }
+        else if (todo.due_date === today) itemColor = 'color: red;';
+        else if (todo.due_date === tomorrow) itemColor = 'color: orange;';
+        else if (todo.due_date === dayAfterTomorrow) itemColor = 'color: yellow;';
+
         let dueDateHtml = '';
         if (todo.due_date) {
           const formatted = todo.due_date.split('-').reverse().join('.');
-          let color = '';
-          if (isOverdue) color = 'color: white;';
-          else if (todo.due_date === today) color = 'color: red;';
-          else if (todo.due_date === tomorrow) color = 'color: orange;';
-          dueDateHtml = `<span style="margin-left: auto; padding-left: 1em; ${color}">📅 ${formatted}</span>`;
+          dueDateHtml = `<span style="padding-left: 2em;">📅 ${formatted}</span>`;
         }
 
-        label.style.display = 'flex';
-        label.style.width = '100%';
+        label.style.cssText = `display: flex; max-width: 500px; ${itemColor} ${fontWeight}`;
         label.innerHTML = `<span>${priorityEmoji}${todo.title}</span>${dueDateHtml}`;
         
         if (todo.completed) todoDiv.classList.add("done");
