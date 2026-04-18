@@ -680,7 +680,7 @@ async def start_interaction(user_id: str):
 @app.post("/chat/{user_id}")
 async def chat(user_id: str, chat_input: ChatInput):
     user_message = chat_input.message
-    # 🔥 TASK DETECTION: Prüfe auf To-Do/Routine Erstellung
+    # Prüfe auf To-Do/Routine Erstellung
     if extract_routine_intent(user_message):
         try:
             task, frequency = await create_routine_from_chat(user_id, user_message)
@@ -790,7 +790,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Routinen laden
         routines_text = "Keine Routinen definiert." # Standardwert
         try:
-            today = datetime.datetime.now().strftime("%A")
+            today_weekday = datetime.datetime.now().strftime("%A")
             routines_response = supabase.table("routines").select("task, checked, day, missed_count").eq("user_id", user_id).execute()
             routines = routines_response.data
             if routines:
@@ -801,9 +801,9 @@ async def chat(user_id: str, chat_input: ChatInput):
         # To-Dos laden
         todos_text = "Keine To-Dos definiert."
         try:
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            today_date = datetime.datetime.now().strftime("%Y-%m-%d")
             open_todos = supabase.table("todos").select("title, priority, due_date, category, status").eq("user_id", user_id).in_("status", ["open", "in_progress"]).limit(10).execute().data
-            overdue_todos = supabase.table("todos").select("title, priority, due_date, category").eq("user_id", user_id).lt("due_date", today).neq("status", "completed").neq("status", "archived").execute().data
+            overdue_todos = supabase.table("todos").select("title, priority, due_date, category").eq("user_id", user_id).lt("due_date", today_date).neq("status", "completed").neq("status", "archived").execute().data
             
             if open_todos or overdue_todos:
                 todos_parts = []
