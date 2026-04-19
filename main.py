@@ -691,7 +691,17 @@ async def chat(user_id: str, chat_input: ChatInput):
             info = await extract_routine_info(user_message)
             task = info.get("task", "Neue Routine")
             frequency = info.get("frequency", "daily")
-            day = (info.get("day") or "monday").lower()
+            raw_day = (info.get("day") or "").lower().strip()
+            day = raw_day or "monday"
+
+            if frequency == "weekly" and raw_day not in WEEKDAY_NAMES:
+                return {"response": f"An welchem Wochentag soll '{task}' stattfinden?", "created_routine": False}
+
+            if frequency == "monthly" and not (raw_day.isdigit() or raw_day == "last"):
+                return {"response": f"An welchem Tag des Monats soll '{task}' stattfinden (z.B. '1' für den Ersten)?", "created_routine": False}
+
+            if frequency in ["biweekly", "triweekly", "fourweekly"] and raw_day not in WEEKDAY_NAMES:
+                return {"response": f"An welchem Wochentag soll '{task}' stattfinden?", "created_routine": False}
 
             if frequency in ["biweekly", "triweekly", "fourweekly"] and day in WEEKDAY_NAMES:
                 weeks = {"biweekly": 2, "triweekly": 3, "fourweekly": 4}[frequency]
