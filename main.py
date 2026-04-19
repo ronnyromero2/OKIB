@@ -717,6 +717,10 @@ async def chat(user_id: str, chat_input: ChatInput):
                 next_due = calculate_next_due_date("monthly_custom", int(day) if str(day).isdigit() else None)
             elif frequency == "weekly" and day in WEEKDAY_NAMES:
                 next_due = get_next_weekday(day).strftime("%Y-%m-%d")
+            elif frequency == "quarterly":
+                next_due = (datetime.datetime.now() + datetime.timedelta(days=91)).strftime("%Y-%m-%d")
+            elif frequency == "biannual":
+                next_due = (datetime.datetime.now() + datetime.timedelta(days=183)).strftime("%Y-%m-%d")
 
             await insert_routine(user_id, task, frequency, day, next_due)
             freq_de = FREQUENCY_TEXT.get(frequency, frequency)
@@ -960,7 +964,7 @@ def detect_intent(user_message: str, recent_history: list) -> str:
             context = f"Letzte KI-Antwort: {last['ai_response']}\n"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos, einer wiederkehrenden Routine, eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, routine_datum oder chat"}],
+        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos (z.B. 'bis Freitag erledigen'), einer wiederkehrenden Routine (z.B. 'jeden Montag', 'monatlich', 'zweimal im Jahr', 'vierteljährlich'), eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, routine_datum oder chat"}],
         temperature=0,
         max_tokens=15
     )
@@ -980,7 +984,8 @@ async def create_todo_from_chat(user_id: str, message: str):
     )
     data = json.loads(response.choices[0].message.content)
     title = data.get("title", "Neue Aufgabe")
-    due_date = data.get("due_date") or None
+    due_date_raw = data.get("due_date")
+    due_date = due_date_raw if (due_date_raw and re.match(r'^\d{4}-\d{2}-\d{2}$', str(due_date_raw))) else None
     priority = data.get("priority", "medium")
     
     todo_data = {
@@ -1004,7 +1009,8 @@ async def create_todo_from_chat(user_id: str, message: str):
 
 FREQUENCY_TEXT = {
     'daily': 'täglich', 'weekly': 'wöchentlich', 'monthly': 'monatlich',
-    'biweekly': 'alle zwei Wochen', 'triweekly': 'alle drei Wochen', 'fourweekly': 'alle vier Wochen'
+    'biweekly': 'alle zwei Wochen', 'triweekly': 'alle drei Wochen', 'fourweekly': 'alle vier Wochen',
+    'quarterly': 'vierteljährlich', 'biannual': 'halbjährlich'
 }
 DAY_NAMES_DE = {
     "monday": "Montag", "tuesday": "Dienstag", "wednesday": "Mittwoch",
@@ -1022,7 +1028,7 @@ async def extract_routine_info(message: str) -> dict:
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; sonst null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; bei quarterly/biannual/daily: null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
         response_format={"type": "json_object"},
         temperature=0
     )
@@ -1053,7 +1059,7 @@ async def create_routine_from_chat(user_id: str, message: str):
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; sonst null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; bei quarterly/biannual/daily: null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
         response_format={"type": "json_object"},
         temperature=0
     )
