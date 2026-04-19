@@ -1141,11 +1141,10 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     {profil_text}
     
     Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
-    ```
     """
 
     response = client.chat.completions.create(
-        model="gpt-4", # Für den Hauptbericht bleiben wir bei GPT-4
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user}
