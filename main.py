@@ -694,8 +694,8 @@ async def chat(user_id: str, chat_input: ChatInput):
             raw_day = (info.get("day") or "").lower().strip()
             day = raw_day or "monday"
 
-            # Unbekannte Häufigkeit → nachfragen
-            if frequency not in FREQUENCY_TEXT:
+            # Unbekannte Häufigkeit → nachfragen (every_N_months ist immer gültig)
+            if frequency not in FREQUENCY_TEXT and not re.match(r'^every_\d+_months$', frequency):
                 question = f"Wie oft soll '{task}' stattfinden? (z.B. täglich, wöchentlich, monatlich, vierteljährlich, halbjährlich)"
                 await _save_conversation_entry(user_id, user_message, question, "")
                 return {"response": question, "created_routine": False}
@@ -734,9 +734,13 @@ async def chat(user_id: str, chat_input: ChatInput):
                 next_due = (datetime.datetime.now() + datetime.timedelta(days=91)).strftime("%Y-%m-%d")
             elif frequency == "biannual":
                 next_due = (datetime.datetime.now() + datetime.timedelta(days=183)).strftime("%Y-%m-%d")
+            else:
+                m = re.match(r'^every_(\d+)_months$', frequency)
+                if m:
+                    next_due = add_months(datetime.datetime.now(), int(m.group(1))).strftime("%Y-%m-%d")
 
             await insert_routine(user_id, task, frequency, day, next_due)
-            freq_de = FREQUENCY_TEXT.get(frequency, frequency)
+            freq_de = get_frequency_text(frequency)
             day_de = DAY_NAMES_DE.get(day, "")
             day_suffix = f" am {day_de}" if day_de and frequency != "daily" else ""
             return {"response": f"✅ Routine '{task}' erstellt, {freq_de}{day_suffix}.", "created_routine": True}
@@ -1041,7 +1045,7 @@ async def extract_routine_info(message: str) -> dict:
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; bei quarterly/biannual/daily: null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit: eine aus (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual), oder bei anderen Monatsintervallen 'every_N_months' (z.B. 'every_5_months' für alle 5 Monate). Tag: bei weekly den Wochentag auf Englisch; bei monthly die Tagesnummer oder 'last'; sonst null. Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
         response_format={"type": "json_object"},
         temperature=0
     )
@@ -1056,6 +1060,22 @@ async def insert_routine(user_id: str, task: str, frequency: str, day: str, next
         "next_due_date": next_due,
     }
     supabase.table("routines").insert(routine_data).execute()
+
+def add_months(dt: datetime.datetime, months: int) -> datetime.datetime:
+    import calendar
+    month = dt.month + months
+    year = dt.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return dt.replace(year=year, month=month, day=min(dt.day, last_day))
+
+def get_frequency_text(frequency: str) -> str:
+    if frequency in FREQUENCY_TEXT:
+        return FREQUENCY_TEXT[frequency]
+    m = re.match(r'^every_(\d+)_months$', frequency)
+    if m:
+        return f"alle {m.group(1)} Monate"
+    return frequency
 
 async def parse_routine_clarification(user_message: str, last_ai_response: str) -> dict:
     today = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -1072,7 +1092,7 @@ async def create_routine_from_chat(user_id: str, message: str):
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; bei quarterly/biannual/daily: null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit: eine aus (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual), oder bei anderen Monatsintervallen 'every_N_months' (z.B. 'every_5_months' für alle 5 Monate). Tag: bei weekly den Wochentag auf Englisch; bei monthly die Tagesnummer oder 'last'; sonst null. Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
         response_format={"type": "json_object"},
         temperature=0
     )
@@ -1340,6 +1360,12 @@ def get_routines(user_id: str):
                     if datetime.datetime.now().day == last_day.day:
                         today_routines.append(routine)
             
+            # Nicht-standardmäßige Monatsintervalle: basierend auf next_due_date
+            elif re.match(r'^every_\d+_months$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
+                next_due = routine.get('next_due_date')
+                if next_due == current_date:
+                    today_routines.append(routine)
+
             # Gestern-Routinen analog
             if frequency == 'weekly' and routine.get('day') == yesterday:
                 yesterday_routines.append(routine)
@@ -1355,6 +1381,9 @@ def get_routines(user_id: str):
                     last_day_prev = (yesterday_date_obj.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
                     if yesterday_date_obj.day == last_day_prev.day:
                         yesterday_routines.append(routine)
+            elif re.match(r'^every_\d+_months$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
+                if routine.get('next_due_date') == yesterday_date:
+                    yesterday_routines.append(routine)
 
         all_routines = []
         
@@ -1466,10 +1495,23 @@ def update_routine_status(update: RoutineUpdate):
             target_date = current_date  # Fallback
               
         # Update checked-Status UND last_checked_date
-        result = supabase.table("routines").update({
-            "checked": update.checked,
-            "last_checked_date": target_date
-        }).eq("id", routine_id).eq("user_id", user_id).execute()
+        update_data = {"checked": update.checked, "last_checked_date": target_date}
+
+        # Bei Intervall-Routinen nach Abhaken next_due_date neu berechnen
+        if update.checked:
+            months_match = re.match(r'^every_(\d+)_months$', frequency)
+            if months_match:
+                n = int(months_match.group(1))
+                update_data["next_due_date"] = add_months(datetime.datetime.now(), n).strftime("%Y-%m-%d")
+            elif frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
+                weeks_map = {'biweekly': 2, 'triweekly': 3, 'fourweekly': 4}
+                days_map = {'quarterly': 91, 'biannual': 183}
+                if frequency in weeks_map:
+                    update_data["next_due_date"] = (datetime.datetime.now() + datetime.timedelta(weeks=weeks_map[frequency])).strftime("%Y-%m-%d")
+                elif frequency in days_map:
+                    update_data["next_due_date"] = (datetime.datetime.now() + datetime.timedelta(days=days_map[frequency])).strftime("%Y-%m-%d")
+
+        result = supabase.table("routines").update(update_data).eq("id", routine_id).eq("user_id", user_id).execute()
         
         return {"status": "success"}
         
