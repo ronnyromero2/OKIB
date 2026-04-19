@@ -688,19 +688,49 @@ async def chat(user_id: str, chat_input: ChatInput):
 
     if intent == "routine":
         try:
-            task, frequency = await create_routine_from_chat(user_id, user_message)
-            frequency_text = {
-                'daily': 'täglich',
-                'weekly': 'wöchentlich',
-                'monthly': 'monatlich',
-                'biweekly': 'alle zwei Wochen',
-                'triweekly': 'alle drei Wochen',
-                'fourweekly': 'alle vier Wochen'
-            }.get(frequency, frequency)
-            response = f"✅ Ich habe eine neue Routine '{task}' erstellt, Wiederholung {frequency_text}."
-            return {"response": response, "created_routine": True}
+            info = await extract_routine_info(user_message)
+            task = info.get("task", "Neue Routine")
+            frequency = info.get("frequency", "daily")
+            day = (info.get("day") or "monday").lower()
+
+            if frequency in ["biweekly", "triweekly", "fourweekly"] and day in WEEKDAY_NAMES:
+                weeks = {"biweekly": 2, "triweekly": 3, "fourweekly": 4}[frequency]
+                option1 = get_next_weekday(day)
+                option2 = option1 + datetime.timedelta(weeks=weeks)
+                day_de = DAY_NAMES_DE[day]
+                freq_de = FREQUENCY_TEXT[frequency]
+                question = f"Ich richte '{task}' als Routine ein ({freq_de}, {day_de}s). Welcher {day_de} soll der erste Termin sein — **{option1.strftime('%d.%m.')}** oder **{option2.strftime('%d.%m.')}**?"
+                return {"response": question, "created_routine": False}
+
+            next_due = None
+            if frequency == "monthly":
+                next_due = calculate_next_due_date("monthly_custom", int(day) if str(day).isdigit() else None)
+            elif frequency == "weekly" and day in WEEKDAY_NAMES:
+                next_due = get_next_weekday(day).strftime("%Y-%m-%d")
+
+            await insert_routine(user_id, task, frequency, day, next_due)
+            freq_de = FREQUENCY_TEXT.get(frequency, frequency)
+            day_de = DAY_NAMES_DE.get(day, "")
+            day_suffix = f" am {day_de}" if day_de and frequency != "daily" else ""
+            return {"response": f"✅ Routine '{task}' erstellt, {freq_de}{day_suffix}.", "created_routine": True}
         except Exception as e:
             print(f"Fehler beim Erstellen der Routine: {e}")
+            return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
+
+    elif intent == "routine_datum":
+        try:
+            last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
+            info = await parse_routine_clarification(user_message, last_ai)
+            task = info.get("task", "Routine")
+            frequency = info.get("frequency", "biweekly")
+            day = (info.get("day") or "monday").lower()
+            chosen_date = info.get("chosen_date")
+            await insert_routine(user_id, task, frequency, day, chosen_date)
+            freq_de = FREQUENCY_TEXT.get(frequency, frequency)
+            date_str = datetime.datetime.fromisoformat(chosen_date).strftime('%d.%m.%Y') if chosen_date else ""
+            return {"response": f"✅ Routine '{task}' erstellt, {freq_de} ab {date_str}.", "created_routine": True}
+        except Exception as e:
+            print(f"Fehler beim Vervollständigen der Routine: {e}")
             return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
     elif intent == "todo":
         try:
@@ -920,9 +950,9 @@ def detect_intent(user_message: str, recent_history: list) -> str:
             context = f"Letzte KI-Antwort: {last['ai_response']}\n"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos, einer wiederkehrenden Routine, oder normaler Chat? Antworte nur mit: todo, routine oder chat"}],
+        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos, einer wiederkehrenden Routine, eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, routine_datum oder chat"}],
         temperature=0,
-        max_tokens=10
+        max_tokens=15
     )
     return response.choices[0].message.content.strip().lower()
 
@@ -961,6 +991,52 @@ async def create_todo_from_chat(user_id: str, message: str):
     result = supabase.table("todos").insert(todo_data).execute()
     
     return title, priority, due_date
+
+FREQUENCY_TEXT = {
+    'daily': 'täglich', 'weekly': 'wöchentlich', 'monthly': 'monatlich',
+    'biweekly': 'alle zwei Wochen', 'triweekly': 'alle drei Wochen', 'fourweekly': 'alle vier Wochen'
+}
+DAY_NAMES_DE = {
+    "monday": "Montag", "tuesday": "Dienstag", "wednesday": "Mittwoch",
+    "thursday": "Donnerstag", "friday": "Freitag", "saturday": "Samstag", "sunday": "Sonntag"
+}
+WEEKDAY_NAMES = set(DAY_NAMES_DE.keys())
+
+def get_next_weekday(weekday_name: str) -> datetime.date:
+    weekday_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+    today = datetime.date.today()
+    days_ahead = (weekday_map.get(weekday_name.lower(), 0) - today.weekday()) % 7
+    return today + datetime.timedelta(days=days_ahead or 7)
+
+async def extract_routine_info(message: str) -> dict:
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; sonst null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
+    return json.loads(response.choices[0].message.content)
+
+async def insert_routine(user_id: str, task: str, frequency: str, day: str, next_due: str = None):
+    routine_data = {
+        "task": task, "checked": False, "day": str(day), "time": None,
+        "last_checked_date": None, "user_id": user_id, "missed_count": 0, "missed_dates": [],
+        "frequency": frequency,
+        "recurrence_day": int(day) if frequency == "monthly" and str(day).isdigit() else None,
+        "next_due_date": next_due,
+    }
+    supabase.table("routines").insert(routine_data).execute()
+
+async def parse_routine_clarification(user_message: str, last_ai_response: str) -> dict:
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Heute ist {today}. Die KI hat gefragt: '{last_ai_response}'. Der Nutzer hat geantwortet: '{user_message}'. Extrahiere: Aufgabentitel, Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly), Tag (weekday auf Englisch oder null) und das vom Nutzer gewählte Datum (YYYY-MM-DD). Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\", \"chosen_date\": \"...\"}}"}],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
+    return json.loads(response.choices[0].message.content)
 
 async def create_routine_from_chat(user_id: str, message: str):
     """Erstellt Routine aus Chat-Message"""
