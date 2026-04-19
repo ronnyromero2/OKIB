@@ -686,82 +686,83 @@ async def chat(user_id: str, chat_input: ChatInput):
 
     intent = detect_intent(user_message, recent_history)
 
-    if intent == "routine":
+    if intent in ["routine", "routine_datum"]:
         try:
-            info = await extract_routine_info(user_message)
-            task = info.get("task", "Neue Routine")
-            frequency = info.get("frequency", "daily")
-            raw_day = (info.get("day") or "").lower().strip()
-            day = raw_day or "monday"
-
-            # Unbekannte Häufigkeit → nachfragen (every_N_months ist immer gültig)
-            if frequency not in FREQUENCY_TEXT and not re.match(r'^every_\d+_months$', frequency):
-                question = f"Wie oft soll '{task}' stattfinden? (z.B. täglich, wöchentlich, monatlich, vierteljährlich, halbjährlich)"
-                await _save_conversation_entry(user_id, user_message, question, "")
-                return {"response": question, "created_routine": False}
-
-            if frequency == "weekly" and raw_day not in WEEKDAY_NAMES:
-                question = f"An welchem Wochentag soll '{task}' stattfinden?"
-                await _save_conversation_entry(user_id, user_message, question, "")
-                return {"response": question, "created_routine": False}
-
-            if frequency == "monthly" and not (raw_day.isdigit() or raw_day == "last"):
-                question = f"An welchem Tag des Monats soll '{task}' stattfinden (z.B. '1' für den Ersten)?"
-                await _save_conversation_entry(user_id, user_message, question, "")
-                return {"response": question, "created_routine": False}
-
-            if frequency in ["biweekly", "triweekly", "fourweekly"] and raw_day not in WEEKDAY_NAMES:
-                question = f"An welchem Wochentag soll '{task}' stattfinden?"
-                await _save_conversation_entry(user_id, user_message, question, "")
-                return {"response": question, "created_routine": False}
-
-            if frequency in ["biweekly", "triweekly", "fourweekly"] and day in WEEKDAY_NAMES:
-                weeks = {"biweekly": 2, "triweekly": 3, "fourweekly": 4}[frequency]
-                option1 = get_next_weekday(day)
-                option2 = option1 + datetime.timedelta(weeks=weeks)
-                day_de = DAY_NAMES_DE[day]
-                freq_de = FREQUENCY_TEXT[frequency]
-                question = f"Ich richte '{task}' als Routine ein ({freq_de}, {day_de}s). Welcher {day_de} soll der erste Termin sein — **{option1.strftime('%d.%m.')}** oder **{option2.strftime('%d.%m.')}**?"
-                await _save_conversation_entry(user_id, user_message, question, "")
-                return {"response": question, "created_routine": False}
-
-            next_due = None
-            if frequency == "monthly":
-                next_due = calculate_next_due_date("monthly_custom", int(day) if str(day).isdigit() else None)
-            elif frequency == "weekly" and day in WEEKDAY_NAMES:
-                next_due = get_next_weekday(day).strftime("%Y-%m-%d")
-            elif frequency == "quarterly":
-                next_due = (datetime.datetime.now() + datetime.timedelta(days=91)).strftime("%Y-%m-%d")
-            elif frequency == "biannual":
-                next_due = (datetime.datetime.now() + datetime.timedelta(days=183)).strftime("%Y-%m-%d")
+            if intent == "routine_datum":
+                last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
+                info = await parse_routine_clarification(user_message, last_ai)
             else:
-                m = re.match(r'^every_(\d+)_months$', frequency)
-                if m:
-                    next_due = add_months(datetime.datetime.now(), int(m.group(1))).strftime("%Y-%m-%d")
+                info = await extract_routine_info(user_message)
 
-            await insert_routine(user_id, task, frequency, day, next_due)
-            freq_de = get_frequency_text(frequency)
+            task = info.get("task", "Neue Routine")
+            interval_days = info.get("interval_days")
+            interval_months = info.get("interval_months")
+            weekday = (info.get("weekday") or "").lower().strip()
+            day_of_month = info.get("day_of_month")
+            chosen_date = info.get("chosen_date")
+
+            interval_days = int(interval_days) if interval_days is not None else None
+            interval_months = int(interval_months) if interval_months is not None else None
+
+            frequency = "daily"
+            day = ""
+            recurrence_day = None
+            next_due = None
+
+            if interval_days == 1:
+                frequency = "daily"
+
+            elif interval_days is not None and interval_days % 7 == 0:
+                weeks = interval_days // 7
+                if weeks == 1:
+                    frequency = "weekly"
+                    if not weekday:
+                        question = f"An welchem Wochentag soll '{task}' stattfinden?"
+                        await _save_conversation_entry(user_id, user_message, question, "")
+                        return {"response": question, "created_routine": False}
+                    day = weekday
+                    next_due = get_next_weekday(weekday).strftime("%Y-%m-%d") if not chosen_date else chosen_date
+                else:
+                    frequency = f"every_{interval_days}_days"
+                    if weekday and not chosen_date:
+                        option1 = get_next_weekday(weekday)
+                        option2 = option1 + datetime.timedelta(days=interval_days)
+                        day_de = DAY_NAMES_DE.get(weekday, weekday)
+                        question = f"Ich richte '{task}' als Routine ein (alle {weeks} Wochen, {day_de}s). Welcher {day_de} soll der erste Termin sein — **{option1.strftime('%d.%m.')}** oder **{option2.strftime('%d.%m.')}**?"
+                        await _save_conversation_entry(user_id, user_message, question, "")
+                        return {"response": question, "created_routine": False}
+                    day = weekday
+                    next_due = chosen_date or (datetime.datetime.now() + datetime.timedelta(days=interval_days)).strftime("%Y-%m-%d")
+
+            elif interval_days is not None:
+                frequency = f"every_{interval_days}_days"
+                next_due = chosen_date or (datetime.datetime.now() + datetime.timedelta(days=interval_days)).strftime("%Y-%m-%d")
+
+            elif interval_months == 1:
+                frequency = "monthly"
+                if day_of_month:
+                    day = str(day_of_month)
+                    recurrence_day = int(day_of_month) if str(day_of_month).isdigit() else None
+                    next_due = calculate_next_due_date("monthly_custom", recurrence_day)
+                elif not chosen_date:
+                    question = f"An welchem Tag des Monats soll '{task}' stattfinden (z.B. '1' für den Ersten)?"
+                    await _save_conversation_entry(user_id, user_message, question, "")
+                    return {"response": question, "created_routine": False}
+                else:
+                    next_due = chosen_date
+
+            elif interval_months is not None:
+                frequency = f"every_{interval_months}_months"
+                next_due = chosen_date or add_months(datetime.datetime.now(), interval_months).strftime("%Y-%m-%d")
+
+            await insert_routine(user_id, task, frequency, day, next_due, recurrence_day)
+            freq_text = get_frequency_text(frequency)
             day_de = DAY_NAMES_DE.get(day, "")
-            day_suffix = f" am {day_de}" if day_de and frequency != "daily" else ""
-            return {"response": f"✅ Routine '{task}' erstellt, {freq_de}{day_suffix}.", "created_routine": True}
+            day_suffix = f" am {day_de}" if day_de and frequency == "weekly" else ""
+            date_suffix = f" ab {datetime.datetime.fromisoformat(next_due).strftime('%d.%m.%Y')}" if next_due and frequency not in ["daily", "weekly", "monthly"] else ""
+            return {"response": f"✅ Routine '{task}' erstellt, {freq_text}{day_suffix}{date_suffix}.", "created_routine": True}
         except Exception as e:
             print(f"Fehler beim Erstellen der Routine: {e}")
-            return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
-
-    elif intent == "routine_datum":
-        try:
-            last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
-            info = await parse_routine_clarification(user_message, last_ai)
-            task = info.get("task", "Routine")
-            frequency = info.get("frequency", "biweekly")
-            day = (info.get("day") or "monday").lower()
-            chosen_date = info.get("chosen_date")
-            await insert_routine(user_id, task, frequency, day, chosen_date)
-            freq_de = FREQUENCY_TEXT.get(frequency, frequency)
-            date_str = datetime.datetime.fromisoformat(chosen_date).strftime('%d.%m.%Y') if chosen_date else ""
-            return {"response": f"✅ Routine '{task}' erstellt, {freq_de} ab {date_str}.", "created_routine": True}
-        except Exception as e:
-            print(f"Fehler beim Vervollständigen der Routine: {e}")
             return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
     elif intent == "todo":
         try:
@@ -1045,18 +1046,18 @@ async def extract_routine_info(message: str) -> dict:
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit: eine aus (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual), oder bei anderen Monatsintervallen 'every_N_months' (z.B. 'every_5_months' für alle 5 Monate). Tag: bei weekly den Wochentag auf Englisch; bei monthly die Tagesnummer oder 'last'; sonst null. Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht:\n1. Aufgabentitel: Nomen oder kurze Phrase, max. 4 Wörter, kein ganzer Satz, korrektes Deutsch (Beispiel: 'Sport machen' statt 'ich will Sport machen').\n2. Intervall: Gib ENTWEDER 'interval_days' (Anzahl Tage) ODER 'interval_months' (Anzahl Monate) an – nie beides. Beispiele: täglich→1Tag, wöchentlich→7Tage, alle 2 Wochen→14Tage, monatlich→1Monat, alle 3 Monate→3Monate, halbjährlich→6Monate, alle 5 Monate→5Monate, jährlich→12Monate.\n3. Optional: 'weekday' (monday-sunday) wenn ein Wochentag genannt wird; 'day_of_month' (Zahl 1-31 oder 'last') wenn ein Monatstag genannt wird.\nNachricht: '{message}'\nAntworte nur mit JSON: {{\"task\":\"...\",\"interval_days\":null,\"interval_months\":null,\"weekday\":null,\"day_of_month\":null}}"}],
         response_format={"type": "json_object"},
         temperature=0
     )
     return json.loads(response.choices[0].message.content)
 
-async def insert_routine(user_id: str, task: str, frequency: str, day: str, next_due: str = None):
+async def insert_routine(user_id: str, task: str, frequency: str, day: str, next_due: str = None, recurrence_day: int = None):
     routine_data = {
-        "task": task, "checked": False, "day": str(day), "time": None,
+        "task": task, "checked": False, "day": str(day) if day else "", "time": None,
         "last_checked_date": None, "user_id": user_id, "missed_count": 0, "missed_dates": [],
         "frequency": frequency,
-        "recurrence_day": int(day) if frequency == "monthly" and str(day).isdigit() else None,
+        "recurrence_day": recurrence_day,
         "next_due_date": next_due,
     }
     supabase.table("routines").insert(routine_data).execute()
@@ -1081,7 +1082,7 @@ async def parse_routine_clarification(user_message: str, last_ai_response: str) 
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Die KI hat gefragt: '{last_ai_response}'. Der Nutzer hat geantwortet: '{user_message}'. Extrahiere: Aufgabentitel, Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly), Tag (weekday auf Englisch oder null) und das vom Nutzer gewählte Datum (YYYY-MM-DD). Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\", \"chosen_date\": \"...\"}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Die KI hat gefragt: '{last_ai_response}'. Der Nutzer hat geantwortet: '{user_message}'. Extrahiere die vollständige Routine: Aufgabentitel, interval_days oder interval_months, weekday (monday-sunday oder null), day_of_month (Zahl oder 'last' oder null), chosen_date (YYYY-MM-DD wenn der Nutzer ein konkretes Datum gewählt hat, sonst null). Antworte mit JSON: {{\"task\":\"...\",\"interval_days\":null,\"interval_months\":null,\"weekday\":null,\"day_of_month\":null,\"chosen_date\":null}}"}],
         response_format={"type": "json_object"},
         temperature=0
     )
@@ -1360,8 +1361,8 @@ def get_routines(user_id: str):
                     if datetime.datetime.now().day == last_day.day:
                         today_routines.append(routine)
             
-            # Nicht-standardmäßige Monatsintervalle: basierend auf next_due_date
-            elif re.match(r'^every_\d+_months$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
+            # Intervall-Routinen: basierend auf next_due_date
+            elif re.match(r'^every_\d+_(days|months)$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
                 next_due = routine.get('next_due_date')
                 if next_due == current_date:
                     today_routines.append(routine)
@@ -1381,7 +1382,7 @@ def get_routines(user_id: str):
                     last_day_prev = (yesterday_date_obj.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
                     if yesterday_date_obj.day == last_day_prev.day:
                         yesterday_routines.append(routine)
-            elif re.match(r'^every_\d+_months$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
+            elif re.match(r'^every_\d+_(days|months)$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
                 if routine.get('next_due_date') == yesterday_date:
                     yesterday_routines.append(routine)
 
@@ -1500,9 +1501,13 @@ def update_routine_status(update: RoutineUpdate):
         # Bei Intervall-Routinen nach Abhaken next_due_date neu berechnen
         if update.checked:
             months_match = re.match(r'^every_(\d+)_months$', frequency)
+            days_match = re.match(r'^every_(\d+)_days$', frequency)
             if months_match:
                 n = int(months_match.group(1))
                 update_data["next_due_date"] = add_months(datetime.datetime.now(), n).strftime("%Y-%m-%d")
+            elif days_match:
+                n = int(days_match.group(1))
+                update_data["next_due_date"] = (datetime.datetime.now() + datetime.timedelta(days=n)).strftime("%Y-%m-%d")
             elif frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
                 weeks_map = {'biweekly': 2, 'triweekly': 3, 'fourweekly': 4}
                 days_map = {'quarterly': 91, 'biannual': 183}
