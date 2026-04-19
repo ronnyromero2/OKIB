@@ -967,7 +967,7 @@ async def create_routine_from_chat(user_id: str, message: str):
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel (kurz und prägnant, max. 4 Wörter, korrektes Deutsch mit Großschreibung und Umlauten), Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; sonst null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit (daily/weekly/biweekly/triweekly/fourweekly/monthly) und Tag (bei weekly: monday/tuesday/wednesday/thursday/friday/saturday/sunday; bei monthly: Tagesnummer als Zahl oder 'last'; sonst null). Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
         response_format={"type": "json_object"},
         temperature=0
     )

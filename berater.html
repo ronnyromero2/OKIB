@@ -264,6 +264,11 @@ async function loadRoutines() {
             
             const label = document.createElement("label");
             label.htmlFor = `routine_${routine.id}`;
+            const isMissed = routine.display_date === 'gestern';
+            let itemColor = '';
+            let fontWeight = '';
+            if (isMissed) { itemColor = 'color: red;'; fontWeight = 'font-weight: bold;'; }
+            label.style.cssText = `display: flex; width: 420px; ${itemColor} ${fontWeight}`;
             label.textContent = routine.task;
             if (routine.checked) {
               routineDiv.classList.add("done");
