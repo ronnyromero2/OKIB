@@ -694,14 +694,26 @@ async def chat(user_id: str, chat_input: ChatInput):
             raw_day = (info.get("day") or "").lower().strip()
             day = raw_day or "monday"
 
+            # Unbekannte Häufigkeit → nachfragen
+            if frequency not in FREQUENCY_TEXT:
+                question = f"Wie oft soll '{task}' stattfinden? (z.B. täglich, wöchentlich, monatlich, vierteljährlich, halbjährlich)"
+                await _save_conversation_entry(user_id, user_message, question, "")
+                return {"response": question, "created_routine": False}
+
             if frequency == "weekly" and raw_day not in WEEKDAY_NAMES:
-                return {"response": f"An welchem Wochentag soll '{task}' stattfinden?", "created_routine": False}
+                question = f"An welchem Wochentag soll '{task}' stattfinden?"
+                await _save_conversation_entry(user_id, user_message, question, "")
+                return {"response": question, "created_routine": False}
 
             if frequency == "monthly" and not (raw_day.isdigit() or raw_day == "last"):
-                return {"response": f"An welchem Tag des Monats soll '{task}' stattfinden (z.B. '1' für den Ersten)?", "created_routine": False}
+                question = f"An welchem Tag des Monats soll '{task}' stattfinden (z.B. '1' für den Ersten)?"
+                await _save_conversation_entry(user_id, user_message, question, "")
+                return {"response": question, "created_routine": False}
 
             if frequency in ["biweekly", "triweekly", "fourweekly"] and raw_day not in WEEKDAY_NAMES:
-                return {"response": f"An welchem Wochentag soll '{task}' stattfinden?", "created_routine": False}
+                question = f"An welchem Wochentag soll '{task}' stattfinden?"
+                await _save_conversation_entry(user_id, user_message, question, "")
+                return {"response": question, "created_routine": False}
 
             if frequency in ["biweekly", "triweekly", "fourweekly"] and day in WEEKDAY_NAMES:
                 weeks = {"biweekly": 2, "triweekly": 3, "fourweekly": 4}[frequency]
@@ -710,6 +722,7 @@ async def chat(user_id: str, chat_input: ChatInput):
                 day_de = DAY_NAMES_DE[day]
                 freq_de = FREQUENCY_TEXT[frequency]
                 question = f"Ich richte '{task}' als Routine ein ({freq_de}, {day_de}s). Welcher {day_de} soll der erste Termin sein — **{option1.strftime('%d.%m.')}** oder **{option2.strftime('%d.%m.')}**?"
+                await _save_conversation_entry(user_id, user_message, question, "")
                 return {"response": question, "created_routine": False}
 
             next_due = None
