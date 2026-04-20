@@ -779,6 +779,26 @@ async def chat(user_id: str, chat_input: ChatInput):
         except Exception as e:
             print(f"Fehler beim Erstellen des To-Dos: {e}")
             return {"response": "❌ Fehler beim Erstellen des To-Dos. Bitte versuche es erneut.", "created_todo": False}
+
+    elif intent == "todo_update":
+        try:
+            last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
+            title, changes = await update_latest_todo(user_id, user_message, last_ai)
+            if not title:
+                return {"response": "Ich konnte kein offenes To-Do zum Ändern finden.", "created_todo": False}
+            parts = []
+            if "due_date" in changes:
+                parts.append(f"Datum → {datetime.datetime.fromisoformat(changes['due_date']).strftime('%d.%m.%Y')}")
+            if "priority" in changes:
+                prio_de = {'high':'Hoch','medium':'Medium','low':'Niedrig'}.get(changes['priority'], changes['priority'])
+                parts.append(f"Relevanz → {prio_de}")
+            if "title" in changes:
+                parts.append(f"Titel → '{changes['title']}'")
+            summary = ", ".join(parts) if parts else "keine Änderungen erkannt"
+            return {"response": f"✅ To-Do '{title}' aktualisiert: {summary}.", "created_todo": False}
+        except Exception as e:
+            print(f"Fehler beim Aktualisieren des To-Dos: {e}")
+            return {"response": "❌ Fehler beim Aktualisieren des To-Dos.", "created_todo": False}
     try:
         # Konversationshistorie der letzten 5 Nachrichten abrufen
         try:
@@ -982,11 +1002,35 @@ def detect_intent(user_message: str, recent_history: list) -> str:
             context = f"Letzte KI-Antwort: {last['ai_response']}\n"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos (z.B. 'bis Freitag erledigen'), einer wiederkehrenden Routine (z.B. 'jeden Montag', 'monatlich', 'zweimal im Jahr', 'vierteljährlich'), eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, routine_datum oder chat"}],
+        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos (z.B. 'bis Freitag erledigen'), einer wiederkehrenden Routine (z.B. 'jeden Montag', 'monatlich', 'zweimal im Jahr', 'vierteljährlich'), eine Korrektur oder Änderung eines bestehenden To-Dos (z.B. 'nein, bitte korrigieren', 'Datum ändern', 'Relevanz hoch', 'doch am Dienstag'), eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, todo_update, routine_datum oder chat"}],
         temperature=0,
         max_tokens=15
     )
     return response.choices[0].message.content.strip().lower()
+
+async def update_latest_todo(user_id: str, user_message: str, last_ai_response: str):
+    recent = supabase.table("todos").select("id, title, due_date, priority").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(1).execute().data
+    if not recent:
+        return None, {}
+    todo = recent[0]
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Heute ist {today}. Kontext: '{last_ai_response}'. Nutzer sagt: '{user_message}'. Bestehendes To-Do: Titel='{todo['title']}', Datum='{todo['due_date']}', Priorität='{todo['priority']}'. Was soll geändert werden? Antworte nur mit JSON — nur geänderte Felder befüllen, unveränderliche Felder als null lassen: {{\"title\": null, \"due_date\": null, \"priority\": null}}"}],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
+    updates = json.loads(response.choices[0].message.content)
+    update_data = {}
+    if updates.get("title"):
+        update_data["title"] = updates["title"]
+    if updates.get("due_date") and re.match(r'^\d{4}-\d{2}-\d{2}$', str(updates["due_date"])):
+        update_data["due_date"] = updates["due_date"]
+    if updates.get("priority") in ["low", "medium", "high"]:
+        update_data["priority"] = updates["priority"]
+    if update_data:
+        supabase.table("todos").update(update_data).eq("id", todo["id"]).execute()
+    return todo["title"], update_data
 
 async def create_todo_from_chat(user_id: str, message: str):
     """Erstellt To-Do aus Chat-Message via GPT"""
