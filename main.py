@@ -12,6 +12,7 @@ import datetime
 import random
 import json
 import re
+import calendar
 
 load_dotenv()
 
@@ -403,7 +404,7 @@ async def start_interaction(user_id: str):
         
         # Letzte 10 Monatsrückblicke und letzte 4 Wochenrückblicke
         monthly_reports = supabase.table("long_term_memory") \
-            .select("thema", "inhalt") \
+            .select("thema, inhalt") \
             .eq("user_id", user_id) \
             .eq("thema", "Monatsrückblick") \
             .order("timestamp", desc=True) \
@@ -411,7 +412,7 @@ async def start_interaction(user_id: str):
             .execute().data
         
         weekly_reports = supabase.table("long_term_memory") \
-            .select("thema", "inhalt") \
+            .select("thema, inhalt") \
             .eq("user_id", user_id) \
             .eq("thema", "Wochenrückblick") \
             .order("timestamp", desc=True) \
@@ -464,7 +465,7 @@ async def start_interaction(user_id: str):
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         unfulfilled_routines = supabase.table("routines") \
-            .select("task, missed_count") \
+            .select("task, missed_count, missed_dates") \
             .eq("day", today) \
             .eq("checked", False) \
             .eq("user_id", user_id) \
@@ -508,7 +509,8 @@ async def start_interaction(user_id: str):
         context_for_gpt += "\nAktuelle Berichte:\n" + reports_context
         context_for_gpt += goals_context
         context_for_gpt += routines_overview_context
-        context_for_gpt += routine_context_today
+        if routine_context_today:
+            context_for_gpt += f"\nHeute oft verpasste Routinen: {routine_context_today}"
 
         if mode == "universum":
             prompt = f"""
@@ -904,7 +906,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Langzeitgedächtnis laden
         memory_text = "Keine spezifischen Langzeit-Erkenntnisse gespeichert." # Standardwert
         try:
-            memory = supabase.table("long_term_memory").select("thema", "inhalt").eq("user_id", user_id).order("timestamp", desc=True).limit(10).execute().data
+            memory = supabase.table("long_term_memory").select("thema, inhalt").eq("user_id", user_id).order("timestamp", desc=True).limit(10).execute().data
             if memory:
                 memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory])
         except Exception as e:
@@ -1083,7 +1085,6 @@ DAY_NAMES_DE = {
     "monday": "Montag", "tuesday": "Dienstag", "wednesday": "Mittwoch",
     "thursday": "Donnerstag", "friday": "Freitag", "saturday": "Samstag", "sunday": "Sonntag"
 }
-WEEKDAY_NAMES = set(DAY_NAMES_DE.keys())
 
 def get_next_weekday(weekday_name: str) -> datetime.date:
     weekday_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
@@ -1112,7 +1113,6 @@ async def insert_routine(user_id: str, task: str, frequency: str, day: str, next
     supabase.table("routines").insert(routine_data).execute()
 
 def add_months(dt: datetime.datetime, months: int) -> datetime.datetime:
-    import calendar
     month = dt.month + months
     year = dt.year + (month - 1) // 12
     month = (month - 1) % 12 + 1
@@ -1125,6 +1125,10 @@ def get_frequency_text(frequency: str) -> str:
     m = re.match(r'^every_(\d+)_months$', frequency)
     if m:
         return f"alle {m.group(1)} Monate"
+    m = re.match(r'^every_(\d+)_days$', frequency)
+    if m:
+        n = int(m.group(1))
+        return f"alle {n // 7} Wochen" if n % 7 == 0 else f"alle {n} Tage"
     return frequency
 
 async def parse_routine_clarification(user_message: str, last_ai_response: str) -> dict:
@@ -1137,46 +1141,6 @@ async def parse_routine_clarification(user_message: str, last_ai_response: str) 
     )
     return json.loads(response.choices[0].message.content)
 
-async def create_routine_from_chat(user_id: str, message: str):
-    """Erstellt Routine aus Chat-Message"""
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Sport machen' statt 'ich will jeden Montag Sport machen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Häufigkeit: eine aus (daily/weekly/biweekly/triweekly/fourweekly/monthly/quarterly/biannual), oder bei anderen Monatsintervallen 'every_N_months' (z.B. 'every_5_months' für alle 5 Monate). Tag: bei weekly den Wochentag auf Englisch; bei monthly die Tagesnummer oder 'last'; sonst null. Nachricht: '{message}'. Antworte nur mit JSON: {{\"task\": \"...\", \"frequency\": \"...\", \"day\": \"...\"}}"}],
-        response_format={"type": "json_object"},
-        temperature=0
-    )
-    data = json.loads(response.choices[0].message.content)
-    task = data.get("task", "Neue Routine")
-    frequency = data.get("frequency", "daily")
-    day = data.get("day") or "monday"
-
-    # Berechne next_due_date basierend auf frequency
-    next_due = None
-    if frequency == "monthly":
-        next_due = calculate_next_due_date("monthly_custom", int(day) if str(day).isdigit() else None)
-    elif frequency in ["biweekly", "triweekly", "fourweekly"]:
-        weeks = {"biweekly": 2, "triweekly": 3, "fourweekly": 4}[frequency]
-        next_due = (datetime.datetime.now() + datetime.timedelta(weeks=weeks)).strftime("%Y-%m-%d")
-
-    routine_data = {
-        "task": task,
-        "checked": False,
-        "day": str(day),
-        "time": None,
-        "last_checked_date": None,
-        "user_id": user_id,
-        "missed_count": 0,
-        "missed_dates": [],
-        "frequency": frequency,
-        "recurrence_day": int(day) if frequency == "monthly" and str(day).isdigit() else None,
-        "next_due_date": next_due,
-    }
-
-    result = supabase.table("routines").insert(routine_data).execute()
-
-    return task, frequency
-    
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
 async def automatischer_bericht(user_id: str = "1"):
