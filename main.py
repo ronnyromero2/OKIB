@@ -1009,25 +1009,28 @@ def detect_intent(user_message: str, recent_history: list) -> str:
     return response.choices[0].message.content.strip().lower()
 
 async def update_latest_todo(user_id: str, user_message: str, last_ai_response: str):
-    recent = supabase.table("todos").select("id, title, due_date, priority").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(1).execute().data
-    if not recent:
+    todos = supabase.table("todos").select("id, title, due_date, priority").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(5).execute().data
+    if not todos:
         return None, {}
-    todo = recent[0]
     today = datetime.datetime.now().strftime("%Y-%m-%d")
+    todos_info = [f"ID {t['id']}: '{t['title']}' (Datum: {t['due_date']}, Priorität: {t['priority']})" for t in todos]
+    todos_text = "\n".join(todos_info)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Kontext: '{last_ai_response}'. Nutzer sagt: '{user_message}'. Bestehendes To-Do: Titel='{todo['title']}', Datum='{todo['due_date']}', Priorität='{todo['priority']}'. Was soll geändert werden? Antworte nur mit JSON — nur geänderte Felder befüllen, unveränderliche Felder als null lassen: {{\"title\": null, \"due_date\": null, \"priority\": null}}"}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Letzte KI-Antwort: '{last_ai_response}'. Nutzer sagt: '{user_message}'.\nOffene To-Dos:\n{todos_text}\nWelches To-Do ist gemeint und was soll geändert werden? Antworte nur mit JSON: {{\"todo_id\": <ID>, \"title\": null, \"due_date\": null, \"priority\": null}} — nur geänderte Felder befüllen, unveränderliche als null."}],
         response_format={"type": "json_object"},
         temperature=0
     )
-    updates = json.loads(response.choices[0].message.content)
+    result = json.loads(response.choices[0].message.content)
+    todo_id = result.get("todo_id")
+    todo = next((t for t in todos if t["id"] == todo_id), todos[0])
     update_data = {}
-    if updates.get("title"):
-        update_data["title"] = updates["title"]
-    if updates.get("due_date") and re.match(r'^\d{4}-\d{2}-\d{2}$', str(updates["due_date"])):
-        update_data["due_date"] = updates["due_date"]
-    if updates.get("priority") in ["low", "medium", "high"]:
-        update_data["priority"] = updates["priority"]
+    if result.get("title"):
+        update_data["title"] = result["title"]
+    if result.get("due_date") and re.match(r'^\d{4}-\d{2}-\d{2}$', str(result["due_date"])):
+        update_data["due_date"] = result["due_date"]
+    if result.get("priority") in ["low", "medium", "high"]:
+        update_data["priority"] = result["priority"]
     if update_data:
         supabase.table("todos").update(update_data).eq("id", todo["id"]).execute()
     return todo["title"], update_data
