@@ -1830,8 +1830,8 @@ def get_todo_stats(user_id: str):
 def cleanup_completed_todos(user_id: str, days_old: int = 30):
     """Archiviert abgeschlossene To-Dos die älter als X Tage sind"""
     try:
-        cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y-%m-%d")
-        
+        cutoff_date = (datetime.datetime.utcnow() - datetime.timedelta(days=days_old)).isoformat() + 'Z'
+
         # Markiere alte erledigte To-Dos als archiviert
         result = supabase.table("todos").update({
             "status": "archived"
