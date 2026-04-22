@@ -1017,7 +1017,7 @@ async def update_latest_todo(user_id: str, user_message: str, last_ai_response: 
     todos_text = "\n".join(todos_info)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Letzte KI-Antwort: '{last_ai_response}'. Nutzer sagt: '{user_message}'.\nOffene To-Dos:\n{todos_text}\nWelches To-Do ist gemeint und was soll geändert werden? Antworte nur mit JSON: {{\"todo_id\": <ID>, \"title\": null, \"due_date\": null, \"priority\": null}} — nur geänderte Felder befüllen, unveränderliche als null."}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Letzte KI-Antwort: '{last_ai_response}'. Nutzer sagt: '{user_message}'.\nOffene To-Dos:\n{todos_text}\nWelches To-Do ist inhaltlich gemeint? Wichtig: Suche nach dem Thema des To-Dos, NICHT nach Wörtern die zufällig im Titel vorkommen. Beispiel: 'Den Friseurtermin korrigieren' meint das To-Do 'Friseurtermin', nicht 'Termin korrigieren'. Was soll geändert werden? Antworte nur mit JSON: {{\"todo_id\": <ID>, \"title\": null, \"due_date\": null, \"priority\": null}} — nur geänderte Felder befüllen, unveränderliche als null."}],
         response_format={"type": "json_object"},
         temperature=0
     )
