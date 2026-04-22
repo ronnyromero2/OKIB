@@ -570,7 +570,7 @@ async function loadTodos() {
         let itemColor = '';
         let fontWeight = '';
         let blinkClass = '';
-        if (isOverdue) { itemColor = 'color: #8b0000;'; fontWeight = 'font-weight: bold;'; }
+        if (isOverdue) { itemColor = 'color: #a04040;'; fontWeight = 'font-weight: bold;'; }
         else if (isDueToday && isAfterNoon) { blinkClass = 'blink-today'; fontWeight = 'font-weight: bold;'; }
         else if (isDueToday) { itemColor = 'color: red;'; fontWeight = 'font-weight: bold;'; }
         else if (todo.due_date === tomorrow) itemColor = 'color: orange;';
