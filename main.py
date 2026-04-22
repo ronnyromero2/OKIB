@@ -1179,28 +1179,24 @@ async def create_routine_from_chat(user_id: str, message: str):
     
 # Automatischer Wochen- und Monatsbericht
 @app.get("/bericht/automatisch")
-async def automatischer_bericht():
-    # Annahme einer festen User ID für Berichte, wie in generiere_rueckblick
-    user_id = "1" 
-
-    # Alle Zeitberechnungen basieren jetzt konsistent auf UTC
-    heute_utc = datetime.datetime.utcnow() 
-    wochentag_utc = heute_utc.weekday() # Montag = 0, Sonntag = 6 (UTC-basiert)
-    
-    # Debug-Ausgaben für den Start
+async def automatischer_bericht(user_id: str = "1"):
+    heute_utc = datetime.datetime.utcnow()
+    wochentag_utc = heute_utc.weekday()
 
     bericht_typ = None
     bericht_inhalt = None
 
-    # Monatsbericht prüfen und ggf. generieren
-    # Prüfe, ob es der letzte Tag des Monats ist (konsistent in UTC)
-    if heute_utc.day == (heute_utc.replace(day=1) + datetime.timedelta(days=32)).replace(day=1).day - 1:
+    # Letzter Tag des Monats: morgen ist ein anderer Monat
+    tomorrow_utc = heute_utc + datetime.timedelta(days=1)
+    if tomorrow_utc.month != heute_utc.month:
         bericht_typ = "Monatsrückblick"
-        # Start des aktuellen Monats (UTC)
         start_of_month_utc = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # Ende des aktuellen Monats (UTC) - 1 Mikrosekunde vor dem nächsten Monat
-        end_of_month_utc = (start_of_month_utc.replace(month=start_of_month_utc.month % 12 + 1, day=1) - datetime.timedelta(microseconds=1))
-  
+        if start_of_month_utc.month == 12:
+            next_month_start = start_of_month_utc.replace(year=start_of_month_utc.year + 1, month=1)
+        else:
+            next_month_start = start_of_month_utc.replace(month=start_of_month_utc.month + 1)
+        end_of_month_utc = next_month_start - datetime.timedelta(microseconds=1)
+
         existing_report_response = supabase.table("long_term_memory") \
             .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
@@ -1208,36 +1204,28 @@ async def automatischer_bericht():
             .gte("timestamp", start_of_month_utc.isoformat() + 'Z') \
             .lt("timestamp", end_of_month_utc.isoformat() + 'Z') \
             .execute()
-        
-        # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
         existing_report_data = existing_report_response.data
-        
-        # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data:
-            bericht_result = await generiere_rueckblick("Monats", 30, user_id)
-            bericht_inhalt = bericht_result
+            bericht_inhalt = await generiere_rueckblick("Monats", 30, user_id)
 
-    # Wochenbericht prüfen und ggf. generieren
-    elif wochentag_utc == 6: # Sonntag (im deutschen Kontext, basierend auf UTC)
+    elif wochentag_utc == 6:
         bericht_typ = "Wochenrückblick"
         today_start_utc = heute_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow_start_utc = today_start_utc + datetime.timedelta(days=1)
 
         existing_report_response = supabase.table("long_term_memory") \
-            .select("id", "thema", "timestamp") \
+            .select("id, thema, timestamp") \
             .eq("user_id", user_id) \
             .eq("thema", bericht_typ) \
             .gte("timestamp", today_start_utc.isoformat() + 'Z') \
             .lt("timestamp", tomorrow_start_utc.isoformat() + 'Z') \
             .execute()
-        
-        # ! WICHTIG: `.data` auf das response-Objekt zugreifen, um die Liste der gefundenen Einträge zu erhalten
         existing_report_data = existing_report_response.data
-        
-
-        # NEU: Bedingte Generierung nur, wenn kein existierender Bericht gefunden wurde
         if not existing_report_data:
             bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id)
+
+    if bericht_typ is None:
+        return {"typ": None, "inhalt": "Heute wird kein Bericht generiert."}
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
@@ -1311,10 +1299,16 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
 
     Ziele (Status):
     {ziele_text}
-    
+
+    Routinen:
+    {routinen_text}
+
+    Früherer Bericht (zum Vergleich / Fortschritt):
+    {previous_report_content}
+
     Benutzerprofil-Details:
     {profil_text}
-    
+
     Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
     """
 
@@ -1324,7 +1318,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
             {"role": "system", "content": system},
             {"role": "user", "content": user}
         ],
-        max_tokens=300, # Begrenze die Ausgabe des Berichts
+        max_tokens=800,
         temperature=0.7
     )
 
@@ -1342,7 +1336,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     
 # Endpunkt zum Abrufen des neuesten gespeicherten Berichts
 @app.get("/bericht/abrufen/{report_type_name}")
-def get_stored_report(report_type_name: str, user_id: int = 1): # user_id kann als Standard 1 haben
+def get_stored_report(report_type_name: str, user_id: str = "1"):
     try:
         # Hier wird der "thema"-String genau so gesucht, wie er gespeichert wird
         # (z.B. "Wochenrückblick" oder "Monatsrückblick", ohne 's')
