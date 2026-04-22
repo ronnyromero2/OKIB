@@ -766,7 +766,8 @@ async def chat(user_id: str, chat_input: ChatInput):
             return {"response": "❌ Fehler beim Erstellen der Routine. Bitte versuche es erneut.", "created_routine": False}
     elif intent == "todo":
         try:
-            title, priority, due_date = await create_todo_from_chat(user_id, user_message)
+            last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
+            title, priority, due_date = await create_todo_from_chat(user_id, user_message, last_ai)
             priority_text = {'high': 'Hoch', 'medium': 'Medium', 'low': 'Niedrig'}.get(priority, 'Medium')
             
             response = f"✅ Ich habe ein neues To-Do '{title}' erstellt mit Relevanz {priority_text}"
@@ -1035,14 +1036,15 @@ async def update_latest_todo(user_id: str, user_message: str, last_ai_response: 
         supabase.table("todos").update(update_data).eq("id", todo["id"]).execute()
     return todo["title"], update_data
 
-async def create_todo_from_chat(user_id: str, message: str):
+async def create_todo_from_chat(user_id: str, message: str, last_ai_response: str = ""):
     """Erstellt To-Do aus Chat-Message via GPT"""
     today = datetime.datetime.now().strftime("%Y-%m-%d")
+    context = f"Vorheriger Gesprächskontext: '{last_ai_response}'\n" if last_ai_response else ""
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"Heute ist {today}. Extrahiere aus dieser Nachricht: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Arzttermin buchen' statt 'ich muss einen Arzt anrufen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Fälligkeitsdatum (YYYY-MM-DD oder null) und Priorität (low/medium/high). Nachricht: '{message}'. Antworte nur mit JSON: {{\"title\": \"...\", \"due_date\": \"...\", \"priority\": \"...\"}}"
+            "content": f"Heute ist {today}. {context}Nutzer-Nachricht: '{message}'. Falls die Nachricht auf den Kontext verweist (z.B. 'dazu', 'das', 'es'), nutze den Kontext um das eigentliche Thema zu verstehen. Extrahiere: Aufgabentitel als Nomen oder kurze Nomen-Phrase, maximal 4 Wörter, KEIN ganzer Satz (Beispiel: 'Arzttermin buchen' statt 'ich muss einen Arzt anrufen'), korrektes Deutsch mit Großschreibung und Umlauten. Außerdem: Fälligkeitsdatum (YYYY-MM-DD oder null) und Priorität (low/medium/high). Antworte nur mit JSON: {{\"title\": \"...\", \"due_date\": \"...\", \"priority\": \"...\"}}"
         }],
         response_format={"type": "json_object"},
         temperature=0
