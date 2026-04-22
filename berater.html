@@ -38,6 +38,11 @@
       text-decoration: line-through;
       color: #888;
     }
+    @keyframes blink-today {
+      0%, 100% { color: red; }
+      50% { color: #ffcc00; }
+    }
+    .blink-today { animation: blink-today 1.2s ease-in-out infinite; }
     button {
       background: #444;
       cursor: pointer;
@@ -557,13 +562,17 @@ async function loadTodos() {
         const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
         const dayAfterTomorrow = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
         const isOverdue = todo.due_date && todo.due_date < today;
+        const isAfterNoon = new Date().getHours() >= 12;
+        const isDueToday = todo.due_date === today;
 
         const priorityEmoji = isOverdue ? '💀 ' : (todo.priority === 'high' ? '🔴 ' : '');
 
         let itemColor = '';
         let fontWeight = '';
-        if (isOverdue) { itemColor = 'color: red;'; fontWeight = 'font-weight: bold;'; }
-        else if (todo.due_date === today) itemColor = 'color: red;';
+        let blinkClass = '';
+        if (isOverdue) { itemColor = 'color: #cc2222;'; fontWeight = 'font-weight: bold;'; }
+        else if (isDueToday && isAfterNoon) { blinkClass = 'blink-today'; }
+        else if (isDueToday) itemColor = 'color: red;';
         else if (todo.due_date === tomorrow) itemColor = 'color: orange;';
         else if (todo.due_date === dayAfterTomorrow) itemColor = 'color: yellow;';
 
@@ -574,6 +583,7 @@ async function loadTodos() {
         }
 
         label.style.cssText = `display: flex; width: 420px; ${itemColor} ${fontWeight}`;
+        if (blinkClass) label.classList.add(blinkClass);
         label.innerHTML = `<span>${priorityEmoji}${todo.title}</span>${dueDateHtml}`;
         
         if (todo.completed) todoDiv.classList.add("done");
