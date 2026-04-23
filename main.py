@@ -1274,8 +1274,8 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
 
     system = f"""
     Du bist ein persönlicher Beobachter und Coach. Erstelle einen kompakten {zeitraum}rückblick für {zeitraum_label}.
-    Halte dich STRIKT an das was tatsächlich in den Gesprächen stand — erfinde oder interpretiere nichts hinzu.
-    Keine langen Aufzählungen. Maximal 200 Wörter. Fließtext, kein Markdown.
+    Halte dich an das was tatsächlich in den Gesprächen stand — dramatisiere oder überinterpretiere nicht.
+    Maximal 200 Wörter. Nur Stichpunkte, kein Fließtext.
     """
     user = f"""
     Zeitraum: {zeitraum_label}
@@ -1295,7 +1295,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     Benutzerprofil-Details:
     {profil_text}
 
-    Fasse knapp zusammen was wirklich besprochen wurde, erkenne ein oder zwei Muster und nenne maximal zwei konkrete nächste Schritte.
+    Fasse in Stichpunkten zusammen was wirklich besprochen wurde, erkenne ein oder zwei Muster und nenne maximal zwei konkrete nächste Schritte.
     """
 
     response = client.chat.completions.create(
