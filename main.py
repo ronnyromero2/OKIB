@@ -1273,9 +1273,9 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     zeitraum_label = f"{heute.strftime('%B %Y')}" if zeitraum == "Monats" else f"Woche bis {heute.strftime('%d.%m.%Y')}"
 
     system = f"""
-    Du bist ein persönlicher Beobachter und Coach. Erstelle einen kompakten {zeitraum}rückblick für {zeitraum_label}.
-    Halte dich an das was tatsächlich in den Gesprächen stand — dramatisiere oder überinterpretiere nicht.
-    Maximal 200 Wörter. Nur Stichpunkte, kein Fließtext.
+    Du bist ein persönlicher Beobachter und Coach. Liste die im letzten {zeitraum} besprochenen Themen und den Status von Zielen und Routinen rückblickend knapp auf.
+    Analysiere Trends, erkenne Fortschritte oder Herausforderungen und gebe konkrete, umsetzbare Vorschläge für die Zukunft.
+    Berücksichtige alle Gespräche im jeweiligen Zeitraum (Woche oder Monat).
     """
     user = f"""
     Zeitraum: {zeitraum_label}
@@ -1295,7 +1295,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     Benutzerprofil-Details:
     {profil_text}
 
-    Fasse in Stichpunkten zusammen was wirklich besprochen wurde, erkenne ein oder zwei Muster und nenne maximal zwei konkrete nächste Schritte.
+    Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
     """
 
     response = client.chat.completions.create(
@@ -1304,8 +1304,8 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
             {"role": "system", "content": system},
             {"role": "user", "content": user}
         ],
-        max_tokens=400,
-        temperature=0.5
+        max_tokens=600,
+        temperature=0.7
     )
 
     bericht = response.choices[0].message.content
