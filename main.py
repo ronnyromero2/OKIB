@@ -124,30 +124,33 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     }
     
     system_prompt = f"""
-    Du bist ein spezialisierter Assistent, der wichtige persönliche Informationen und Vorlieben des Benutzers aus Gesprächen extrahiert.
-    Deine Aufgabe ist es, ein detailliertes Langzeitprofil des Benutzers aufzubauen und kontinuierlich zu erweitern.
-    
+    Du bist ein spezialisierter Assistent, der wichtige persönliche Informationen über den Benutzer aus Gesprächen extrahiert.
+    Deine Aufgabe ist es, ein detailliertes Langzeitprofil aufzubauen — sowohl Fakten als auch Verhaltensmuster.
+
     WICHTIG: Du sollst AKTIV nach NEUEN Informationen suchen und NEUE Kategorien erstellen!
     AUSGABEFORMAT - SEHR WICHTIG:
     - Verwende IMMER reine Strings als Werte, NIEMALS Arrays
     - Beispiel: "Hobbys": "Laufen, Kochen, Lesen" (NICHT ["Laufen", "Kochen"])
     - Alle Werte als Text formatieren
-    
+
     REGELN:
     1. Analysiere JEDEN Gesprächsteil nach neuen, relevanten Informationen
-    2. Erstelle NEUE Kategorien für jede neue Information (z.B. "Lieblingsspeise", "Musik", "Reisepläne_August")
+    2. Erstelle NEUE Kategorien für jede neue Information
     3. Behalte bestehende Kategorien bei, wenn sie weiterhin relevant sind
     4. Aktualisiere bestehende Werte bei neuen/anderen Informationen
     5. Ignoriere nur wirklich temporäre Dinge (wie "heute bin ich müde")
-    
-    NEUE KATEGORIEN-BEISPIELE:
-    - Lieblingsspeise, Kochvorlieben, Musik, Hobbys, Reisepläne_spezifisch
-    - Arbeitsbereiche, Sprachen, Filme/Serien, Sport, Wohnsituation
-    - Haustiere, Freunde, Familie, Gesundheit, Finanzen, etc.
-    
-    Du erhältst eine aktuelle Gesprächshistorie und bereits bekannte Profilinformationen.
+
+    FAKTEN-KATEGORIEN (Beispiele):
+    - Beruf, Wohnsituation, Familie, Beziehung, Hobbys, Sport, Gesundheit, Finanzen
+
+    VERHALTENSMUSTER-KATEGORIEN (Beispiele):
+    - Muster_Prokrastination: z.B. "Schiebt unangenehme Aufgaben regelmäßig auf"
+    - Muster_Motivation: z.B. "Reagiert gut auf konkrete Fragen, weniger auf allgemeine Ratschläge"
+    - Muster_Herausforderungen: z.B. "Kämpft mit beruflicher Unzufriedenheit, findet schwer konkrete Schritte"
+    - Muster_Staerken: z.B. "Hält Routinen gut durch wenn sie einmal etabliert sind"
+    - Alltag_Einschraenkungen: z.B. "Wenig freie Zeit durch Arbeit und Familie, keine großen Verhaltensänderungen möglich"
+
     Gib das VOLLSTÄNDIGE, ERWEITERTE JSON-Objekt zurück - mit allen alten UND neuen Kategorien.
-    
     Antworte NUR mit dem JSON-Objekt.
     """
 
@@ -807,13 +810,13 @@ async def chat(user_id: str, chat_input: ChatInput):
             print(f"Fehler beim Aktualisieren des To-Dos: {e}")
             return {"response": "❌ Fehler beim Aktualisieren des To-Dos.", "created_todo": False}
     try:
-        # Konversationshistorie der letzten 5 Nachrichten abrufen
+        # Konversationshistorie der letzten 10 Nachrichten abrufen
         try:
             history_response = supabase.table("conversation_history") \
                 .select("user_input, ai_response, ai_prompt") \
                 .eq("user_id", user_id) \
                 .order("timestamp", desc=True) \
-                .limit(5) \
+                .limit(10) \
                 .execute()
             gespraechs_historie = history_response.data
             gespraechs_historie.reverse() # Älteste zuerst
@@ -966,7 +969,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         Wenn der Nutzer überrascht über Deine Nachricht scheint, frage direkt nach, ob Du etwas bestimmtes falsch einschätzt und korrigiere Deine Infos, falls der Nutzer auf Fehler hinweist.
         Kein allgemeines Lob. Fokussiere dich auf konkrete Ansatzpunkte.
         Stelle konkrete Fragen oder weise auf Reflexionen hin. Mache NUR in etwa 5% der Fälle einen konkreten Vorschlag für nächste Schritte. In 15% der Fälle erzähle einen sarkastischen Witz im Zusammenhang mit der Antwort und lache Dich kaputt. In den anderen 85% der Fälle: akzeptiere die Antwort, hake nach oder gib eine kurze Einschätzung — ohne Empfehlungen.
-        Achte auf realistische Vorschläge, da der Nutzer schon feste Routinen, eine Arbeit und Frau hat.
+        WICHTIG: Schlage keine zeitintensiven neuen Aktivitäten oder grundlegenden Verhaltensänderungen vor, die nicht mit dem bekannten Alltag des Nutzers vereinbar sind. Berücksichtige dabei besonders die Kategorie "Alltag_Einschraenkungen" aus dem Nutzerprofil.
 
         Antworte maximal 3 Sätze. Deine Antworten sollen knapp, direkt, motivierend oder kritisch sein.
         """
