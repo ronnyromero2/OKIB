@@ -987,8 +987,9 @@ async def chat(user_id: str, chat_input: ChatInput):
         if gespraechs_historie:
             last_entry = gespraechs_historie[-1]
             last_ai_prompt = last_entry.get('ai_prompt', '')
-                
-        await extrahiere_und_speichere_profil_details(user_id, user_message, ai_response_content, last_ai_prompt)
+
+        if len(user_message.split()) >= 5:
+            await extrahiere_und_speichere_profil_details(user_id, user_message, ai_response_content, last_ai_prompt)
 
         return {"response": ai_response_content, "created_todo": False, "created_routine": False}
 
