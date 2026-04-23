@@ -1154,7 +1154,7 @@ async def parse_routine_clarification(user_message: str, last_ai_response: str) 
     )
     return json.loads(response.choices[0].message.content)
 
-# Automatischer Wochen- und Monatsbericht
+# Automatischer Wochen-, Monats- und Jahresbericht
 @app.get("/bericht/automatisch")
 async def automatischer_bericht(user_id: str = "1"):
     heute_utc = datetime.datetime.utcnow()
@@ -1163,29 +1163,42 @@ async def automatischer_bericht(user_id: str = "1"):
     bericht_typ = None
     bericht_inhalt = None
 
-    # Monatsbericht: beim ersten Öffnen im neuen Monat, falls noch keiner für diesen Monat existiert
-    first_of_this_month = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    existing_monthly = supabase.table("long_term_memory") \
+    # Jahresbericht: beim ersten Öffnen im neuen Jahr, falls noch keiner für dieses Jahr existiert
+    first_of_this_year = heute_utc.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    existing_yearly = supabase.table("long_term_memory") \
         .select("id") \
         .eq("user_id", user_id) \
-        .eq("thema", "Monatsrückblick") \
-        .gte("timestamp", first_of_this_month.isoformat() + 'Z') \
+        .eq("thema", "Jahresrückblick") \
+        .gte("timestamp", first_of_this_year.isoformat() + 'Z') \
         .execute().data
 
-    if not existing_monthly and heute_utc.day > 1:
-        bericht_typ = "Monatsrückblick"
-        bericht_inhalt = await generiere_rueckblick("Monats", 30, user_id)
-        # Alte Konversationshistorie löschen — Bericht ist gerade generiert
-        try:
-            supabase.table("conversation_history") \
-                .delete() \
-                .eq("user_id", user_id) \
-                .lt("timestamp", first_of_this_month.isoformat() + 'Z') \
-                .execute()
-        except Exception as e:
-            print(f"Fehler beim Cleanup der Konversationshistorie: {e}")
+    if not existing_yearly and heute_utc.month > 1:
+        bericht_typ = "Jahresrückblick"
+        bericht_inhalt = await generiere_rueckblick("Jahres", 365, user_id)
 
-    elif wochentag_utc == 6:
+    else:
+        # Monatsbericht: beim ersten Öffnen im neuen Monat, falls noch keiner für diesen Monat existiert
+        first_of_this_month = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        existing_monthly = supabase.table("long_term_memory") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("thema", "Monatsrückblick") \
+            .gte("timestamp", first_of_this_month.isoformat() + 'Z') \
+            .execute().data
+
+        if not existing_monthly and heute_utc.day > 1:
+            bericht_typ = "Monatsrückblick"
+            bericht_inhalt = await generiere_rueckblick("Monats", 30, user_id)
+            try:
+                supabase.table("conversation_history") \
+                    .delete() \
+                    .eq("user_id", user_id) \
+                    .lt("timestamp", first_of_this_month.isoformat() + 'Z') \
+                    .execute()
+            except Exception as e:
+                print(f"Fehler beim Cleanup der Konversationshistorie: {e}")
+
+    if bericht_typ is None and wochentag_utc == 6:
         bericht_typ = "Wochenrückblick"
         today_start_utc = heute_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow_start_utc = today_start_utc + datetime.timedelta(days=1)
@@ -1328,7 +1341,7 @@ def get_stored_report(report_type_name: str, user_id: str = "1"):
         # (z.B. "Wochenrückblick" oder "Monatsrückblick", ohne 's')
         
         # Sicherstellen, dass der übergebene Typ einem bekannten Thema entspricht
-        if report_type_name not in ["Wochenrückblick", "Monatsrückblick"]:
+        if report_type_name not in ["Wochenrückblick", "Monatsrückblick", "Jahresrückblick"]:
             raise HTTPException(status_code=400, detail="Ungültiger Berichtstyp angefragt.")
 
         report_data = supabase.table("long_term_memory") \

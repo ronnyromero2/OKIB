@@ -151,6 +151,7 @@ input[type="checkbox"] {
   <h2 onclick="toggleSection('berichteSektion')" style="cursor:pointer">▶ Berichte</h2>
   <button onclick="ladeBericht('wochenbericht')">✨ Wochenrückblick</button>
   <button onclick="ladeBericht('monatsbericht')">📅 Monatsanalyse</button>
+  <button onclick="ladeBericht('jahresbericht')">🗓️ Jahresrückblick</button>
   <div id="berichtBox" class="response"></div>
 </div>
 
@@ -415,9 +416,11 @@ async function ladeBericht(typ) {
 
     // Mapping von Frontend-Typ auf Backend-Thema
     if (typ === 'wochenbericht') {
-        reportTypeName = "Wochenrückblick"; // Backend erwartet diesen String
+        reportTypeName = "Wochenrückblick";
     } else if (typ === 'monatsbericht') {
-        reportTypeName = "Monatsrückblick"; // Backend erwartet diesen String
+        reportTypeName = "Monatsrückblick";
+    } else if (typ === 'jahresbericht') {
+        reportTypeName = "Jahresrückblick";
     } else {
         console.error("Unbekannter Berichtstyp:", typ);
         const box = document.getElementById("berichtBox");
