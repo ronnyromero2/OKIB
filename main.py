@@ -1269,13 +1269,16 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     
     previous_report_content = latest_report_res[0]['inhalt'] if latest_report_res else "Kein früherer Bericht dieses Typs vorhanden."
 
+    heute = datetime.datetime.now()
+    zeitraum_label = f"{heute.strftime('%B %Y')}" if zeitraum == "Monats" else f"Woche bis {heute.strftime('%d.%m.%Y')}"
+
     system = f"""
-    Du bist ein persönlicher Beobachter und Coach. Liste die im letzten {zeitraum} besprochenen Themen und den Status von Zielen und Routinen rückblickend knapp auf.
-    Analysiere Trends, erkenne Fortschritte oder Herausforderungen und gebe konkrete, umsetzbare Vorschläge für die Zukunft.
-    Berücksichtige alle Gespräche im jeweiligen Zeitraum (Woche oder Monat).
+    Du bist ein persönlicher Beobachter und Coach. Erstelle einen kompakten {zeitraum}rückblick für {zeitraum_label}.
+    Halte dich STRIKT an das was tatsächlich in den Gesprächen stand — erfinde oder interpretiere nichts hinzu.
+    Keine langen Aufzählungen. Maximal 200 Wörter. Fließtext, kein Markdown.
     """
     user = f"""
-    Hier sind die Informationen für den {zeitraum}-Rückblick:
+    Zeitraum: {zeitraum_label}
 
     Gespräche:
     {gespraeche_text_for_prompt}
@@ -1292,7 +1295,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     Benutzerprofil-Details:
     {profil_text}
 
-    Bitte gib einen motivierenden und tiefgehenden Rückblick, der wirklich analysiert, was passiert ist und konkrete, umsetzbare nächste Schritte vorschlägt.
+    Fasse knapp zusammen was wirklich besprochen wurde, erkenne ein oder zwei Muster und nenne maximal zwei konkrete nächste Schritte.
     """
 
     response = client.chat.completions.create(
@@ -1301,8 +1304,8 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
             {"role": "system", "content": system},
             {"role": "user", "content": user}
         ],
-        max_tokens=800,
-        temperature=0.7
+        max_tokens=400,
+        temperature=0.5
     )
 
     bericht = response.choices[0].message.content
