@@ -789,6 +789,10 @@ async def chat(user_id: str, chat_input: ChatInput):
             title, changes = await update_latest_todo(user_id, user_message, last_ai)
             if not title:
                 return {"response": "Ich konnte kein offenes To-Do zum Ändern finden.", "created_todo": False}
+            if title == "__unclear__":
+                question = changes.get("question", "Welches To-Do meinst du?")
+                await _save_conversation_entry(user_id, user_message, question, "")
+                return {"response": question, "created_todo": False}
             parts = []
             if "due_date" in changes:
                 parts.append(f"Datum → {datetime.datetime.fromisoformat(changes['due_date']).strftime('%d.%m.%Y')}")
@@ -1021,13 +1025,18 @@ async def update_latest_todo(user_id: str, user_message: str, last_ai_response: 
     todos_text = "\n".join(todos_info)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Heute ist {today}. Letzte KI-Antwort: '{last_ai_response}'. Nutzer sagt: '{user_message}'.\nOffene To-Dos:\n{todos_text}\nWelches To-Do ist inhaltlich gemeint? Wichtig: Suche nach dem Thema des To-Dos, NICHT nach Wörtern die zufällig im Titel vorkommen. Beispiel: 'Den Friseurtermin korrigieren' meint das To-Do 'Friseurtermin', nicht 'Termin korrigieren'. Was soll geändert werden? Antworte nur mit JSON: {{\"todo_id\": <ID>, \"title\": null, \"due_date\": null, \"priority\": null}} — nur geänderte Felder befüllen, unveränderliche als null."}],
+        messages=[{"role": "user", "content": f"Heute ist {today}. Letzte KI-Antwort: '{last_ai_response}'. Nutzer sagt: '{user_message}'.\nOffene To-Dos:\n{todos_text}\nWelches To-Do ist inhaltlich gemeint? Wichtig: Suche nach dem Thema des To-Dos, NICHT nach Wörtern die zufällig im Titel vorkommen. Beispiel: 'Den Friseurtermin korrigieren' meint das To-Do 'Friseurtermin', nicht 'Termin korrigieren'. Falls kein To-Do eindeutig passt, gib todo_id als null zurück. Was soll geändert werden? Antworte nur mit JSON: {{\"todo_id\": <ID oder null>, \"title\": null, \"due_date\": null, \"priority\": null}} — nur geänderte Felder befüllen, unveränderliche als null."}],
         response_format={"type": "json_object"},
         temperature=0
     )
     result = json.loads(response.choices[0].message.content)
     todo_id = result.get("todo_id")
-    todo = next((t for t in todos if t["id"] == todo_id), todos[0])
+    if todo_id is None:
+        todo_list = "\n".join([f"- {t['title']}" for t in todos])
+        return "__unclear__", {"question": f"Welches To-Do meinst du?\n{todo_list}"}
+    todo = next((t for t in todos if t["id"] == todo_id), None)
+    if todo is None:
+        return None, {}
     update_data = {}
     if result.get("title"):
         update_data["title"] = result["title"]
