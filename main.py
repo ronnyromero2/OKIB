@@ -1174,7 +1174,7 @@ async def automatischer_bericht(user_id: str = "1"):
 
     if not existing_yearly and heute_utc.month > 1:
         bericht_typ = "Jahresrückblick"
-        bericht_inhalt = await generiere_rueckblick("Jahres", 365, user_id)
+        bericht_inhalt = await generiere_jahresbericht(user_id)
 
     else:
         # Monatsbericht: beim ersten Öffnen im neuen Monat, falls noch keiner für diesen Monat existiert
@@ -1217,6 +1217,87 @@ async def automatischer_bericht(user_id: str = "1"):
     if bericht_typ is None:
         return {"typ": None, "inhalt": "Heute wird kein Bericht generiert."}
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
+
+async def generiere_jahresbericht(user_id: str):
+    heute = datetime.datetime.now()
+    jahr = heute.year
+
+    # Letzte 12 Monatsberichte als Hauptquelle
+    monatsberichte = supabase.table("long_term_memory") \
+        .select("inhalt, timestamp") \
+        .eq("user_id", user_id) \
+        .eq("thema", "Monatsrückblick") \
+        .order("timestamp", desc=False) \
+        .limit(12) \
+        .execute().data
+
+    if monatsberichte:
+        monatsberichte_text = "\n\n".join([f"Monatsbericht ({m['timestamp'][:7]}):\n{m['inhalt']}" for m in monatsberichte])
+    else:
+        monatsberichte_text = "Keine Monatsberichte vorhanden."
+
+    profil_data = supabase.table("profile") \
+        .select("attribute_name, attribute_value") \
+        .eq("user_id", user_id) \
+        .execute().data
+    profil_text = "\n".join([f"- {p['attribute_name']}: {p['attribute_value']}" for p in profil_data]) if profil_data else "Keine Profildaten."
+
+    all_ziele = supabase.table("goals").select("titel, status").eq("user_id", user_id).execute().data
+    ziele_text = "\n".join([f"- {z['titel']} ({z['status']})" for z in all_ziele]) if all_ziele else "Keine Ziele."
+
+    letzter_jahresbericht = supabase.table("long_term_memory") \
+        .select("inhalt") \
+        .eq("user_id", user_id) \
+        .eq("thema", "Jahresrückblick") \
+        .order("timestamp", desc=True) \
+        .limit(1) \
+        .execute().data
+    vorheriger_bericht = letzter_jahresbericht[0]['inhalt'] if letzter_jahresbericht else "Kein früherer Jahresbericht."
+
+    system = f"""
+    Du bist ein persönlicher Coach. Erstelle einen Jahresrückblick für {jahr} basierend auf den Monatsberichten.
+    Analysiere Entwicklungen über das Jahr, erkenne übergeordnete Muster und Trends.
+    Halte dich an das was in den Berichten steht — dramatisiere nicht.
+    Stichpunkte, maximal 400 Wörter.
+    """
+    user_prompt = f"""
+    Jahr: {jahr}
+
+    Monatsberichte des Jahres:
+    {monatsberichte_text}
+
+    Ziele:
+    {ziele_text}
+
+    Benutzerprofil:
+    {profil_text}
+
+    Vorheriger Jahresbericht (zum Vergleich):
+    {vorheriger_bericht}
+
+    Fasse die wichtigsten Entwicklungen des Jahres zusammen, erkenne 2-3 übergeordnete Muster und nenne maximal 3 konkrete Ziele für das nächste Jahr.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_prompt}
+        ],
+        max_tokens=700,
+        temperature=0.7
+    )
+
+    bericht = response.choices[0].message.content
+
+    supabase.table("long_term_memory").insert({
+        "thema": "Jahresrückblick",
+        "inhalt": bericht,
+        "timestamp": datetime.datetime.utcnow().isoformat() + 'Z',
+        "user_id": user_id
+    }).execute()
+
+    return bericht
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
 async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
