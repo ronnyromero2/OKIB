@@ -1324,38 +1324,33 @@ async def generiere_jahresbericht(user_id: str):
         .execute().data
     vorheriger_bericht = letzter_jahresbericht[0]['inhalt'] if letzter_jahresbericht else "Kein früherer Jahresbericht."
 
-    system = f"""
-    Du bist ein persönlicher Coach. Erstelle einen Jahresrückblick für {jahr} basierend auf den Monatsberichten.
-    Analysiere Entwicklungen über das Jahr, erkenne übergeordnete Muster und Trends.
-    Halte dich an das was in den Berichten steht — dramatisiere nicht.
-    Stichpunkte, maximal 400 Wörter.
-    """
-    user_prompt = f"""
-    Jahr: {jahr}
-
-    Monatsberichte des Jahres:
-    {monatsberichte_text}
-
-    Ziele:
-    {ziele_text}
-
-    Benutzerprofil:
-    {profil_text}
-
-    Vorheriger Jahresbericht (zum Vergleich):
-    {vorheriger_bericht}
-
-    Fasse die wichtigsten Entwicklungen des Jahres zusammen, erkenne 2-3 übergeordnete Muster und nenne maximal 3 konkrete Ziele für das nächste Jahr.
-    """
-
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_prompt}
+            {"role": "system", "content": f"""Du bist ein persönlicher Coach. Erstelle einen ausführlichen Jahresrückblick für {jahr} basierend auf den Monatsberichten des gesamten Jahres.
+Der Bericht hat ZWEI klar getrennte Teile und erzählt eine Geschichte — keine Stichpunkte, sondern fließender, lebendiger Prosa-Text.
+
+TEIL 1 — WOHLWOLLEND: Erzähle das Jahr als eine bewegende Geschichte voller Wachstum und Leistung. Feiere jeden Fortschritt als riesige Leistung. Geh Monat für Monat durch das Jahr und male ein warmherziges, lobendes Bild der Reise. Übertrieben anerkennend, motivierend, fast schon euphorisch — aber basierend auf dem was wirklich passiert ist.
+
+TEIL 2 — PROVOKATIV: Direkte, unverblümte Ansagen was sich über das Jahr nicht verändert hat und sich dringend ändern MUSS. Kein Weichspülen. Klare Sprache wie "So geht das nicht weiter", "Reiß dich zusammen", "Das ist keine Ausrede". Benenne wiederkehrende Muster schonungslos. Konkrete Verhaltensänderungen für das nächste Jahr.
+
+ABSCHLUSS: Beende den Bericht auf einer positiven, vorwärtsgewandten Note — eine ermutigende Vision für das kommende Jahr, die Lust macht weiterzumachen."""},
+            {"role": "user", "content": f"""Jahr: {jahr}
+
+Monatsberichte des Jahres:
+{monatsberichte_text}
+
+Ziele:
+{ziele_text}
+
+Benutzerprofil:
+{profil_text}
+
+Vorheriger Jahresbericht (zum Vergleich):
+{vorheriger_bericht}"""}
         ],
-        max_tokens=700,
-        temperature=0.7
+        max_tokens=1500,
+        temperature=0.8
     )
 
     bericht = response.choices[0].message.content
