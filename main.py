@@ -1177,6 +1177,21 @@ async def automatischer_bericht(user_id: str = "1"):
         bericht_inhalt = await generiere_jahresbericht(user_id)
 
     else:
+        # Quartalsbericht: beim ersten Öffnen eines neuen Quartals (Jan, Apr, Jul, Okt)
+        quartal_monate = [1, 4, 7, 10]
+        if heute_utc.month in quartal_monate:
+            first_of_quarter = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            existing_quarterly = supabase.table("long_term_memory") \
+                .select("id") \
+                .eq("user_id", user_id) \
+                .eq("thema", "Quartalsbericht") \
+                .gte("timestamp", first_of_quarter.isoformat() + 'Z') \
+                .execute().data
+            if not existing_quarterly and heute_utc.day > 1:
+                bericht_typ = "Quartalsbericht"
+                bericht_inhalt = await generiere_quartalsbericht(user_id)
+
+    if bericht_typ is None:
         # Monatsbericht: beim ersten Öffnen im neuen Monat, falls noch keiner für diesen Monat existiert
         first_of_this_month = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         existing_monthly = supabase.table("long_term_memory") \
@@ -1217,6 +1232,61 @@ async def automatischer_bericht(user_id: str = "1"):
     if bericht_typ is None:
         return {"typ": None, "inhalt": "Heute wird kein Bericht generiert."}
     return {"typ": bericht_typ, "inhalt": bericht_inhalt}
+
+async def generiere_quartalsbericht(user_id: str):
+    heute = datetime.datetime.now()
+    quartal = (heute.month - 1) // 3 + 1
+    quartal_name = f"Q{quartal} {heute.year}"
+
+    monatsberichte = supabase.table("long_term_memory") \
+        .select("inhalt, timestamp") \
+        .eq("user_id", user_id) \
+        .eq("thema", "Monatsrückblick") \
+        .order("timestamp", desc=True) \
+        .limit(3) \
+        .execute().data
+
+    monatsberichte_text = "\n\n".join([
+        f"Monatsbericht ({m['timestamp'][:7]}):\n{m['inhalt']}" for m in reversed(monatsberichte)
+    ]) if monatsberichte else "Keine Monatsberichte vorhanden."
+
+    profil_data = supabase.table("profile") \
+        .select("attribute_name, attribute_value") \
+        .eq("user_id", user_id) \
+        .execute().data
+    profil_text = "\n".join([f"- {p['attribute_name']}: {p['attribute_value']}" for p in profil_data]) if profil_data else "Keine Profildaten."
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": f"""Du bist ein persönlicher Coach. Erstelle einen Quartalsbericht für {quartal_name} basierend auf den letzten 3 Monatsberichten.
+Der Bericht hat ZWEI klar getrennte Teile:
+
+TEIL 1 — WOHLWOLLEND: Übertrieben lobendes, warmherziges Lob. Feiere jeden Fortschritt als riesige Leistung. Positiv, motivierend, fast schon übertrieben anerkennend.
+
+TEIL 2 — PROVOKATIV: Direkte, unverblümte Ansagen was sich ändern MUSS. Kein Weichspülen. Klare Sprache wie "So geht das nicht weiter", "Reiß dich zusammen", "Das ist keine Ausrede". Konkrete Verhaltensänderungen benennen."""},
+            {"role": "user", "content": f"""Quartal: {quartal_name}
+
+Monatsberichte:
+{monatsberichte_text}
+
+Benutzerprofil:
+{profil_text}"""}
+        ],
+        max_tokens=900,
+        temperature=0.8
+    )
+
+    bericht = response.choices[0].message.content
+
+    supabase.table("long_term_memory").insert({
+        "thema": "Quartalsbericht",
+        "inhalt": bericht,
+        "timestamp": datetime.datetime.utcnow().isoformat() + 'Z',
+        "user_id": user_id
+    }).execute()
+
+    return bericht
 
 async def generiere_jahresbericht(user_id: str):
     heute = datetime.datetime.now()
@@ -1422,7 +1492,7 @@ def get_stored_report(report_type_name: str, user_id: str = "1"):
         # (z.B. "Wochenrückblick" oder "Monatsrückblick", ohne 's')
         
         # Sicherstellen, dass der übergebene Typ einem bekannten Thema entspricht
-        if report_type_name not in ["Wochenrückblick", "Monatsrückblick", "Jahresrückblick"]:
+        if report_type_name not in ["Wochenrückblick", "Monatsrückblick", "Quartalsbericht", "Jahresrückblick"]:
             raise HTTPException(status_code=400, detail="Ungültiger Berichtstyp angefragt.")
 
         report_data = supabase.table("long_term_memory") \
