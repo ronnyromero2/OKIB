@@ -1151,27 +1151,18 @@ async def automatischer_bericht(user_id: str = "1"):
     bericht_typ = None
     bericht_inhalt = None
 
-    # Letzter Tag des Monats: morgen ist ein anderer Monat
-    tomorrow_utc = heute_utc + datetime.timedelta(days=1)
-    if tomorrow_utc.month != heute_utc.month:
-        bericht_typ = "Monatsrückblick"
-        start_of_month_utc = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if start_of_month_utc.month == 12:
-            next_month_start = start_of_month_utc.replace(year=start_of_month_utc.year + 1, month=1)
-        else:
-            next_month_start = start_of_month_utc.replace(month=start_of_month_utc.month + 1)
-        end_of_month_utc = next_month_start - datetime.timedelta(microseconds=1)
+    # Monatsbericht: beim ersten Öffnen im neuen Monat, falls noch keiner für diesen Monat existiert
+    first_of_this_month = heute_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    existing_monthly = supabase.table("long_term_memory") \
+        .select("id") \
+        .eq("user_id", user_id) \
+        .eq("thema", "Monatsrückblick") \
+        .gte("timestamp", first_of_this_month.isoformat() + 'Z') \
+        .execute().data
 
-        existing_report_response = supabase.table("long_term_memory") \
-            .select("id, thema, timestamp") \
-            .eq("user_id", user_id) \
-            .eq("thema", bericht_typ) \
-            .gte("timestamp", start_of_month_utc.isoformat() + 'Z') \
-            .lt("timestamp", end_of_month_utc.isoformat() + 'Z') \
-            .execute()
-        existing_report_data = existing_report_response.data
-        if not existing_report_data:
-            bericht_inhalt = await generiere_rueckblick("Monats", 30, user_id)
+    if not existing_monthly and heute_utc.day > 1:
+        bericht_typ = "Monatsrückblick"
+        bericht_inhalt = await generiere_rueckblick("Monats", 30, user_id)
 
     elif wochentag_utc == 6:
         bericht_typ = "Wochenrückblick"
@@ -1839,5 +1830,38 @@ def delete_old_completed_todos(user_id: str, days_old: int = 90):
         
     except Exception as e:
         print(f"Fehler beim Löschen alter To-Dos: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/cleanup/conversation/{user_id}")
+def cleanup_conversation_history(user_id: str):
+    """Löscht Konversationshistorie die älter als der 1. des aktuellen Monats ist.
+    Nur aufrufen nachdem der Monatsbericht generiert wurde."""
+    try:
+        first_of_this_month = datetime.datetime.utcnow().replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+
+        # Sicherstellen dass ein Monatsbericht für diesen Monat existiert
+        existing_monthly = supabase.table("long_term_memory") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("thema", "Monatsrückblick") \
+            .gte("timestamp", first_of_this_month.isoformat() + 'Z') \
+            .execute().data
+
+        if not existing_monthly:
+            return {"status": "skipped", "message": "Kein Monatsbericht für diesen Monat gefunden — nichts gelöscht."}
+
+        result = supabase.table("conversation_history") \
+            .delete() \
+            .eq("user_id", user_id) \
+            .lt("timestamp", first_of_this_month.isoformat() + 'Z') \
+            .execute()
+
+        deleted_count = len(result.data) if result.data else 0
+        return {"status": "success", "deleted_count": deleted_count, "message": f"{deleted_count} alte Einträge gelöscht."}
+
+    except Exception as e:
+        print(f"Fehler beim Cleanup der Konversationshistorie: {e}")
         return {"status": "error", "message": str(e)}
 
