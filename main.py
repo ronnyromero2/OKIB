@@ -1224,6 +1224,12 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
             if g.get('ai_prompt'):
                 formatted_gespraeche.append(f"Einstiegsfrage: {g['ai_prompt']}")
         gespraeche_text_for_prompt += "\n".join(formatted_gespraeche)
+        if len(gespraeche_text_for_prompt) > 3000:
+            gespraeche_text_for_prompt = summarize_text_with_gpt(
+                gespraeche_text_for_prompt,
+                summary_length=400,
+                prompt_context="besprochene Themen, Fortschritte, Herausforderungen und Muster"
+            )
     else:
         gespraeche_text_for_prompt = "Es gab keine relevanten Gespräche in diesem Zeitraum."
 
