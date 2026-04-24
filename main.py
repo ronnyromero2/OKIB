@@ -1511,6 +1511,12 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     Analysiere Trends, erkenne Fortschritte oder Herausforderungen und gebe konkrete, umsetzbare Vorschläge für die Zukunft.
     Berücksichtige alle Gespräche im jeweiligen Zeitraum (Woche oder Monat).
     Nutze den übergeordneten Kontext (Monats-/Quartalsbericht), um zu prüfen ob die aktuellen Aktivitäten zur größeren Richtung passen.
+
+    WICHTIG — Zeitliche Einordnung (Heute: {heute.strftime('%d. %B %Y')}):
+    - Ereignisse und Termine die vor dem heutigen Datum lagen, sind VERGANGEN — schreibe sie im Präteritum
+    - Profil-Einträge mit "abgeschlossen" sind Vergangenheit — nicht als aktuell oder bevorstehend behandeln
+    - Nur was noch in der Zukunft liegt oder gerade läuft, als aktuell formulieren
+    - Wenn in den Gesprächen steht "ich habe Sorge wegen X" aber X-Datum liegt vor heute → X ist bereits passiert, formuliere entsprechend
     """
     uebergeordnet_abschnitt = f"\n\n    Übergeordneter Kontext (höhere Berichtsebene):\n    {uebergeordnet_text}" if uebergeordnet_text else ""
     user = f"""
