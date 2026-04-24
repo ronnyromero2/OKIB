@@ -1263,6 +1263,16 @@ async def generiere_quartalsbericht(user_id: str):
         f"Quartalsbericht ({q['timestamp'][:7]}):\n{q['inhalt']}" for q in reversed(frueherer_quartale_res)
     ]) if frueherer_quartale_res else "Keine früheren Quartalsberichte vorhanden."
 
+    letzter_jahresbericht_res = supabase.table("long_term_memory") \
+        .select("inhalt, timestamp") \
+        .eq("user_id", user_id) \
+        .eq("thema", "Jahresrückblick") \
+        .order("timestamp", desc=True) \
+        .limit(1) \
+        .execute().data
+    letzter_jahresbericht_text = f"Letzter Jahresbericht ({letzter_jahresbericht_res[0]['timestamp'][:7]}):\n{letzter_jahresbericht_res[0]['inhalt']}" \
+        if letzter_jahresbericht_res else "Kein Jahresbericht vorhanden."
+
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -1273,7 +1283,7 @@ TEIL 1 — WOHLWOLLEND: Übertrieben lobendes, warmherziges Lob. Feiere jeden Fo
 
 TEIL 2 — PROVOKATIV: Direkte, unverblümte Ansagen was sich ändern MUSS. Kein Weichspülen. Klare Sprache wie "So geht das nicht weiter", "Reiß dich zusammen", "Das ist keine Ausrede". Konkrete Verhaltensänderungen benennen.
 
-Vergleiche dabei auch mit den früheren Quartalsberichten — hat sich etwas verbessert oder wiederholen sich dieselben Muster?"""},
+Vergleiche dabei auch mit den früheren Quartalsberichten und dem Jahresbericht — hat sich etwas verbessert, oder wiederholen sich dieselben Muster? Passt das Quartal zur Jahresrichtung?"""},
             {"role": "user", "content": f"""Quartal: {quartal_name}
 
 Monatsberichte:
@@ -1281,6 +1291,9 @@ Monatsberichte:
 
 Frühere Quartalsberichte (Entwicklung über die Zeit):
 {frueherer_quartale_text}
+
+Übergeordneter Kontext:
+{letzter_jahresbericht_text}
 
 Benutzerprofil:
 {profil_text}"""}
@@ -1449,6 +1462,26 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     else:
         previous_report_content = "Kein früherer Bericht dieses Typs vorhanden."
 
+    # Übergeordneter Kontext: eine Ebene höher
+    uebergeordnet_text = ""
+    if zeitraum == "Wochen":
+        letzter_monat = supabase.table("long_term_memory").select("inhalt, timestamp") \
+            .eq("user_id", user_id).eq("thema", "Monatsrückblick") \
+            .order("timestamp", desc=True).limit(1).execute().data
+        letzter_quartal = supabase.table("long_term_memory").select("inhalt, timestamp") \
+            .eq("user_id", user_id).eq("thema", "Quartalsbericht") \
+            .order("timestamp", desc=True).limit(1).execute().data
+        if letzter_monat:
+            uebergeordnet_text += f"Letzter Monatsbericht ({letzter_monat[0]['timestamp'][:7]}):\n{letzter_monat[0]['inhalt']}"
+        if letzter_quartal:
+            uebergeordnet_text += f"\n\nLetzter Quartalsbericht ({letzter_quartal[0]['timestamp'][:7]}):\n{letzter_quartal[0]['inhalt']}"
+    elif zeitraum == "Monats":
+        letzter_quartal = supabase.table("long_term_memory").select("inhalt, timestamp") \
+            .eq("user_id", user_id).eq("thema", "Quartalsbericht") \
+            .order("timestamp", desc=True).limit(1).execute().data
+        if letzter_quartal:
+            uebergeordnet_text = f"Letzter Quartalsbericht ({letzter_quartal[0]['timestamp'][:7]}):\n{letzter_quartal[0]['inhalt']}"
+
     heute = datetime.datetime.now()
     zeitraum_label = f"{heute.strftime('%B %Y')}" if zeitraum == "Monats" else f"Woche bis {heute.strftime('%d.%m.%Y')}"
 
@@ -1456,7 +1489,9 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     Du bist ein persönlicher Beobachter und Coach. Liste die im letzten {zeitraum} besprochenen Themen und den Status von Zielen und Routinen rückblickend knapp auf.
     Analysiere Trends, erkenne Fortschritte oder Herausforderungen und gebe konkrete, umsetzbare Vorschläge für die Zukunft.
     Berücksichtige alle Gespräche im jeweiligen Zeitraum (Woche oder Monat).
+    Nutze den übergeordneten Kontext (Monats-/Quartalsbericht), um zu prüfen ob die aktuellen Aktivitäten zur größeren Richtung passen.
     """
+    uebergeordnet_abschnitt = f"\n\n    Übergeordneter Kontext (höhere Berichtsebene):\n    {uebergeordnet_text}" if uebergeordnet_text else ""
     user = f"""
     Zeitraum: {zeitraum_label}
 
@@ -1470,7 +1505,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     {routinen_text}
 
     Frühere Berichte gleichen Typs (Entwicklung über die Zeit):
-    {previous_report_content}
+    {previous_report_content}{uebergeordnet_abschnitt}
 
     Benutzerprofil-Details:
     {profil_text}
