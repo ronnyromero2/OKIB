@@ -140,6 +140,13 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     4. Aktualisiere bestehende Werte bei neuen/anderen Informationen
     5. Ignoriere nur wirklich temporäre Dinge (wie "heute bin ich müde")
 
+    ZEITLICHE EREIGNISSE (Reisen, Wettkämpfe, Projekte, Pläne):
+    - Unterscheide IMMER zwischen: "geplant für [Zeitraum]", "laufend", "abgeschlossen [Zeitraum]"
+    - Wenn der User sagt, dass etwas vorbei/beendet/gemacht ist → Wert SOFORT auf "abgeschlossen [Zeitraum]" aktualisieren
+    - Vergangene Ereignisse erkennbar an: "war", "ist vorbei", "habe ich gemacht", "letztes Jahr", "ist beendet", "bin zurück" → immer "abgeschlossen" markieren
+    - Zukünftige Ereignisse → "geplant für [Datum]"
+    - Beispiele: "Reise_Kolumbien: abgeschlossen Oktober 2024", "Marathon_Koeln: abgeschlossen April 2024", "Projekt_X: geplant für Sommer 2025"
+
     FAKTEN-KATEGORIEN (Beispiele):
     - Beruf, Wohnsituation, Familie, Beziehung, Hobbys, Sport, Gesundheit, Finanzen
 
@@ -965,6 +972,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         Konversationshistorie (letzte 5 Nachrichten):
         {history_text}
 
+        WICHTIG zum Profil: Einträge die "abgeschlossen" enthalten sind VERGANGENE Ereignisse. Frage NICHT danach als wären sie noch bevorstehend oder in Vorbereitung. Nutze sie nur als Hintergrundwissen über den Nutzer.
         Analysiere die aktuelle Nachricht im Kontext ALLER Infos. Erkenne Inkonsistenzen oder mangelnden Fortschritt.
         Wenn der Nutzer überrascht über Deine Nachricht scheint, frage direkt nach, ob Du etwas bestimmtes falsch einschätzt und korrigiere Deine Infos, falls der Nutzer auf Fehler hinweist.
         Kein allgemeines Lob. Fokussiere dich auf konkrete Ansatzpunkte.
