@@ -1213,20 +1213,16 @@ async def automatischer_bericht(user_id: str = "1"):
             except Exception as e:
                 print(f"Fehler beim Cleanup der Konversationshistorie: {e}")
 
-    if bericht_typ is None and wochentag_utc == 6:
-        bericht_typ = "Wochenrückblick"
-        today_start_utc = heute_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow_start_utc = today_start_utc + datetime.timedelta(days=1)
-
-        existing_report_response = supabase.table("long_term_memory") \
-            .select("id, thema, timestamp") \
+    if bericht_typ is None:
+        monday_of_this_week = (heute_utc - datetime.timedelta(days=heute_utc.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        existing_weekly = supabase.table("long_term_memory") \
+            .select("id") \
             .eq("user_id", user_id) \
-            .eq("thema", bericht_typ) \
-            .gte("timestamp", today_start_utc.isoformat() + 'Z') \
-            .lt("timestamp", tomorrow_start_utc.isoformat() + 'Z') \
-            .execute()
-        existing_report_data = existing_report_response.data
-        if not existing_report_data:
+            .eq("thema", "Wochenrückblick") \
+            .gte("timestamp", monday_of_this_week.isoformat() + 'Z') \
+            .execute().data
+        if not existing_weekly and heute_utc.weekday() > 0:
+            bericht_typ = "Wochenrückblick"
             bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id)
 
     if bericht_typ is None:
