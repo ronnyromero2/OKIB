@@ -1256,6 +1256,17 @@ async def generiere_quartalsbericht(user_id: str):
         .execute().data
     profil_text = "\n".join([f"- {p['attribute_name']}: {p['attribute_value']}" for p in profil_data]) if profil_data else "Keine Profildaten."
 
+    frueherer_quartale_res = supabase.table("long_term_memory") \
+        .select("inhalt, timestamp") \
+        .eq("user_id", user_id) \
+        .eq("thema", "Quartalsbericht") \
+        .order("timestamp", desc=True) \
+        .limit(4) \
+        .execute().data
+    frueherer_quartale_text = "\n\n".join([
+        f"Quartalsbericht ({q['timestamp'][:7]}):\n{q['inhalt']}" for q in reversed(frueherer_quartale_res)
+    ]) if frueherer_quartale_res else "Keine früheren Quartalsberichte vorhanden."
+
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -1264,11 +1275,16 @@ Der Bericht hat ZWEI klar getrennte Teile:
 
 TEIL 1 — WOHLWOLLEND: Übertrieben lobendes, warmherziges Lob. Feiere jeden Fortschritt als riesige Leistung. Positiv, motivierend, fast schon übertrieben anerkennend.
 
-TEIL 2 — PROVOKATIV: Direkte, unverblümte Ansagen was sich ändern MUSS. Kein Weichspülen. Klare Sprache wie "So geht das nicht weiter", "Reiß dich zusammen", "Das ist keine Ausrede". Konkrete Verhaltensänderungen benennen."""},
+TEIL 2 — PROVOKATIV: Direkte, unverblümte Ansagen was sich ändern MUSS. Kein Weichspülen. Klare Sprache wie "So geht das nicht weiter", "Reiß dich zusammen", "Das ist keine Ausrede". Konkrete Verhaltensänderungen benennen.
+
+Vergleiche dabei auch mit den früheren Quartalsberichten — hat sich etwas verbessert oder wiederholen sich dieselben Muster?"""},
             {"role": "user", "content": f"""Quartal: {quartal_name}
 
 Monatsberichte:
 {monatsberichte_text}
+
+Frühere Quartalsberichte (Entwicklung über die Zeit):
+{frueherer_quartale_text}
 
 Benutzerprofil:
 {profil_text}"""}
@@ -1315,14 +1331,16 @@ async def generiere_jahresbericht(user_id: str):
     all_ziele = supabase.table("goals").select("titel, status").eq("user_id", user_id).execute().data
     ziele_text = "\n".join([f"- {z['titel']} ({z['status']})" for z in all_ziele]) if all_ziele else "Keine Ziele."
 
-    letzter_jahresbericht = supabase.table("long_term_memory") \
-        .select("inhalt") \
+    frueherer_jahresberichte = supabase.table("long_term_memory") \
+        .select("inhalt, timestamp") \
         .eq("user_id", user_id) \
         .eq("thema", "Jahresrückblick") \
         .order("timestamp", desc=True) \
-        .limit(1) \
+        .limit(3) \
         .execute().data
-    vorheriger_bericht = letzter_jahresbericht[0]['inhalt'] if letzter_jahresbericht else "Kein früherer Jahresbericht."
+    vorheriger_bericht = "\n\n".join([
+        f"Jahresbericht ({j['timestamp'][:7]}):\n{j['inhalt']}" for j in reversed(frueherer_jahresberichte)
+    ]) if frueherer_jahresberichte else "Kein früherer Jahresbericht."
 
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -1333,6 +1351,8 @@ Der Bericht hat ZWEI klar getrennte Teile und erzählt eine Geschichte — keine
 TEIL 1 — WOHLWOLLEND: Erzähle das Jahr als eine bewegende Geschichte voller Wachstum und Leistung. Feiere jeden Fortschritt als riesige Leistung. Geh Monat für Monat durch das Jahr und male ein warmherziges, lobendes Bild der Reise. Übertrieben anerkennend, motivierend, fast schon euphorisch — aber basierend auf dem was wirklich passiert ist.
 
 TEIL 2 — PROVOKATIV: Direkte, unverblümte Ansagen was sich über das Jahr nicht verändert hat und sich dringend ändern MUSS. Kein Weichspülen. Klare Sprache wie "So geht das nicht weiter", "Reiß dich zusammen", "Das ist keine Ausrede". Benenne wiederkehrende Muster schonungslos. Konkrete Verhaltensänderungen für das nächste Jahr.
+
+Vergleiche auch mit früheren Jahresberichten — was hat sich über die Jahre verändert, was bleibt hartnäckig gleich?
 
 ABSCHLUSS: Beende den Bericht auf einer positiven, vorwärtsgewandten Note — eine ermutigende Vision für das kommende Jahr, die Lust macht weiterzumachen."""},
             {"role": "user", "content": f"""Jahr: {jahr}
@@ -1346,7 +1366,7 @@ Ziele:
 Benutzerprofil:
 {profil_text}
 
-Vorheriger Jahresbericht (zum Vergleich):
+Frühere Jahresberichte (Entwicklung über die Jahre):
 {vorheriger_bericht}"""}
         ],
         max_tokens=1500,
@@ -1418,15 +1438,20 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     else:
         routinen_text = "Keine Routinen vorhanden."
         
-    latest_report_res = supabase.table("long_term_memory") \
-        .select("inhalt") \
+    latest_reports_res = supabase.table("long_term_memory") \
+        .select("inhalt, timestamp") \
         .eq("user_id", user_id) \
         .eq("thema", f"{zeitraum}rückblick") \
         .order("timestamp", desc=True) \
-        .limit(1) \
+        .limit(4) \
         .execute().data
-    
-    previous_report_content = latest_report_res[0]['inhalt'] if latest_report_res else "Kein früherer Bericht dieses Typs vorhanden."
+
+    if latest_reports_res:
+        previous_report_content = "\n\n".join([
+            f"Bericht vom {r['timestamp'][:10]}:\n{r['inhalt']}" for r in reversed(latest_reports_res)
+        ])
+    else:
+        previous_report_content = "Kein früherer Bericht dieses Typs vorhanden."
 
     heute = datetime.datetime.now()
     zeitraum_label = f"{heute.strftime('%B %Y')}" if zeitraum == "Monats" else f"Woche bis {heute.strftime('%d.%m.%Y')}"
@@ -1448,7 +1473,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
     Routinen:
     {routinen_text}
 
-    Früherer Bericht (zum Vergleich / Fortschritt):
+    Frühere Berichte gleichen Typs (Entwicklung über die Zeit):
     {previous_report_content}
 
     Benutzerprofil-Details:
