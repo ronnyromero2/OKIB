@@ -140,12 +140,15 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     4. Aktualisiere bestehende Werte bei neuen/anderen Informationen
     5. Ignoriere nur wirklich temporäre Dinge (wie "heute bin ich müde")
 
-    ZEITLICHE EREIGNISSE (Reisen, Wettkämpfe, Projekte, Pläne):
-    - Unterscheide IMMER zwischen: "geplant für [Zeitraum]", "laufend", "abgeschlossen [Zeitraum]"
-    - Wenn der User sagt, dass etwas vorbei/beendet/gemacht ist → Wert SOFORT auf "abgeschlossen [Zeitraum]" aktualisieren
+    TERMINE & PROZESSE (höchste Priorität — aktiv suchen!):
+    - Erkenne ALLE konkreten Ereignisse, Deadlines und mehrstufige Vorhaben
+    - Format Termine: Schlüssel = "Termin_[Name]", Wert = "[Status] [Datum/Zeitraum]"
+      Beispiele: "Termin_Hamburg_Marathon": "geplant Mai 2025", "Termin_Reise_Japan": "geplant August 2025"
+    - Format Prozesse: Schlüssel = "Prozess_[Name]", Wert = "[Status] – [kurze Beschreibung]"
+      Beispiele: "Prozess_Marathontraining": "laufend – Vorbereitung auf Hamburg Mai 2025", "Prozess_Jobsuche": "abgeschlossen Januar 2025"
+    - Status IMMER aktuell halten: sobald etwas vorbei ist → "abgeschlossen [Zeitraum]"
     - Vergangene Ereignisse erkennbar an: "war", "ist vorbei", "habe ich gemacht", "letztes Jahr", "ist beendet", "bin zurück" → immer "abgeschlossen" markieren
     - Zukünftige Ereignisse → "geplant für [Datum]"
-    - Beispiele: "Reise_Kolumbien: abgeschlossen Oktober 2024", "Marathon_Koeln: abgeschlossen April 2024", "Projekt_X: geplant für Sommer 2025"
 
     FAKTEN-KATEGORIEN (Beispiele):
     - Beruf, Wohnsituation, Familie, Beziehung, Hobbys, Sport, Gesundheit, Finanzen
@@ -876,7 +879,8 @@ async def chat(user_id: str, chat_input: ChatInput):
             print(f"Fehler beim Abrufen der Ziele: {e}")
 
         # Laden der dynamischen Profildaten aus der 'profile'-Tabelle (EAV-Modell)
-        profile_text_for_prompt = "Keine spezifischen Profilinformationen erfasst." # Standardwert
+        profile_text_for_prompt = "Keine spezifischen Profilinformationen erfasst."
+        upcoming_events_text = "Keine bevorstehenden Termine oder laufenden Prozesse."
         try:
             profile_attributes_data = supabase.table("profile") \
                 .select("attribute_name, attribute_value") \
@@ -886,6 +890,12 @@ async def chat(user_id: str, chat_input: ChatInput):
             if profile_attributes_data:
                 user_profile_details = {item["attribute_name"]: item["attribute_value"] for item in profile_attributes_data}
                 profile_text_for_prompt = "Aktuelles Benutzerprofil:\n" + "\n".join([f"- {name}: {value}" for name, value in user_profile_details.items()])
+                upcoming = [
+                    f"- {name}: {value}"
+                    for name, value in user_profile_details.items()
+                    if name.startswith(("Termin_", "Prozess_")) and "abgeschlossen" not in value.lower()
+                ]
+                upcoming_events_text = "\n".join(upcoming) if upcoming else "Keine bevorstehenden Termine oder laufenden Prozesse."
         except Exception as e:
             print(f"Fehler beim Laden des Profils: {e}")
 
@@ -950,7 +960,10 @@ async def chat(user_id: str, chat_input: ChatInput):
 
         Nutzerprofil:
         {profile_text_for_prompt}
-        
+
+        Bevorstehende Termine & laufende Prozesse:
+        {upcoming_events_text}
+
         Deine heutigen Routinen:
         {routines_text}
 
