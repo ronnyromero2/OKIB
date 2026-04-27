@@ -656,12 +656,12 @@ async function updateTodoStatus(todoId, isCompleted) {
   }
 }
   
-  window.addEventListener('DOMContentLoaded', () => {
+  window.addEventListener('DOMContentLoaded', async () => {
     loadRoutines();
     ladeZiele();
     loadTodos();
-    // stelleEinstiegsfrage(); // ZUM AKTIVIEREN: // am Anfang entfernen
-    zeigeAutomatischenBericht();
+    await zeigeAutomatischenBericht();
+    stelleEinstiegsfrage();
   });
 </script>
 
