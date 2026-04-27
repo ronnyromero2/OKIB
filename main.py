@@ -1059,7 +1059,41 @@ async def chat(user_id: str, chat_input: ChatInput):
         if len(user_message.split()) >= 5:
             await extrahiere_und_speichere_profil_details(user_id, user_message, ai_response_content, last_ai_prompt)
 
-        return {"response": ai_response_content, "created_todo": False, "created_routine": False}
+        # Commitment-Check: nur wenn Nachricht substanziell genug
+        todo_suggestion = None
+        if len(user_message.split()) >= 6:
+            try:
+                today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+                commitment_check = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": f"""Heute ist {today_str}.
+
+Analysiere diese Nachricht auf ein konkretes, wichtiges Commitment:
+"{user_message}"
+
+Ein Commitment ist NUR relevant wenn ALLE Kriterien erfüllt sind:
+1. Spezifische Aktion (nicht vage wie "ich will gesünder leben")
+2. Hat einen Zeitbezug oder ist zeitkritisch
+3. Nicht trivial (kein "ich gehe heute einkaufen", kein "ich trinke mehr Wasser")
+4. Relevant für Ziele, Karriere, Gesundheit oder persönliche Entwicklung
+
+Antworte NUR mit JSON:
+{{"commitment": false}} — wenn kein echtes Commitment
+{{"commitment": true, "titel": "kurzer Aktions-Titel", "due_date": "YYYY-MM-DD oder null", "priority": "high/medium/low"}}"""}],
+                    response_format={"type": "json_object"},
+                    temperature=0
+                )
+                result = json.loads(commitment_check.choices[0].message.content)
+                if result.get("commitment"):
+                    todo_suggestion = {
+                        "titel": result.get("titel"),
+                        "due_date": result.get("due_date"),
+                        "priority": result.get("priority", "medium")
+                    }
+            except Exception:
+                pass
+
+        return {"response": ai_response_content, "created_todo": False, "created_routine": False, "todo_suggestion": todo_suggestion}
 
     except Exception as e:
         print(f"Fehler in der Chat-Funktion: {e}")
