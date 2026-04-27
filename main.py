@@ -477,6 +477,7 @@ async def start_interaction(user_id: str):
             
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
+        today_date = datetime.datetime.now().strftime("%Y-%m-%d")
         unfulfilled_routines = supabase.table("routines") \
             .select("task, missed_count, missed_dates") \
             .eq("day", today) \
@@ -494,24 +495,53 @@ async def start_interaction(user_id: str):
                 routine_texts.append(str(r.get("task", '')))
         routine_context_today = ", ".join(routine_texts)
 
+        # Überfällige To-Dos laden
+        overdue_todos_data = supabase.table("todos") \
+            .select("title, due_date, priority") \
+            .eq("user_id", user_id) \
+            .lt("due_date", today_date) \
+            .not_.in_("status", ["completed", "archived"]) \
+            .order("due_date", desc=False) \
+            .limit(5) \
+            .execute().data
+        overdue_todos_context = "\n".join([
+            f"- {t['title']} (fällig seit {t['due_date']}, Priorität: {t['priority']})"
+            for t in overdue_todos_data
+        ]) if overdue_todos_data else ""
 
-# Modus-Auswahl per Zufall
+        # Priority-Flags
+        has_overdue_todos = len(overdue_todos_data) > 0
+        has_struggling_routines = len(routine_texts) > 0
+        has_priority_items = has_overdue_todos or has_struggling_routines
+
+        # Modus-Auswahl: Priority-Items zuerst, dann Zufall
         roll = random.random()
 
-        if roll < 0.05:
-            mode = "universum"
-        elif roll < 0.20:
-            mode = "insight"
-        elif roll < 0.30:
-            mode = "rueckblick"
-        elif roll < 0.40:
-            mode = "ziel_check"
-        elif roll < 0.50:
-            mode = "routine_reflexion"
-        elif roll < 0.57:
-            mode = "provokation"
+        if has_priority_items and roll < 0.65:
+            # 65% Wahrscheinlichkeit dass Priority-Items angesprochen werden
+            if has_overdue_todos and has_struggling_routines:
+                mode = random.choice(["todo_followup", "routine_reflexion"])
+            elif has_overdue_todos:
+                mode = "todo_followup"
+            else:
+                mode = "routine_reflexion"
         else:
-            mode = "normal"
+            # Normaler Zufalls-Modus
+            roll2 = random.random()
+            if roll2 < 0.05:
+                mode = "universum"
+            elif roll2 < 0.20:
+                mode = "insight"
+            elif roll2 < 0.30:
+                mode = "rueckblick"
+            elif roll2 < 0.40:
+                mode = "ziel_check"
+            elif roll2 < 0.50:
+                mode = "routine_reflexion"
+            elif roll2 < 0.57:
+                mode = "provokation"
+            else:
+                mode = "normal"
 
 
         # Kontext für GPT aufbauen
@@ -525,7 +555,17 @@ async def start_interaction(user_id: str):
         if routine_context_today:
             context_for_gpt += f"\nHeute oft verpasste Routinen: {routine_context_today}"
 
-        if mode == "universum":
+        if mode == "todo_followup":
+            prompt = f"""
+            Du bist ein direkter persönlicher Coach. Der Nutzer hat überfällige To-Dos:
+            {overdue_todos_context}
+
+            Sprich EINES davon direkt an — frag knapp und konkret warum es noch nicht erledigt ist und was jetzt den nächsten Schritt blockiert.
+            Maximal 1-2 Sätze. Nicht wiederholen was schon in den letzten Fragen stand:
+            {", ".join(recent_ai_prompts_to_avoid)}
+            """
+
+        elif mode == "universum":
             prompt = f"""
             Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
             Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
