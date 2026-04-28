@@ -1317,17 +1317,17 @@ async def automatischer_bericht(user_id: str = "1"):
             except Exception as e:
                 print(f"Fehler beim Cleanup der Konversationshistorie: {e}")
 
-    if bericht_typ is None:
-        monday_of_this_week = (heute_utc - datetime.timedelta(days=heute_utc.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    if bericht_typ is None and heute_utc.weekday() == 6:
+        monday_of_this_week = (heute_utc - datetime.timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
         existing_weekly = supabase.table("long_term_memory") \
             .select("id") \
             .eq("user_id", user_id) \
             .eq("thema", "Wochenrückblick") \
             .gte("timestamp", monday_of_this_week.isoformat() + 'Z') \
             .execute().data
-        if not existing_weekly and heute_utc.weekday() >= 3:
+        if not existing_weekly:
             bericht_typ = "Wochenrückblick"
-            bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id)
+            bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id, seit=monday_of_this_week.isoformat() + 'Z')
 
     if bericht_typ is None:
         return {"typ": None, "inhalt": "Heute wird kein Bericht generiert."}
@@ -1498,8 +1498,9 @@ Frühere Jahresberichte (Entwicklung über die Jahre):
     return bericht
 
 # Wochen- und Monatsberichte generieren (mit Summarisierung)
-async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
-    seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat() + 'Z'
+async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str, seit: str = None):
+    if seit is None:
+        seit = (datetime.datetime.utcnow() - datetime.timedelta(days=tage)).isoformat() + 'Z'
 
     # Rufe die gesamte Konversationshistorie für den Zeitraum ab
     all_gespraeche = supabase.table("conversation_history").select("user_input, ai_response, ai_prompt, timestamp").gte("timestamp", seit).eq("user_id", user_id).order("timestamp", desc=False).execute().data
@@ -1587,7 +1588,11 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str):
             uebergeordnet_text = f"Letzter Quartalsbericht ({letzter_quartal[0]['timestamp'][:7]}):\n{letzter_quartal[0]['inhalt']}"
 
     heute = datetime.datetime.now()
-    zeitraum_label = f"{heute.strftime('%B %Y')}" if zeitraum == "Monats" else f"Woche bis {heute.strftime('%d.%m.%Y')}"
+    if zeitraum == "Monats":
+        zeitraum_label = heute.strftime('%B %Y')
+    else:
+        montag = (heute - datetime.timedelta(days=heute.weekday())).strftime('%d.%m.')
+        zeitraum_label = f"Woche {montag} – {heute.strftime('%d.%m.%Y')}"
 
     system = f"""
     Du bist ein persönlicher Beobachter und Coach. Liste die im letzten {zeitraum} besprochenen Themen und den Status von Zielen und Routinen rückblickend knapp auf.
