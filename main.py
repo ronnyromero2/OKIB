@@ -638,7 +638,7 @@ async def start_interaction(user_id: str):
                 - Ehrliche Einschätzung: "Bist du wirklich zufrieden mit X?"
                 - Was blockiert: "Was hält dich bei X noch zurück?"
                 - Überraschung: "Was war bei X anders als erwartet?"
-                VERBOTEN: "Gab es einen Moment...", "hat sich etwas verändert", "was ist daraus geworden" — zu abgenutzt.
+                Selten verwenden (max. 1 von 5 Fragen): "Gab es einen Moment...", "hat sich etwas verändert", "was ist daraus geworden".
                 Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
                 {", ".join(recent_ai_prompts_to_avoid)}
                 """
@@ -689,7 +689,7 @@ async def start_interaction(user_id: str):
             3. Verbiete dir selbst folgende Themen komplett: Lieblingsessen, Lieblingsmusik, Lieblingsfilm, Lieblingsbuch, Urlaubsziele, Lottogewinn.
             4. Sei konkret und persönlich, nicht allgemein. Nicht "Wie gehst du mit Stress um?" sondern z.B. "Was machst du als erstes, wenn ein Arbeitstag richtig schiefläuft?"
             5. Variiere den Fragetyp: manchmal eine Meinungsfrage, manchmal eine Statusfrage, manchmal eine hypothetische Frage, manchmal eine direkte Konfrontation.
-            6. VERBOTEN: "Gab es einen Moment...", "Gab es ein Erlebnis...", "Wann hast du das letzte Mal..." — diese Formulierungen sind überstrapaziert.
+            6. Selten verwenden (max. 1 von 5 Fragen): "Gab es einen Moment...", "Gab es ein Erlebnis...", "Wann hast du das letzte Mal..."
             7. Die Frage soll maximal 1 Satz lang sein.
             
             Benutzerprofil (was du bereits weißt):
