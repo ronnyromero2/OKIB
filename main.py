@@ -1325,7 +1325,7 @@ async def automatischer_bericht(user_id: str = "1"):
             .eq("thema", "Wochenrückblick") \
             .gte("timestamp", monday_of_this_week.isoformat() + 'Z') \
             .execute().data
-        if not existing_weekly and heute_utc.weekday() > 0:
+        if not existing_weekly and heute_utc.weekday() >= 3:
             bericht_typ = "Wochenrückblick"
             bericht_inhalt = await generiere_rueckblick("Wochen", 7, user_id)
 
