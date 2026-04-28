@@ -630,9 +630,15 @@ async def start_interaction(user_id: str):
                 Du bist ein persönlicher Mentor. Hier ist ein früherer Rückblick des Nutzers:
                 Typ: "{gewählter_bericht['thema']}"
                 Inhalt: "{gewählter_bericht['inhalt']}"
-                
-                Greife ein konkretes Thema, Muster oder eine Herausforderung aus diesem Rückblick auf und stelle eine kurze, 
-                direkte Anschlussfrage — hat sich etwas verändert, was ist daraus geworden?
+
+                Stelle eine kurze, direkte Anschlussfrage zu einem konkreten Thema aus diesem Rückblick.
+                Variiere den Fragetyp — wähle EINEN davon:
+                - Aktueller Status: "Wie weit bist du mit X?"
+                - Konkrete Aktion: "Hast du X inzwischen gemacht?"
+                - Ehrliche Einschätzung: "Bist du wirklich zufrieden mit X?"
+                - Was blockiert: "Was hält dich bei X noch zurück?"
+                - Überraschung: "Was war bei X anders als erwartet?"
+                VERBOTEN: "Gab es einen Moment...", "hat sich etwas verändert", "was ist daraus geworden" — zu abgenutzt.
                 Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
                 {", ".join(recent_ai_prompts_to_avoid)}
                 """
@@ -682,8 +688,9 @@ async def start_interaction(user_id: str):
             {chr(10).join(f"- {q}" for q in recent_ai_prompts_to_avoid)}
             3. Verbiete dir selbst folgende Themen komplett: Lieblingsessen, Lieblingsmusik, Lieblingsfilm, Lieblingsbuch, Urlaubsziele, Lottogewinn.
             4. Sei konkret und persönlich, nicht allgemein. Nicht "Wie gehst du mit Stress um?" sondern z.B. "Was machst du als erstes, wenn ein Arbeitstag richtig schiefläuft?"
-            5. Frag nach echten Erlebnissen, konkreten Momenten oder ehrlichen Meinungen — nicht nach Präferenzen oder Lieblingsthemen.
-            6. Die Frage soll maximal 1 Satz lang sein.
+            5. Variiere den Fragetyp: manchmal eine Meinungsfrage, manchmal eine Statusfrage, manchmal eine hypothetische Frage, manchmal eine direkte Konfrontation.
+            6. VERBOTEN: "Gab es einen Moment...", "Gab es ein Erlebnis...", "Wann hast du das letzte Mal..." — diese Formulierungen sind überstrapaziert.
+            7. Die Frage soll maximal 1 Satz lang sein.
             
             Benutzerprofil (was du bereits weißt):
             {user_profile_context}
