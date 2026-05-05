@@ -680,8 +680,8 @@ async def start_interaction(user_id: str):
 
         else:  # normal
             prompt = f"""
-            Du bist ein kreativer, neugieriger Gesprächspartner. Deine Aufgabe: Stelle EINE einzige, kurze Frage.
-            
+            Du bist ein kreativer, neugieriger Gesprächspartner. Deine Aufgabe: Stelle GENAU EINE kurze Frage — kein "und", kein Komma zwischen zwei Fragen, keine Mehrfachfragen.
+
             REGELN:
             1. Schaue zuerst auf das Benutzerprofil und die Historie — was weißt du bereits? Frag nach etwas, das du noch NICHT weißt.
             2. Diese Fragen wurden bereits gestellt — stelle sie NIEMALS nochmal oder ähnlich:
@@ -690,7 +690,7 @@ async def start_interaction(user_id: str):
             4. Sei konkret und persönlich, nicht allgemein. Nicht "Wie gehst du mit Stress um?" sondern z.B. "Was machst du als erstes, wenn ein Arbeitstag richtig schiefläuft?"
             5. Variiere den Fragetyp: manchmal eine Meinungsfrage, manchmal eine Statusfrage, manchmal eine hypothetische Frage, manchmal eine direkte Konfrontation.
             6. Selten verwenden (max. 1 von 10 Fragen): "Gab es einen Moment...", "Gab es ein Erlebnis...", "Wann hast du das letzte Mal..."
-            7. Die Frage soll maximal 1 Satz lang sein.
+            7. Die Frage soll maximal 1 Satz lang sein. EIN Fragezeichen, nicht mehrere.
             
             Benutzerprofil (was du bereits weißt):
             {user_profile_context}
@@ -1033,6 +1033,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         {history_text}
 
         WICHTIG zum Profil: Einträge die "abgeschlossen" enthalten sind VERGANGENE Ereignisse. Frage NICHT danach als wären sie noch bevorstehend oder in Vorbereitung. Nutze sie nur als Hintergrundwissen über den Nutzer.
+        Erfinde KEINE Daten, Namen oder Details die nicht explizit in den bereitgestellten Infos stehen. Wenn du dir bei einem Detail unsicher bist, lass es weg statt es zu erfinden.
         Analysiere die aktuelle Nachricht im Kontext ALLER Infos. Erkenne Inkonsistenzen oder mangelnden Fortschritt.
         Wenn der Nutzer überrascht über Deine Nachricht scheint, frage direkt nach, ob Du etwas bestimmtes falsch einschätzt und korrigiere Deine Infos, falls der Nutzer auf Fehler hinweist.
         Kein allgemeines Lob. Fokussiere dich auf konkrete Ansatzpunkte.
