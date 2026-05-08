@@ -320,8 +320,29 @@ async function loadRoutines() {
                   });
                   routineDiv.classList.add("skipped");
                   checkbox.disabled = true;
-                  skipBtn.remove();
+                  skipBtn.title = "Zurücksetzen";
+                  skipBtn.style.color = "#c87020";
                 } catch(e) { console.error("Skip fehlgeschlagen:", e); }
+              });
+              routineDiv.appendChild(skipBtn);
+            } else if (routine.skipped) {
+              const skipBtn = document.createElement("button");
+              skipBtn.textContent = "✕";
+              skipBtn.className = "skip-btn";
+              skipBtn.title = "Zurücksetzen";
+              skipBtn.style.color = "#c87020";
+              skipBtn.addEventListener("click", async () => {
+                try {
+                  await fetch(`${API_URL}/routines/skip`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: routine.id, user_id: USER_ID, unskip: true })
+                  });
+                  routineDiv.classList.remove("skipped");
+                  checkbox.disabled = false;
+                  skipBtn.title = "Überspringen";
+                  skipBtn.style.color = "";
+                } catch(e) { console.error("Unskip fehlgeschlagen:", e); }
               });
               routineDiv.appendChild(skipBtn);
             }
@@ -679,21 +700,37 @@ async function loadTodos() {
         todoDiv.appendChild(checkbox);
         todoDiv.appendChild(label);
 
-        if (todo.status !== "skipped" && !todo.completed) {
+        if (!todo.completed) {
+          const isSkipped = todo.status === "skipped";
           const skipBtn = document.createElement("button");
           skipBtn.textContent = "✕";
           skipBtn.className = "skip-btn";
-          skipBtn.title = "Überspringen";
+          skipBtn.title = isSkipped ? "Zurücksetzen" : "Überspringen";
+          if (isSkipped) skipBtn.style.color = "#c87020";
           skipBtn.addEventListener("click", async () => {
+            const nowSkipped = todoDiv.classList.contains("skipped");
             try {
-              await fetch(`${API_URL}/todos/skip/${USER_ID}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: todo.id })
-              });
-              todoDiv.classList.add("skipped");
-              checkbox.disabled = true;
-              skipBtn.remove();
+              if (nowSkipped) {
+                await fetch(`${API_URL}/todos/skip/${USER_ID}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: todo.id, unskip: true })
+                });
+                todoDiv.classList.remove("skipped");
+                checkbox.disabled = false;
+                skipBtn.title = "Überspringen";
+                skipBtn.style.color = "";
+              } else {
+                await fetch(`${API_URL}/todos/skip/${USER_ID}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: todo.id })
+                });
+                todoDiv.classList.add("skipped");
+                checkbox.disabled = true;
+                skipBtn.title = "Zurücksetzen";
+                skipBtn.style.color = "#c87020";
+              }
             } catch(e) { console.error("Skip fehlgeschlagen:", e); }
           });
           todoDiv.appendChild(skipBtn);

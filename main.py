@@ -2091,7 +2091,10 @@ def update_todo_status(update: TodoStatusUpdate, user_id: str):
 @app.post("/todos/skip/{user_id}")
 def skip_todo(user_id: str, body: dict):
     try:
-        supabase.table("todos").update({"status": "skipped", "completed": False}).eq("id", str(body["id"])).eq("user_id", user_id).execute()
+        if body.get("unskip"):
+            supabase.table("todos").update({"status": "open", "completed": False}).eq("id", str(body["id"])).eq("user_id", user_id).execute()
+        else:
+            supabase.table("todos").update({"status": "skipped", "completed": False}).eq("id", str(body["id"])).eq("user_id", user_id).execute()
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -2099,7 +2102,10 @@ def skip_todo(user_id: str, body: dict):
 @app.post("/routines/skip")
 def skip_routine(body: dict):
     try:
-        supabase.table("routines").update({"skipped": True}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
+        if body.get("unskip"):
+            supabase.table("routines").update({"skipped": False}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
+        else:
+            supabase.table("routines").update({"skipped": True}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
