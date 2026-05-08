@@ -530,15 +530,15 @@ async def start_interaction(user_id: str):
             roll2 = random.random()
             if roll2 < 0.05:
                 mode = "universum"
-            elif roll2 < 0.20:
+            elif roll2 < 0.15:
                 mode = "insight"
             elif roll2 < 0.30:
                 mode = "rueckblick"
-            elif roll2 < 0.40:
+            elif roll2 < 0.45:
                 mode = "ziel_check"
-            elif roll2 < 0.50:
+            elif roll2 < 0.60:
                 mode = "routine_reflexion"
-            elif roll2 < 0.57:
+            elif roll2 < 0.75:
                 mode = "provokation"
             else:
                 mode = "normal"
@@ -595,7 +595,7 @@ async def start_interaction(user_id: str):
                 {", ".join(recent_ai_prompts_to_avoid)}
                 """
             else:
-                mode = "normal"  # Fallback wenn keine Insights vorhanden
+                mode = "rueckblick"  # Fallback wenn keine Insights vorhanden
 
         elif mode == "rueckblick":
             # Lade die letzten 8 Wochenberichte, 20 Monatsberichte und alle Jahresberichte
