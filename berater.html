@@ -38,6 +38,10 @@
       text-decoration: line-through;
       color: #888;
     }
+    .todo-item.skipped label {
+      text-decoration: line-through;
+      color: #c87020;
+    }
     @keyframes blink-today {
       0%, 100% { color: red; }
       50% { color: #ffcc00; }
@@ -96,6 +100,21 @@ input[type="checkbox"] {
 .routine.done label {
   text-decoration: line-through;
   color: #888;
+}
+.routine.skipped label {
+  text-decoration: line-through;
+  color: #c87020;
+}
+.skip-btn {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0 4px;
+  width: auto;
+  margin: 0;
+  line-height: 1;
 }
 
 /* Einheitliche Ausblendung */
@@ -280,8 +299,33 @@ async function loadRoutines() {
             if (routine.checked) {
               routineDiv.classList.add("done");
             }
+            if (routine.skipped) {
+              routineDiv.classList.add("skipped");
+              checkbox.disabled = true;
+            }
             routineDiv.appendChild(checkbox);
             routineDiv.appendChild(label);
+
+            if (!routine.checked && !routine.skipped) {
+              const skipBtn = document.createElement("button");
+              skipBtn.textContent = "✕";
+              skipBtn.className = "skip-btn";
+              skipBtn.title = "Überspringen";
+              skipBtn.addEventListener("click", async () => {
+                try {
+                  await fetch(`${API_URL}/routines/skip`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: routine.id, user_id: USER_ID })
+                  });
+                  routineDiv.classList.add("skipped");
+                  checkbox.disabled = true;
+                  skipBtn.remove();
+                } catch(e) { console.error("Skip fehlgeschlagen:", e); }
+              });
+              routineDiv.appendChild(skipBtn);
+            }
+
             routinenBox.appendChild(routineDiv);
           });
         }
@@ -565,7 +609,8 @@ async function loadTodos() {
     const openTodos = [
       ...(data.todos.open || []),
       ...(data.todos.in_progress || []),
-      ...(data.todos.overdue || [])
+      ...(data.todos.overdue || []),
+      ...(data.todos.skipped || [])
     ].sort((a, b) => (a.due_date || '9999') > (b.due_date || '9999') ? 1 : -1);
     
     if (openTodos.length > 0) {
@@ -626,9 +671,34 @@ async function loadTodos() {
         label.innerHTML = `<span>${priorityEmoji}${todo.title}</span>${dueDateHtml}`;
         
         if (todo.completed) todoDiv.classList.add("done");
-        
+        if (todo.status === "skipped") {
+          todoDiv.classList.add("skipped");
+          checkbox.disabled = true;
+        }
+
         todoDiv.appendChild(checkbox);
         todoDiv.appendChild(label);
+
+        if (todo.status !== "skipped" && !todo.completed) {
+          const skipBtn = document.createElement("button");
+          skipBtn.textContent = "✕";
+          skipBtn.className = "skip-btn";
+          skipBtn.title = "Überspringen";
+          skipBtn.addEventListener("click", async () => {
+            try {
+              await fetch(`${API_URL}/todos/skip/${USER_ID}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: todo.id })
+              });
+              todoDiv.classList.add("skipped");
+              checkbox.disabled = true;
+              skipBtn.remove();
+            } catch(e) { console.error("Skip fehlgeschlagen:", e); }
+          });
+          todoDiv.appendChild(skipBtn);
+        }
+
         todosBox.appendChild(todoDiv);
       });
     } else {

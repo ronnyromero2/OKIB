@@ -500,7 +500,7 @@ async def start_interaction(user_id: str):
             .select("title, due_date, priority") \
             .eq("user_id", user_id) \
             .lt("due_date", today_date) \
-            .not_.in_("status", ["completed", "archived"]) \
+            .not_.in_("status", ["completed", "archived", "skipped"]) \
             .order("due_date", desc=False) \
             .limit(5) \
             .execute().data
@@ -962,7 +962,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         try:
             today_date = datetime.datetime.now().strftime("%Y-%m-%d")
             open_todos = supabase.table("todos").select("title, priority, due_date, category, status").eq("user_id", user_id).in_("status", ["open", "in_progress"]).limit(10).execute().data
-            overdue_todos = supabase.table("todos").select("title, priority, due_date, category").eq("user_id", user_id).lt("due_date", today_date).neq("status", "completed").neq("status", "archived").execute().data
+            overdue_todos = supabase.table("todos").select("title, priority, due_date, category").eq("user_id", user_id).lt("due_date", today_date).not_.in_("status", ["completed", "archived", "skipped"]).execute().data
             
             if open_todos or overdue_todos:
                 todos_parts = []
@@ -1700,7 +1700,7 @@ def get_routines(user_id: str):
         # 🆕 SCHRITT 1: Alle Routinen für heute abrufen (mit last_checked_date)
 
         # Hole ALLE Routinen des Users (inkl. frequency)
-        all_user_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, last_checked_date, missed_dates, frequency, recurrence_day").eq("user_id", user_id).execute().data
+        all_user_routines = supabase.table("routines").select("id, task, time, day, checked, skipped, missed_count, last_checked_date, missed_dates, frequency, recurrence_day").eq("user_id", user_id).execute().data
         
         # Filtere für heute relevante Routinen
         today_routines = []
@@ -1772,9 +1772,10 @@ def get_routines(user_id: str):
                     # Reset ohne missed_dates zu ändern (48h Kulanz)
                     supabase.table("routines").update({
                         "checked": False,
+                        "skipped": False,
                         "last_checked_date": current_date
                     }).eq("id", routine_id).execute()
-                    
+
                     # Lokale Daten aktualisieren
                     routine['checked'] = False
                     
@@ -1983,17 +1984,19 @@ def get_todos(user_id: str, status: str = None, category: str = None):
             "open": [],
             "in_progress": [],
             "completed": [],
-            "overdue": []
+            "overdue": [],
+            "skipped": []
         }
-        
+
         today = datetime.datetime.now().strftime("%Y-%m-%d")
-        
+
         for todo in todos:
             todo_status = todo.get('status', 'open')
             due_date = todo.get('due_date')
-            
-            # Prüfe auf überfällige To-Dos
-            if due_date and due_date < today and todo_status not in ['completed', 'archived']:
+
+            if todo_status == 'skipped':
+                grouped_todos["skipped"].append(todo)
+            elif due_date and due_date < today and todo_status not in ['completed', 'archived']:
                 grouped_todos["overdue"].append(todo)
             else:
                 if todo_status in grouped_todos:
@@ -2083,6 +2086,22 @@ def update_todo_status(update: TodoStatusUpdate, user_id: str):
         
     except Exception as e:
         print(f"Fehler beim Aktualisieren des To-Do Status: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/todos/skip/{user_id}")
+def skip_todo(user_id: str, body: dict):
+    try:
+        supabase.table("todos").update({"status": "skipped", "completed": False}).eq("id", str(body["id"])).eq("user_id", user_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/routines/skip")
+def skip_routine(body: dict):
+    try:
+        supabase.table("routines").update({"skipped": True}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
+        return {"status": "success"}
+    except Exception as e:
         return {"status": "error", "message": str(e)}
 
 @app.put("/todos/{todo_id}/{user_id}")
