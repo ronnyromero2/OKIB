@@ -1066,6 +1066,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         - Verbiete dir selbst: "lass es mich wissen", "ich bin für dich da", "klingt spannend!", passive Einladungen. Entweder konkret nachfragen oder gar nicht.
         - Keine Emojis.
         - Wenn der Nutzer etwas relativiert, korrigiert oder ein Thema als erledigt/nicht relevant signalisiert: vollständig akzeptieren und KEINE Folgefrage stellen. Thema ist damit beendet.
+        - Schlage KEINE To-Dos für berufliche Themen vor (Meetings, Arbeitsprojekte, Kundentermine, Präsentationen). Nur private Themen: Gesundheit, Sport, persönliche Ziele, soziale Kontakte.
 
         Antworte maximal 3 Sätze. Deine Antworten sollen knapp, direkt, motivierend oder kritisch sein.
         """
@@ -1110,7 +1111,7 @@ Ein Commitment ist NUR relevant wenn ALLE Kriterien erfüllt sind:
 1. Spezifische Aktion (nicht vage wie "ich will gesünder leben")
 2. Hat einen Zeitbezug oder ist zeitkritisch
 3. Nicht trivial (kein "ich gehe heute einkaufen", kein "ich trinke mehr Wasser")
-4. Relevant für Ziele, Karriere, Gesundheit oder persönliche Entwicklung
+4. Relevant für Ziele, Gesundheit oder persönliche Entwicklung — NICHT beruflich (keine Meetings, Arbeitsprojekte, Kundentermine, berufliche Präsentationen)
 
 Antworte NUR mit JSON:
 {{"commitment": false}} — wenn kein echtes Commitment
