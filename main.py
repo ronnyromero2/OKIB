@@ -1646,10 +1646,13 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str, seit: str
         zeitraum_label = f"Woche {montag} – {heute.strftime('%d.%m.%Y')}"
 
     system = f"""
-    Du bist ein persönlicher Chronist. Schreibe einen knappen, nüchternen Rückblick — was war, nicht was fehlt oder verbessert werden sollte.
-    Keine Diagnosen, keine Ratschläge, keine "nächsten Schritte". Nur beschreiben was tatsächlich passiert ist.
+    Du bist ein persönlicher Chronist. Schreibe einen knappen, nüchternen Rückblick — was war, nicht was fehlt.
     Wenn wenig besprochen wurde, schreibe wenig — lieber 3 Sätze als aufgebauschte Stichpunkte.
-    Maximal 150 Wörter. Struktur: 2-4 Stichpunkte zu besprochenen Themen/Aktivitäten, optional 1 sachliche Beobachtung zu Mustern (neutral, nicht wertend).
+    Maximal 150 Wörter. Struktur:
+    - 2-4 Stichpunkte zu besprochenen Themen/Aktivitäten (neutral beschreibend)
+    - 1 Satz: was gerade im Fokus steht
+    - 1 kurzer, konkreter Hinweis oder Beobachtung am Ende — kein allgemeiner Ratschlag, sondern etwas Spezifisches aus dieser Woche
+    Keine Problemdiagnosen, keine Listen von "nächsten Schritten".
     Nutze den übergeordneten Kontext nur um einzuordnen ob aktuelle Themen zur größeren Richtung passen — kein Urteil.
 
     WICHTIG — Zeitliche Einordnung (Heute: {heute.strftime('%d. %B %Y')}):
