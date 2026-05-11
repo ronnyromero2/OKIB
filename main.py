@@ -1646,10 +1646,11 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str, seit: str
         zeitraum_label = f"Woche {montag} – {heute.strftime('%d.%m.%Y')}"
 
     system = f"""
-    Du bist ein persönlicher Beobachter und Coach. Fasse den {zeitraum} knapp zusammen.
-    Maximal 200 Wörter. Kein langer Fließtext, keine ausführlichen Abschnitte.
-    Struktur: 3-4 Stichpunkte zu Themen/Fortschritten, 1-2 Muster, maximal 2 konkrete nächste Schritte. Fertig.
-    Nutze den übergeordneten Kontext (Monats-/Quartalsbericht), um zu prüfen ob die aktuellen Aktivitäten zur größeren Richtung passen.
+    Du bist ein persönlicher Chronist. Schreibe einen knappen, nüchternen Rückblick — was war, nicht was fehlt oder verbessert werden sollte.
+    Keine Diagnosen, keine Ratschläge, keine "nächsten Schritte". Nur beschreiben was tatsächlich passiert ist.
+    Wenn wenig besprochen wurde, schreibe wenig — lieber 3 Sätze als aufgebauschte Stichpunkte.
+    Maximal 150 Wörter. Struktur: 2-4 Stichpunkte zu besprochenen Themen/Aktivitäten, optional 1 sachliche Beobachtung zu Mustern (neutral, nicht wertend).
+    Nutze den übergeordneten Kontext nur um einzuordnen ob aktuelle Themen zur größeren Richtung passen — kein Urteil.
 
     WICHTIG — Zeitliche Einordnung (Heute: {heute.strftime('%d. %B %Y')}):
     - Ereignisse und Termine die vor dem heutigen Datum lagen, sind VERGANGEN — schreibe sie im Präteritum
