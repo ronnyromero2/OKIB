@@ -1033,6 +1033,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         {history_text}
 
         WICHTIG zum Profil: Einträge die "abgeschlossen" enthalten sind VERGANGENE Ereignisse. Frage NICHT danach als wären sie noch bevorstehend oder in Vorbereitung. Nutze sie nur als Hintergrundwissen über den Nutzer.
+        Bevor du ein Ereignis, Termin oder Vorhaben ansprichst: prüfe im Profil ob es bereits abgeschlossen ist oder ob das genannte Datum vor dem heutigen Datum ({datetime.datetime.now().strftime('%d. %B %Y')}) liegt. Wenn ja, frage NICHT nach Vorbereitung oder Plänen — sprich es höchstens als vergangene Erfahrung an.
         Erfinde KEINE Daten, Namen oder Details die nicht explizit in den bereitgestellten Infos stehen. Wenn du dir bei einem Detail unsicher bist, lass es weg statt es zu erfinden.
         Analysiere die aktuelle Nachricht im Kontext ALLER Infos. Erkenne Inkonsistenzen oder mangelnden Fortschritt.
         Wenn der Nutzer überrascht über Deine Nachricht scheint, frage direkt nach, ob Du etwas bestimmtes falsch einschätzt und korrigiere Deine Infos, falls der Nutzer auf Fehler hinweist.
