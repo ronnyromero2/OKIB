@@ -843,6 +843,22 @@ async def chat(user_id: str, chat_input: ChatInput):
             print(f"Fehler beim Erstellen des To-Dos: {e}")
             return {"response": "❌ Fehler beim Erstellen des To-Dos. Bitte versuche es erneut.", "created_todo": False}
 
+    elif intent == "todo_delete":
+        try:
+            last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
+            result = await delete_todo_from_chat(user_id, user_message, last_ai)
+            if result is None:
+                return {"response": "Ich konnte kein passendes To-Do zum Löschen finden.", "created_todo": False}
+            if result == "__unclear__":
+                todos = supabase.table("todos").select("title").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(10).execute().data
+                todo_list = "\n".join([f"- {t['title']}" for t in todos])
+                question = f"Welches To-Do soll gelöscht werden?\n{todo_list}"
+                await _save_conversation_entry(user_id, user_message, question, "")
+                return {"response": question, "created_todo": False}
+            return {"response": f"✅ To-Do '{result}' wurde gelöscht.", "created_todo": False}
+        except Exception as e:
+            print(f"Fehler beim Löschen des To-Dos: {e}")
+            return {"response": "❌ Fehler beim Löschen des To-Dos.", "created_todo": False}
     elif intent == "todo_update":
         try:
             last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
@@ -1127,7 +1143,7 @@ def detect_intent(user_message: str, recent_history: list) -> str:
             context = f"Letzte KI-Antwort: {last['ai_response']}\n"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos (z.B. 'bis Freitag erledigen'), einer wiederkehrenden Routine (z.B. 'jeden Montag', 'monatlich', 'zweimal im Jahr', 'vierteljährlich'), eine Korrektur oder Änderung eines bestehenden To-Dos (z.B. 'nein, bitte korrigieren', 'Datum ändern', 'Relevanz hoch', 'doch am Dienstag'), eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, todo_update, routine_datum oder chat"}],
+        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos (z.B. 'bis Freitag erledigen'), einer wiederkehrenden Routine (z.B. 'jeden Montag', 'monatlich', 'zweimal im Jahr', 'vierteljährlich'), eine Korrektur oder Änderung eines bestehenden To-Dos (z.B. 'nein, bitte korrigieren', 'Datum ändern', 'Relevanz hoch', 'doch am Dienstag'), ein Löschen oder Entfernen eines bestehenden To-Dos (z.B. 'lösch das To-Do', 'bitte entfernen', 'rausnehmen'), eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, todo_update, todo_delete, routine_datum oder chat"}],
         temperature=0,
         max_tokens=15
     )
@@ -1164,6 +1180,27 @@ async def update_latest_todo(user_id: str, user_message: str, last_ai_response: 
     if update_data:
         supabase.table("todos").update(update_data).eq("id", todo["id"]).execute()
     return todo["title"], update_data
+
+async def delete_todo_from_chat(user_id: str, user_message: str, last_ai_response: str):
+    todos = supabase.table("todos").select("id, title").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(10).execute().data
+    if not todos:
+        return None
+    todos_text = "\n".join([f"ID {t['id']}: '{t['title']}'" for t in todos])
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Letzte KI-Antwort: '{last_ai_response}'. Nutzer sagt: '{user_message}'.\nOffene To-Dos:\n{todos_text}\nWelches To-Do soll gelöscht werden? Suche nach dem Thema, nicht nach zufälligen Wörtern. Falls kein To-Do eindeutig passt, gib todo_id als null zurück. Antworte nur mit JSON: {{\"todo_id\": <ID oder null>}}"}],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
+    result = json.loads(response.choices[0].message.content)
+    todo_id = result.get("todo_id")
+    if todo_id is None:
+        return "__unclear__"
+    todo = next((t for t in todos if t["id"] == todo_id), None)
+    if todo is None:
+        return None
+    supabase.table("todos").delete().eq("id", todo["id"]).eq("user_id", user_id).execute()
+    return todo["title"]
 
 async def create_todo_from_chat(user_id: str, message: str, last_ai_response: str = ""):
     """Erstellt To-Do aus Chat-Message via GPT"""
