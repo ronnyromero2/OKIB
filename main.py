@@ -545,6 +545,7 @@ async def start_interaction(user_id: str):
 
 
         # Kontext für GPT aufbauen
+        today_date_str = datetime.datetime.now().strftime('%d. %B %Y')
         context_for_gpt = "\nUser-Historie (letzte 30 Nachrichten):\n" + "\n".join(messages)
         if recent_ai_prompts_to_avoid:
             context_for_gpt += "\nKürzlich gestellte Fragen des Beraters:\n" + ", ".join(recent_ai_prompts_to_avoid)
@@ -554,6 +555,7 @@ async def start_interaction(user_id: str):
         context_for_gpt += routines_overview_context
         if routine_context_today:
             context_for_gpt += f"\nHeute oft verpasste Routinen: {routine_context_today}"
+        context_for_gpt += f"\n\nWICHTIG — Heute ist {today_date_str}. Bevor du ein Ereignis, Termin oder Vorhaben ansprichst: prüfe ob das genannte Datum vor dem heutigen Datum liegt. Wenn ja, frage NICHT nach Vorbereitung oder Plänen — sprich es höchstens als vergangene Erfahrung an."
 
         if mode == "todo_followup":
             prompt = f"""
