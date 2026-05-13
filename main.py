@@ -147,7 +147,8 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     - Format Prozesse: Schlüssel = "Prozess_[Name]", Wert = "[Status] – [kurze Beschreibung]"
       Beispiele: "Prozess_Marathontraining": "laufend – Vorbereitung auf Hamburg Mai 2025", "Prozess_Jobsuche": "abgeschlossen Januar 2025"
     - Status IMMER aktuell halten: sobald etwas vorbei ist → "abgeschlossen [Zeitraum]"
-    - Vergangene Ereignisse erkennbar an: "war", "ist vorbei", "habe ich gemacht", "letztes Jahr", "ist beendet", "bin zurück" → immer "abgeschlossen" markieren
+    - Vergangene Ereignisse erkennbar an: "war", "ist vorbei", "habe ich gemacht", "letztes Jahr", "ist beendet", "bin zurück", "das war damals", "habe ich bereits" → immer "abgeschlossen" markieren
+    - WICHTIG: Wenn im bestehenden Profil ein Eintrag steht der offensichtlich veraltet ist (z.B. "bald nach X reisen" aber der Nutzer sagt es war letztes Jahr) → mit "abgeschlossen" zurückgeben damit er gelöscht wird
     - Zukünftige Ereignisse → "geplant für [Datum]"
 
     FAKTEN-KATEGORIEN (Beispiele):
@@ -189,19 +190,26 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
         extracted_data_str = response.choices[0].message.content
         new_extracted_profile: Dict[str, str] = json.loads(extracted_data_str)
 
-
         # Temporäre Kategorien ausschließen
         EXCLUDED_CATEGORIES = ['Aktuelles_Datum']
         now = datetime.datetime.utcnow().isoformat() + 'Z'
 
-        records = [
-            {"user_id": user_id, "attribute_name": key, "attribute_value": value, "last_updated": now}
-            for key, value in new_extracted_profile.items()
-            if key not in EXCLUDED_CATEGORIES
-        ]
+        to_upsert = []
+        to_delete = []
 
-        if records:
-            supabase.table("profile").upsert(records).execute()
+        for key, value in new_extracted_profile.items():
+            if key in EXCLUDED_CATEGORIES:
+                continue
+            if isinstance(value, str) and "abgeschlossen" in value.lower():
+                to_delete.append(key)
+            else:
+                to_upsert.append({"user_id": user_id, "attribute_name": key, "attribute_value": value, "last_updated": now})
+
+        if to_upsert:
+            supabase.table("profile").upsert(to_upsert).execute()
+
+        for key in to_delete:
+            supabase.table("profile").delete().eq("user_id", user_id).eq("attribute_name", key).execute()
 
 
     except json.JSONDecodeError as e:
