@@ -149,7 +149,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
       Beispiele: "Prozess_Marathontraining": "laufend – Vorbereitung auf Hamburg Mai 2025", "Prozess_Jobsuche": "abgeschlossen Januar 2025"
     - Status IMMER aktuell halten: sobald etwas vorbei ist → "abgeschlossen [Zeitraum]"
     - Vergangene Ereignisse erkennbar an: "war", "ist vorbei", "habe ich gemacht", "letztes Jahr", "ist beendet", "bin zurück", "das war damals", "habe ich bereits" → immer "abgeschlossen" markieren
-    - WICHTIG: Wenn im bestehenden Profil ein Eintrag steht der offensichtlich veraltet ist (z.B. "bald nach X reisen" aber der Nutzer sagt es war letztes Jahr) → mit "abgeschlossen" zurückgeben damit er gelöscht wird
+    - WICHTIG: Wenn im bestehenden Profil ein Eintrag steht der offensichtlich veraltet ist (z.B. "bald nach X reisen" aber der Nutzer sagt es war letztes Jahr) → verwende DENSELBEN Schlüssel wie im bestehenden Profil und setze den Wert auf "abgeschlossen [Zeitraum]". Erstelle KEINEN neuen Schlüssel dafür.
     - Zukünftige Ereignisse → "geplant für [Datum]"
 
     FAKTEN-KATEGORIEN (Beispiele):
@@ -210,7 +210,13 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
             supabase.table("profile").upsert(to_upsert).execute()
 
         for key in to_delete:
-            supabase.table("profile").update({"archived": True}).eq("user_id", user_id).eq("attribute_name", key).execute()
+            result = supabase.table("profile").update({"archived": True}).eq("user_id", user_id).eq("attribute_name", key).execute()
+            if not result.data:
+                # Kein exakter Key-Match — suche nach verwandten Einträgen via Keyword
+                keyword = key.replace("Termin_", "").replace("Prozess_", "").replace("_", " ")
+                related = supabase.table("profile").select("attribute_name").eq("user_id", user_id).eq("archived", False).ilike("attribute_value", f"%{keyword}%").execute().data
+                for entry in related:
+                    supabase.table("profile").update({"archived": True}).eq("user_id", user_id).eq("attribute_name", entry["attribute_name"]).execute()
 
 
     except json.JSONDecodeError as e:
