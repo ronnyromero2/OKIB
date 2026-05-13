@@ -861,6 +861,16 @@ async def chat(user_id: str, chat_input: ChatInput):
             print(f"Fehler beim Erstellen des To-Dos: {e}")
             return {"response": "❌ Fehler beim Erstellen des To-Dos. Bitte versuche es erneut.", "created_todo": False}
 
+    elif intent == "archive_profile":
+        try:
+            archived = await archive_profile_entries(user_id, user_message)
+            if archived:
+                return {"response": f"✅ Archiviert: {', '.join(archived)}.", "created_todo": False}
+            else:
+                return {"response": "Ich konnte keine passenden Profil-Einträge dazu finden.", "created_todo": False}
+        except Exception as e:
+            print(f"Fehler beim Archivieren: {e}")
+            return {"response": "❌ Fehler beim Archivieren.", "created_todo": False}
     elif intent == "todo_delete":
         try:
             last_ai = recent_history[0].get("ai_response", "") if recent_history else ""
@@ -1163,7 +1173,7 @@ def detect_intent(user_message: str, recent_history: list) -> str:
             context = f"Letzte KI-Antwort: {last['ai_response']}\n"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos (z.B. 'bis Freitag erledigen'), einer wiederkehrenden Routine (z.B. 'jeden Montag', 'monatlich', 'zweimal im Jahr', 'vierteljährlich'), eine Korrektur oder Änderung eines bestehenden To-Dos (z.B. 'nein, bitte korrigieren', 'Datum ändern', 'Relevanz hoch', 'doch am Dienstag'), ein Löschen oder Entfernen eines bestehenden To-Dos (z.B. 'lösch das To-Do', 'bitte entfernen', 'rausnehmen'), eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, todo_update, todo_delete, routine_datum oder chat"}],
+        messages=[{"role": "user", "content": f"{context}Neue Nachricht: '{user_message}'\nIst das eine Anfrage zum Erstellen eines einmaligen To-Dos (z.B. 'bis Freitag erledigen'), einer wiederkehrenden Routine (z.B. 'jeden Montag', 'monatlich', 'zweimal im Jahr', 'vierteljährlich'), eine Korrektur oder Änderung eines bestehenden To-Dos (z.B. 'nein, bitte korrigieren', 'Datum ändern', 'Relevanz hoch', 'doch am Dienstag'), ein Löschen oder Entfernen eines bestehenden To-Dos (z.B. 'lösch das To-Do', 'bitte entfernen', 'rausnehmen'), eine Meldung dass bestimmte Ereignisse/Vorhaben/Reisen/Aktivitäten bereits vergangen oder abgeschlossen sind (z.B. 'X ist vorbei', 'X war letztes Jahr', 'X ist abgeschlossen', 'X sind alle vergangen'), eine Antwort auf eine Terminauswahl für eine Routine, oder normaler Chat? Antworte nur mit: todo, routine, todo_update, todo_delete, archive_profile, routine_datum oder chat"}],
         temperature=0,
         max_tokens=15
     )
@@ -1200,6 +1210,22 @@ async def update_latest_todo(user_id: str, user_message: str, last_ai_response: 
     if update_data:
         supabase.table("todos").update(update_data).eq("id", todo["id"]).execute()
     return todo["title"], update_data
+
+async def archive_profile_entries(user_id: str, user_message: str):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Nachricht: '{user_message}'\nWelche konkreten Ereignisse, Reisen, Vorhaben oder Aktivitäten werden als vergangen/abgeschlossen bezeichnet? Gib eine Liste von kurzen Keywords zurück (z.B. ['Kolumbien', 'Halbmarathon', 'Sambia']). Antworte NUR mit JSON: {{\"keywords\": [...]}}"}],
+        response_format={"type": "json_object"},
+        temperature=0
+    )
+    keywords = json.loads(response.choices[0].message.content).get("keywords", [])
+    archived_names = []
+    for keyword in keywords:
+        matches = supabase.table("profile").select("attribute_name, attribute_value").eq("user_id", user_id).eq("archived", False).or_(f"attribute_value.ilike.%{keyword}%,attribute_name.ilike.%{keyword}%").execute().data
+        for entry in matches:
+            supabase.table("profile").update({"archived": True}).eq("user_id", user_id).eq("attribute_name", entry["attribute_name"]).execute()
+            archived_names.append(entry["attribute_name"])
+    return archived_names
 
 async def delete_todo_from_chat(user_id: str, user_message: str, last_ai_response: str):
     todos = supabase.table("todos").select("id, title").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(10).execute().data
