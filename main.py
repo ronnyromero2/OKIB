@@ -116,6 +116,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     current_dynamic_profile_response = supabase.table("profile") \
         .select("attribute_name, attribute_value") \
         .eq("user_id", user_id) \
+        .eq("archived", False) \
         .execute().data
     
     existing_dynamic_profile: Dict[str, str] = {
@@ -209,7 +210,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
             supabase.table("profile").upsert(to_upsert).execute()
 
         for key in to_delete:
-            supabase.table("profile").delete().eq("user_id", user_id).eq("attribute_name", key).execute()
+            supabase.table("profile").update({"archived": True}).eq("user_id", user_id).eq("attribute_name", key).execute()
 
 
     except json.JSONDecodeError as e:
@@ -412,6 +413,7 @@ async def start_interaction(user_id: str):
         user_profile_data_raw = supabase.table("profile") \
             .select("attribute_name, attribute_value") \
             .eq("user_id", user_id) \
+            .eq("archived", False) \
             .execute().data
         
         user_profile_context = ""
@@ -958,6 +960,7 @@ async def chat(user_id: str, chat_input: ChatInput):
             profile_attributes_data = supabase.table("profile") \
                 .select("attribute_name, attribute_value") \
                 .eq("user_id", user_id) \
+                .eq("archived", False) \
                 .execute().data
             
             if profile_attributes_data:
