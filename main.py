@@ -126,43 +126,37 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     
     system_prompt = f"""
     Du bist ein spezialisierter Assistent, der wichtige persönliche Informationen über den Benutzer aus Gesprächen extrahiert.
-    Deine Aufgabe ist es, ein detailliertes Langzeitprofil aufzubauen — sowohl Fakten als auch Verhaltensmuster.
+    Deine Aufgabe ist es, ein kompaktes, aktuelles Langzeitprofil zu pflegen — ein Eintrag pro Aktivität/Ereignis/Thema.
 
-    WICHTIG: Du sollst AKTIV nach NEUEN Informationen suchen und NEUE Kategorien erstellen!
-    AUSGABEFORMAT - SEHR WICHTIG:
+    AUSGABEFORMAT:
     - Verwende IMMER reine Strings als Werte, NIEMALS Arrays
-    - Beispiel: "Hobbys": "Laufen, Kochen, Lesen" (NICHT ["Laufen", "Kochen"])
     - Alle Werte als Text formatieren
 
-    REGELN:
-    1. Analysiere JEDEN Gesprächsteil nach neuen, relevanten Informationen
-    2. Erstelle NEUE Kategorien für jede neue Information
-    3. Behalte bestehende Kategorien bei, wenn sie weiterhin relevant sind
-    4. Aktualisiere bestehende Werte bei neuen/anderen Informationen
-    5. Ignoriere nur wirklich temporäre Dinge (wie "heute bin ich müde")
+    KERNREGEL — IMMER ZUERST PRÜFEN:
+    Schau in das bestehende Profil. Gibt es bereits einen Eintrag der zum neuen Inhalt passt?
+    - JA → ergänze, aktualisiere oder korrigiere den bestehenden Eintrag. KEIN neuer Eintrag.
+    - NEIN → erstelle EINEN neuen Eintrag für dieses Thema. Nie mehrere für dasselbe.
 
-    TERMINE & PROZESSE (höchste Priorität — aktiv suchen!):
-    - Erkenne ALLE konkreten Ereignisse, Deadlines und mehrstufige Vorhaben
-    - Format Termine: Schlüssel = "Termin_[Name]", Wert = "[Status] [Datum/Zeitraum]"
-      Beispiele: "Termin_Hamburg_Marathon": "geplant Mai 2025", "Termin_Reise_Japan": "geplant August 2025"
-    - Format Prozesse: Schlüssel = "Prozess_[Name]", Wert = "[Status] – [kurze Beschreibung]"
-      Beispiele: "Prozess_Marathontraining": "laufend – Vorbereitung auf Hamburg Mai 2025", "Prozess_Jobsuche": "abgeschlossen Januar 2025"
-    - Status IMMER aktuell halten: sobald etwas vorbei ist → "abgeschlossen [Zeitraum]"
-    - Vergangene Ereignisse erkennbar an: "war", "ist vorbei", "habe ich gemacht", "letztes Jahr", "ist beendet", "bin zurück", "das war damals", "habe ich bereits" → immer "abgeschlossen" markieren
-    - WICHTIG: Wenn im bestehenden Profil ein Eintrag steht der offensichtlich veraltet ist (z.B. "bald nach X reisen" aber der Nutzer sagt es war letztes Jahr) → verwende DENSELBEN Schlüssel wie im bestehenden Profil und setze den Wert auf "abgeschlossen [Zeitraum]". Erstelle KEINEN neuen Schlüssel dafür.
-    - Zukünftige Ereignisse → "geplant für [Datum]"
+    SCHLÜSSEL-PRINZIP: Ein Eintrag pro konkretes Ereignis oder Thema.
+    - Richtig: "Halbmarathon_Köln_2023": "Oktober 2023, abgeschlossen; Training 3 Monate vorher"
+    - Falsch: separate Einträge für Halbmarathon_Termin, Halbmarathon_Ort, Halbmarathon_Training usw.
+    - Richtig: "Reise_Kolumbien": "2023, abgeschlossen; erste Reise"
+    - Falsch: Reisepläne_Kolumbien + Reisepläne_Kolumbien_Sambia + Berufliche_Reisen
 
-    FAKTEN-KATEGORIEN (Beispiele):
+    TERMINE & PROZESSE:
+    - Erkenne konkrete Ereignisse und Vorhaben
+    - Status IMMER aktuell halten: sobald etwas vorbei ist → Wert mit "abgeschlossen" ergänzen
+    - Vergangene Ereignisse erkennbar an: "war", "ist vorbei", "habe ich gemacht", "letztes Jahr", "bin zurück" → "abgeschlossen" im Wert vermerken
+    - Wenn ein bestehender Eintrag veraltet ist (z.B. "geplant" aber Nutzer sagt es war letztes Jahr) → denselben Schlüssel behalten, Wert auf "abgeschlossen [Zeitraum]" setzen
+    - Zukünftige Ereignisse → "geplant [Datum]" im Wert
+
+    WEITERE KATEGORIEN (Beispiele für neue Einträge):
     - Beruf, Wohnsituation, Familie, Beziehung, Hobbys, Sport, Gesundheit, Finanzen
+    - Alltag_Einschraenkungen: z.B. "Wenig freie Zeit durch Arbeit"
+    - Muster_Prokrastination, Muster_Motivation, Muster_Herausforderungen, Muster_Staerken
 
-    VERHALTENSMUSTER-KATEGORIEN (Beispiele):
-    - Muster_Prokrastination: z.B. "Schiebt unangenehme Aufgaben regelmäßig auf"
-    - Muster_Motivation: z.B. "Reagiert gut auf konkrete Fragen, weniger auf allgemeine Ratschläge"
-    - Muster_Herausforderungen: z.B. "Kämpft mit beruflicher Unzufriedenheit, findet schwer konkrete Schritte"
-    - Muster_Staerken: z.B. "Hält Routinen gut durch wenn sie einmal etabliert sind"
-    - Alltag_Einschraenkungen: z.B. "Wenig freie Zeit durch Arbeit und Familie, keine großen Verhaltensänderungen möglich"
-
-    Gib das VOLLSTÄNDIGE, ERWEITERTE JSON-Objekt zurück - mit allen alten UND neuen Kategorien.
+    Ignoriere temporäre Dinge ("heute bin ich müde").
+    Gib NUR Einträge zurück die neu sind oder sich geändert haben — NICHT das gesamte bestehende Profil.
     Antworte NUR mit dem JSON-Objekt.
     """
 
@@ -174,7 +168,7 @@ async def extrahiere_und_speichere_profil_details(user_id: str, user_input: str,
     
     Bereits bekanntes Profil: {json.dumps(existing_dynamic_profile, ensure_ascii=False)}
     
-    Extrahiere neue persönliche Informationen aus dem User-Input und gib das vollständige, aktualisierte Profil als JSON-Objekt zurück.
+    Gib NUR die Einträge zurück die neu sind oder sich geändert haben. Nicht das gesamte Profil — nur die Differenz.
     """
 
     try:
