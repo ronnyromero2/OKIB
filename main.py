@@ -1032,9 +1032,9 @@ async def chat(user_id: str, chat_input: ChatInput):
         # Langzeitgedächtnis laden
         memory_text = "Keine spezifischen Langzeit-Erkenntnisse gespeichert." # Standardwert
         try:
-            memory = supabase.table("long_term_memory").select("thema, inhalt").eq("user_id", user_id).order("timestamp", desc=True).limit(10).execute().data
+            memory = supabase.table("long_term_memory").select("thema, inhalt, timestamp").eq("user_id", user_id).order("timestamp", desc=True).limit(10).execute().data
             if memory:
-                memory_text = "\n".join([f"{m['thema']}: {m['inhalt']}" for m in memory])
+                memory_text = "\n".join([f"[Aufgezeichnet: {m['timestamp'][:10] if m.get('timestamp') else 'unbekannt'}] {m['thema']}: {m['inhalt']}" for m in memory])
         except Exception as e:
             print(f"Fehler beim Abrufen des Langzeitgedächtnisses: {e}")
 
@@ -1089,6 +1089,7 @@ async def chat(user_id: str, chat_input: ChatInput):
 
         WICHTIG zum Profil: Einträge die "abgeschlossen" enthalten sind VERGANGENE Ereignisse. Frage NICHT danach als wären sie noch bevorstehend oder in Vorbereitung. Nutze sie nur als Hintergrundwissen über den Nutzer.
         Bevor du ein Ereignis, Termin oder Vorhaben ansprichst: prüfe im Profil ob es bereits abgeschlossen ist oder ob das genannte Datum vor dem heutigen Datum ({datetime.datetime.now().strftime('%d. %B %Y')}) liegt. Wenn ja, frage NICHT nach Vorbereitung oder Plänen — sprich es höchstens als vergangene Erfahrung an.
+        WICHTIG zum Langzeitgedächtnis: Jeder Eintrag im Langzeitgedächtnis hat ein Aufzeichnungsdatum in eckigen Klammern. Ereignisse oder Ziele die in Einträgen erwähnt werden, deren Datum mehr als 3 Monate zurückliegt, oder für die ein konkretes Datum genannt wird das bereits vergangen ist, sind HISTORISCH. Frage NICHT danach als wären sie aktuell, in Vorbereitung oder noch geplant. Erwähne sie nur falls der Nutzer explizit darauf eingeht.
         Erfinde KEINE Daten, Namen oder Details die nicht explizit in den bereitgestellten Infos stehen. Wenn du dir bei einem Detail unsicher bist, lass es weg statt es zu erfinden.
         Analysiere die aktuelle Nachricht im Kontext ALLER Infos. Erkenne Inkonsistenzen oder mangelnden Fortschritt.
         Wenn der Nutzer überrascht über Deine Nachricht scheint, frage direkt nach, ob Du etwas bestimmtes falsch einschätzt und korrigiere Deine Infos, falls der Nutzer auf Fehler hinweist.
