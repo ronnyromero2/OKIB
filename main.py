@@ -2044,8 +2044,8 @@ def create_profile(profile_data: ProfileData, user_id: str):
 def get_todos(user_id: str, status: str = None, category: str = None):
     """Alle To-Dos eines Users abrufen mit optionalen Filtern"""
     try:
-        query = supabase.table("todos").select("*").eq("user_id", user_id)
-        
+        query = supabase.table("todos").select("*").eq("user_id", user_id).eq("is_recurring", False)
+
         if status:
             query = query.eq("status", status)
         if category:
