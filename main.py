@@ -657,19 +657,18 @@ async def start_interaction(user_id: str):
 
             if alle_rueckblicke:
                 gewählter_bericht = random.choice(alle_rueckblicke)
+                bericht_datum = gewählter_bericht.get('timestamp', '')[:10] if gewählter_bericht.get('timestamp') else 'unbekannt'
                 prompt = f"""
-                Du bist ein persönlicher Mentor. Hier ist ein früherer Rückblick des Nutzers:
+                Du bist ein persönlicher Mentor. Hier ist ein früherer Rückblick des Nutzers vom {bericht_datum}:
                 Typ: "{gewählter_bericht['thema']}"
                 Inhalt: "{gewählter_bericht['inhalt']}"
 
-                Stelle eine kurze, direkte Anschlussfrage zu einem konkreten Thema aus diesem Rückblick.
-                Variiere den Fragetyp — wähle EINEN davon:
-                - Aktueller Status: "Wie weit bist du mit X?"
-                - Konkrete Aktion: "Hast du X inzwischen gemacht?"
-                - Ehrliche Einschätzung: "Bist du wirklich zufrieden mit X?"
-                - Was blockiert: "Was hält dich bei X noch zurück?"
-                - Überraschung: "Was war bei X anders als erwartet?"
-                Selten verwenden (max. 1 von 10 Fragen): "Gab es einen Moment...", "hat sich etwas verändert", "was ist daraus geworden".
+                Heute ist {today_date_str}. Prüfe: Enthält der Rückblick ein Ereignis oder Vorhaben mit einem konkreten Datum, das bereits vergangen ist (z.B. ein Wettkampf, Termin, Abgabe)? Falls ja, frage NICHT nach Vorbereitung, aktuellem Stand oder Plänen dazu — es ist vorbei. Wähle dann stattdessen ein anderes Thema aus dem Rückblick.
+                Falls du ein geeignetes Thema findest, stelle eine kurze direkte Frage. Wähle EINEN dieser Typen:
+                - Wie läuft X gerade?
+                - Hast du X inzwischen gemacht?
+                - Bist du wirklich zufrieden mit X?
+                - Was war bei X anders als erwartet?
                 Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
                 {", ".join(recent_ai_prompts_to_avoid)}
                 """
@@ -690,8 +689,8 @@ async def start_interaction(user_id: str):
             prompt = f"""
             Du bist ein persönlicher Mentor. Hier ist eine Übersicht der Routinen des Nutzers:
             {routines_overview_context}
-            
-            Greife eine Routine auf — entweder eine die oft verpasst wird, oder eine die gut läuft — und frage nach dem Warum.
+
+            Greife EINE Routine auf und stelle eine konkrete Frage dazu. Wenn "Verpasst" einen Wert >= 3 hat, frage nach dem Grund. Wenn "Verpasst" 1-2 ist, sprich es NICHT als "oft verpasst" an — frage stattdessen wie es läuft. Wenn alle gut laufen, frage was die Routine so leicht macht.
             Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
             {", ".join(recent_ai_prompts_to_avoid)}
             """
