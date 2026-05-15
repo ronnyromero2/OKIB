@@ -684,7 +684,8 @@ async function loadTodos() {
 
         label.style.cssText = `display: flex; width: 420px; ${itemColor} ${fontWeight}`;
         if (blinkClass) label.classList.add(blinkClass);
-        label.innerHTML = `<span>${priorityEmoji}${todo.title}</span>${dueDateHtml}`;
+        const recurringIcon = todo.is_recurring ? ' <span style="opacity:0.5;font-size:0.85em;">🔁</span>' : '';
+        label.innerHTML = `<span>${priorityEmoji}${todo.title}${recurringIcon}</span>${dueDateHtml}`;
         
         if (todo.completed) todoDiv.classList.add("done");
         if (todo.status === "skipped") {
