@@ -469,31 +469,40 @@ async def start_interaction(user_id: str):
         else:
             goals_context = "\nBisher keine Ziele erfasst."
 
-        # Laden aller Routinen aus der 'routines'-Tabelle für eine Gesamtübersicht
-        all_user_routines = supabase.table("routines") \
-            .select("task, day, checked, missed_count") \
+        # Laden aller Routinen aus todos (is_recurring=True)
+        _routines_ctx_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        all_user_routines = supabase.table("todos") \
+            .select("title, recurrence_weekday, last_checked_date, missed_count") \
             .eq("user_id", user_id) \
+            .eq("is_recurring", True) \
+            .not_.in_("status", ["completed", "archived"]) \
             .limit(10) \
             .execute().data
-            
+
         routines_overview_context = ""
         if all_user_routines:
             routines_overview_context = "\nÜbersicht aller Routinen:\n" + "\n".join([
-                f"- {str(r.get('task', ''))} ({str(r.get('day', ''))}, Erledigt: {'Ja' if r.get('checked', False) else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" 
+                f"- {str(r.get('title', ''))} ({str(r.get('recurrence_weekday', ''))}, Erledigt: {'Ja' if r.get('last_checked_date') == _routines_ctx_date else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})"
                 for r in all_user_routines
             ])
         else:
             routines_overview_context = "\nBisher keine Routinen erfasst."
-            
+
         # Routinen überprüfen
         today = datetime.datetime.now().strftime("%A")
         today_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        unfulfilled_routines = supabase.table("routines") \
-            .select("task, missed_count, missed_dates") \
-            .eq("day", today) \
-            .eq("checked", False) \
+        _today_weekday = today.lower()
+        _all_recurring = supabase.table("todos") \
+            .select("title, missed_count, missed_dates, recurrence_type, recurrence_weekday, last_checked_date") \
             .eq("user_id", user_id) \
+            .eq("is_recurring", True) \
+            .not_.in_("status", ["completed", "archived"]) \
             .execute().data
+        unfulfilled_routines = [
+            r for r in _all_recurring
+            if (r.get('recurrence_type') == 'daily' or (r.get('recurrence_weekday') or '').lower() == _today_weekday)
+            and r.get('last_checked_date') != today_date
+        ]
 
         # Routinen, die mindestens 3-mal nicht erfüllt wurden
         five_weeks_ago = (datetime.datetime.now() - datetime.timedelta(weeks=5)).strftime("%Y-%m-%d")
@@ -501,8 +510,8 @@ async def start_interaction(user_id: str):
         for r in unfulfilled_routines:
             missed_dates = r.get("missed_dates") or []
             recent_missed = [d for d in missed_dates if d >= five_weeks_ago]
-            if len(recent_missed) >= 3 and r.get("task") is not None:
-                routine_texts.append(str(r.get("task", '')))
+            if len(recent_missed) >= 3 and r.get("title") is not None:
+                routine_texts.append(str(r.get("title", '')))
         routine_context_today = ", ".join(routine_texts)
 
         # Überfällige To-Dos laden
@@ -989,10 +998,11 @@ async def chat(user_id: str, chat_input: ChatInput):
         routines_text = "Keine Routinen definiert." # Standardwert
         try:
             today_weekday = datetime.datetime.now().strftime("%A")
-            routines_response = supabase.table("routines").select("task, checked, day, missed_count").eq("user_id", user_id).execute()
+            _chat_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            routines_response = supabase.table("todos").select("title, last_checked_date, recurrence_weekday, missed_count").eq("user_id", user_id).eq("is_recurring", True).not_.in_("status", ["completed", "archived"]).execute()
             routines = routines_response.data
             if routines:
-                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['task']} (Tag: {r['day']}, Erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {str(r['missed_count'])})" for r in routines])
+                routines_text = "Aktuelle Routinen:\n" + "\n".join([f"- {r['title']} (Tag: {r['recurrence_weekday']}, Erledigt: {'Ja' if r.get('last_checked_date') == _chat_date else 'Nein'}, Verpasst: {str(r.get('missed_count', 0))})" for r in routines])
         except Exception as e:
             print(f"Fehler beim Abrufen der Routinen: {e}")
        
@@ -1307,14 +1317,25 @@ async def extract_routine_info(message: str) -> dict:
     return json.loads(response.choices[0].message.content)
 
 async def insert_routine(user_id: str, task: str, frequency: str, day: str, next_due: str = None, recurrence_day: int = None):
-    routine_data = {
-        "task": task, "checked": False, "day": str(day) if day else "", "time": None,
-        "last_checked_date": None, "user_id": user_id, "missed_count": 0, "missed_dates": [],
-        "frequency": frequency,
+    todo_data = {
+        "user_id": user_id,
+        "title": task,
+        "description": "",
+        "priority": "medium",
+        "status": "open",
+        "category": "routine",
+        "due_date": next_due if next_due else datetime.datetime.now().strftime("%Y-%m-%d"),
+        "completed": False,
+        "is_recurring": True,
+        "recurrence_type": frequency,
         "recurrence_day": recurrence_day,
-        "next_due_date": next_due,
+        "recurrence_weekday": day.lower() if day else None,
+        "missed_count": 0,
+        "missed_dates": [],
+        "last_checked_date": None,
+        "created_at": datetime.datetime.utcnow().isoformat() + 'Z',
     }
-    supabase.table("routines").insert(routine_data).execute()
+    supabase.table("todos").insert(todo_data).execute()
 
 def add_months(dt: datetime.datetime, months: int) -> datetime.datetime:
     month = dt.month + months
@@ -1631,14 +1652,17 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str, seit: str
     # Ziele können oft kompakter sein. Wenn sie aber auch zu lang werden, hier auch summarisieren.
     ziele_text = "\n".join([f"{z['titel']} ({z['status']})" for z in all_ziele[-20:]]) # max. die letzten 20 Ziele
 
-    all_routines_res = supabase.table("routines") \
-        .select("task, checked, day, missed_count") \
+    _report_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    all_routines_res = supabase.table("todos") \
+        .select("title, recurrence_weekday, last_checked_date, missed_count") \
         .eq("user_id", user_id) \
+        .eq("is_recurring", True) \
+        .not_.in_("status", ["completed", "archived"]) \
         .execute().data
-    
+
     routinen_text = ""
     if all_routines_res:
-        routinen_text = "\n".join([f"- {r['task']} (Tag: {r['day']}, Heute erledigt: {'Ja' if r['checked'] else 'Nein'}, Verpasst: {r['missed_count']})" for r in all_routines_res])
+        routinen_text = "\n".join([f"- {r['title']} (Tag: {r['recurrence_weekday']}, Heute erledigt: {'Ja' if r.get('last_checked_date') == _report_date else 'Nein'}, Verpasst: {r.get('missed_count', 0)})" for r in all_routines_res])
     else:
         routinen_text = "Keine Routinen vorhanden."
         
@@ -1776,202 +1800,165 @@ def get_stored_report(report_type_name: str, user_id: str = "1"):
 # Routinen abrufen
 @app.get("/routines/{user_id}")
 def get_routines(user_id: str):
-    today = datetime.datetime.now().strftime("%A")
+    today = datetime.datetime.now().strftime("%A").lower()
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
+    yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A").lower()
     yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     today_day_of_month = datetime.datetime.now().day
 
-    try:
-        # 🆕 SCHRITT 1: Alle Routinen für heute abrufen (mit last_checked_date)
+    def make_routine_response(r, date_str, display_date):
+        checked = r.get('last_checked_date') == date_str
+        return {
+            **r,
+            'task': r.get('title'),
+            'day': r.get('recurrence_weekday'),
+            'frequency': r.get('recurrence_type'),
+            'next_due_date': str(r.get('due_date')) if r.get('due_date') else None,
+            'checked': checked,
+            'skipped': r.get('status') == 'skipped',
+            'date': date_str,
+            'display_date': display_date,
+        }
 
-        # Hole ALLE Routinen des Users (inkl. frequency)
-        all_user_routines = supabase.table("routines").select("id, task, time, day, checked, skipped, missed_count, last_checked_date, missed_dates, frequency, recurrence_day").eq("user_id", user_id).execute().data
-        
-        # Filtere für heute relevante Routinen
+    try:
+        all_user_routines = supabase.table("todos") \
+            .select("id, title, recurrence_weekday, last_checked_date, status, missed_count, missed_dates, recurrence_type, recurrence_day, due_date") \
+            .eq("user_id", user_id) \
+            .eq("is_recurring", True) \
+            .not_.in_("status", ["completed", "archived"]) \
+            .execute().data
+
         today_routines = []
         yesterday_routines = []
-        
+
         for routine in all_user_routines:
-            frequency = routine.get('frequency', 'daily')
-            
-            # Tägliche Routinen - immer für heute
+            frequency = routine.get('recurrence_type', 'daily')
+            weekday = (routine.get('recurrence_weekday') or '').lower()
+
+            # Skipped-Reset: wenn skip von einem früheren Tag ist, zurücksetzen
+            if routine.get('status') == 'skipped' and routine.get('last_checked_date') != current_date:
+                supabase.table("todos").update({"status": "open"}).eq("id", routine['id']).execute()
+                routine['status'] = 'open'
+
             if frequency == 'daily':
                 today_routines.append(routine)
-            
-            # Wöchentliche Routinen - nur am richtigen Wochentag
-            elif frequency == 'weekly' and routine.get('day') == today:
+            elif frequency == 'weekly' and weekday == today:
                 today_routines.append(routine)
-            
-            # Monatliche Routinen - nur am richtigen Tag des Monats
             elif frequency == 'monthly':
-                routine_day = routine.get('recurrence_day') or int(routine.get('day', 1))
-                if routine_day == today_day_of_month:
+                try:
+                    day_val = routine.get('recurrence_day') or int(routine.get('recurrence_weekday', '1'))
+                except:
+                    day_val = 1
+                if day_val == today_day_of_month:
                     today_routines.append(routine)
-                # Letzter Tag des Monats
-                elif routine.get('day') == 'last':
-                    last_day = (datetime.datetime.now().replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
-                    if datetime.datetime.now().day == last_day.day:
-                        today_routines.append(routine)
-            
-            # Intervall-Routinen: basierend auf next_due_date
             elif re.match(r'^every_\d+_(days|months)$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
-                next_due = routine.get('next_due_date')
-                if next_due == current_date:
+                if routine.get('due_date') and str(routine.get('due_date')) == current_date:
                     today_routines.append(routine)
 
-            # Gestern-Routinen analog
-            if frequency == 'weekly' and routine.get('day') == yesterday:
+            if frequency == 'weekly' and weekday == yesterday:
                 yesterday_routines.append(routine)
-            # NEU: Monatliche Routinen von gestern
             elif frequency == 'monthly':
                 yesterday_day_of_month = (datetime.datetime.now() - datetime.timedelta(days=1)).day
-                routine_day = routine.get('recurrence_day') or int(routine.get('day', 1))
-                if routine_day == yesterday_day_of_month:
+                try:
+                    day_val = routine.get('recurrence_day') or int(routine.get('recurrence_weekday', '1'))
+                except:
+                    day_val = 1
+                if day_val == yesterday_day_of_month:
                     yesterday_routines.append(routine)
-                # Letzter Tag des vorherigen Monats
-                elif routine.get('day') == 'last':
-                    yesterday_date_obj = datetime.datetime.now() - datetime.timedelta(days=1)
-                    last_day_prev = (yesterday_date_obj.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
-                    if yesterday_date_obj.day == last_day_prev.day:
-                        yesterday_routines.append(routine)
             elif re.match(r'^every_\d+_(days|months)$', frequency) or frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
-                if routine.get('next_due_date') == yesterday_date:
+                if routine.get('due_date') and str(routine.get('due_date')) == yesterday_date:
                     yesterday_routines.append(routine)
 
         all_routines = []
-        
-        # 🆕 SCHRITT 2: Reset-Logik für jeden Routine-Eintrag
+
         for routine in today_routines:
-            routine_copy = routine.copy()
-            routine_copy['date'] = current_date
-            routine_copy['display_date'] = 'heute'
-            routine_id = routine['id']
             last_checked = routine.get('last_checked_date')
-            is_checked = routine.get('checked', False)
+            if last_checked and last_checked < current_date:
+                supabase.table("todos").update({"last_checked_date": current_date}).eq("id", routine['id']).execute()
+                routine['last_checked_date'] = current_date
+            all_routines.append(make_routine_response(routine, current_date, 'heute'))
 
-            # 🎯 RESET-BEDINGUNG: Wenn last_checked_date nicht heute ist (oder NULL)
-            if last_checked != current_date and last_checked is not None:
-                if last_checked < current_date:  # Nur wenn letzter Check VOR heute war
-                    
-                    # Wenn Routine nicht gecheckt wurde -> missed_count erhöhen
-                    # Reset ohne missed_dates zu ändern (48h Kulanz)
-                    supabase.table("routines").update({
-                        "checked": False,
-                        "skipped": False,
-                        "last_checked_date": current_date
-                    }).eq("id", routine_id).execute()
-
-                    # Lokale Daten aktualisieren
-                    routine['checked'] = False
-                    
-                    routine_copy['checked'] = False
-                    routine_copy['last_checked_date'] = current_date    
-                    routine['last_checked_date'] = current_date
-            routine_copy['checked'] = routine.get('checked', False)
-            routine_copy['last_checked_date'] = routine.get('last_checked_date')
-            all_routines.append(routine_copy)
-        
-        # Verarbeite GESTERN-Routinen (nur unerledigte)
         for routine in yesterday_routines:
             last_checked = routine.get('last_checked_date')
-            is_checked = routine.get('checked', False)
-            
-            # Nur anzeigen wenn NICHT gecheckt wurde gestern
-            if last_checked != yesterday_date or not is_checked:
-                routine_copy = routine.copy()
-                routine_copy['date'] = yesterday_date
-                routine_copy['display_date'] = 'gestern'
-                routine_copy['checked'] = False  # Immer unchecked anzeigen
-                all_routines.append(routine_copy)
-                
-                # Prüfe ob diese Routine vorgestern auch schon nicht gecheckt war
+            is_checked = last_checked == yesterday_date
+            if not is_checked:
+                all_routines.append(make_routine_response(routine, yesterday_date, 'gestern'))
                 day_before_yesterday = (datetime.datetime.now() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
-                
-                # Nur zu missed_dates hinzufügen wenn 48h vorbei sind (vorgestern nicht gecheckt)
                 if last_checked and last_checked <= day_before_yesterday:
                     missed_dates = routine.get('missed_dates') or []
                     if yesterday_date not in missed_dates:
                         missed_dates.append(yesterday_date)
-                        supabase.table("routines").update({
-                            "missed_dates": missed_dates
-                        }).eq("id", routine['id']).execute()
-        
-        # Sortiere: heute zuerst, dann gestern
+                        supabase.table("todos").update({"missed_dates": missed_dates}).eq("id", routine['id']).execute()
+
         all_routines.sort(key=lambda x: x['date'], reverse=True)
-                
         return {"routines": all_routines}
-        
+
     except Exception as e:
-        print(f"Fehler beim Abrufen/Reset der Routinen: {e}")
-        # Fallback ohne last_checked_date
-        all_routines = supabase.table("routines").select("id, task, time, day, checked, missed_count, missed_dates").eq("day", today).eq("user_id", user_id).execute().data
-        return {"routines": all_routines}
+        print(f"Fehler beim Abrufen der Routinen: {e}")
+        fallback = supabase.table("todos") \
+            .select("id, title, recurrence_weekday, last_checked_date, status, missed_count, missed_dates, recurrence_type") \
+            .eq("user_id", user_id) \
+            .eq("is_recurring", True) \
+            .not_.in_("status", ["completed", "archived"]) \
+            .execute().data
+        return {"routines": [make_routine_response(r, current_date, 'heute') for r in fallback]}
         
 @app.post("/routines/update")
 def update_routine_status(update: RoutineUpdate):
-    # Konvertiere zu Strings für Supabase
     routine_id = str(update.id)
     user_id = str(update.user_id)
-        
+
     try:
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         yesterday_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
-        # Hole aktuelle Routine-Daten um zu bestimmen für welches Datum das Update gilt     
-        routine_data = supabase.table("routines").select("day, frequency, recurrence_day").eq("id", routine_id).eq("user_id", user_id).execute().data
+        routine_data = supabase.table("todos").select("recurrence_weekday, recurrence_type, recurrence_day").eq("id", routine_id).eq("user_id", user_id).execute().data
 
         if not routine_data:
             return {"status": "error", "message": "Routine nicht gefunden"}
 
         routine = routine_data[0]
-        frequency = routine.get('frequency', 'daily')
-        
-        # Bestimme target_date basierend auf frequency
+        frequency = routine.get('recurrence_type', 'daily')
+
         if frequency == 'daily':
-            target_date = current_date  # Tägliche Routinen = heute
+            target_date = current_date
         elif frequency == 'weekly':
-            # Für wöchentliche Routinen: bisherige Logik
-            routine_day = routine['day']
-            today_weekday = datetime.datetime.now().strftime("%A")
-            yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A")
-            
-            if routine_day == today_weekday:
+            routine_weekday = (routine.get('recurrence_weekday') or '').lower()
+            today_weekday = datetime.datetime.now().strftime("%A").lower()
+            yesterday_weekday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%A").lower()
+            if routine_weekday == today_weekday:
                 target_date = current_date
-            elif routine_day == yesterday_weekday:
+            elif routine_weekday == yesterday_weekday:
                 target_date = yesterday_date
             else:
                 return {"status": "error", "message": "Wöchentliche Routine gehört weder zu heute noch zu gestern"}
         elif frequency == 'monthly':
-            target_date = current_date  # Monatliche Routinen = heute
+            target_date = current_date
         else:
-            target_date = current_date  # Fallback
-              
-        # Update checked-Status UND last_checked_date
-        update_data = {"checked": update.checked, "last_checked_date": target_date}
+            target_date = current_date
 
-        # Bei Intervall-Routinen nach Abhaken next_due_date neu berechnen
+        update_data = {"last_checked_date": target_date if update.checked else None}
+
         if update.checked:
             months_match = re.match(r'^every_(\d+)_months$', frequency)
             days_match = re.match(r'^every_(\d+)_days$', frequency)
             if months_match:
                 n = int(months_match.group(1))
-                update_data["next_due_date"] = add_months(datetime.datetime.now(), n).strftime("%Y-%m-%d")
+                update_data["due_date"] = add_months(datetime.datetime.now(), n).strftime("%Y-%m-%d")
             elif days_match:
                 n = int(days_match.group(1))
-                update_data["next_due_date"] = (datetime.datetime.now() + datetime.timedelta(days=n)).strftime("%Y-%m-%d")
+                update_data["due_date"] = (datetime.datetime.now() + datetime.timedelta(days=n)).strftime("%Y-%m-%d")
             elif frequency in ['biweekly', 'triweekly', 'fourweekly', 'quarterly', 'biannual']:
                 weeks_map = {'biweekly': 2, 'triweekly': 3, 'fourweekly': 4}
                 days_map = {'quarterly': 91, 'biannual': 183}
                 if frequency in weeks_map:
-                    update_data["next_due_date"] = (datetime.datetime.now() + datetime.timedelta(weeks=weeks_map[frequency])).strftime("%Y-%m-%d")
+                    update_data["due_date"] = (datetime.datetime.now() + datetime.timedelta(weeks=weeks_map[frequency])).strftime("%Y-%m-%d")
                 elif frequency in days_map:
-                    update_data["next_due_date"] = (datetime.datetime.now() + datetime.timedelta(days=days_map[frequency])).strftime("%Y-%m-%d")
+                    update_data["due_date"] = (datetime.datetime.now() + datetime.timedelta(days=days_map[frequency])).strftime("%Y-%m-%d")
 
-        result = supabase.table("routines").update(update_data).eq("id", routine_id).eq("user_id", user_id).execute()
-        
+        supabase.table("todos").update(update_data).eq("id", routine_id).eq("user_id", user_id).execute()
         return {"status": "success"}
-        
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
         
@@ -2188,10 +2175,11 @@ def skip_todo(user_id: str, body: dict):
 @app.post("/routines/skip")
 def skip_routine(body: dict):
     try:
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         if body.get("unskip"):
-            supabase.table("routines").update({"skipped": False}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
+            supabase.table("todos").update({"status": "open"}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
         else:
-            supabase.table("routines").update({"skipped": True}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
+            supabase.table("todos").update({"status": "skipped", "last_checked_date": current_date}).eq("id", str(body["id"])).eq("user_id", str(body["user_id"])).execute()
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
