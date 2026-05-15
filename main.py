@@ -2096,8 +2096,6 @@ def get_todos(user_id: str, status: str = None, category: str = None):
 
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         tomorrow = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        today_weekday = datetime.datetime.now().strftime("%A").lower()
-        tomorrow_weekday = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%A").lower()
 
         for todo in todos:
             todo_status = todo.get('status', 'open')
@@ -2105,30 +2103,15 @@ def get_todos(user_id: str, status: str = None, category: str = None):
                 continue
 
             if todo.get('is_recurring'):
-                frequency = todo.get('recurrence_type', 'daily')
-                weekday = (todo.get('recurrence_weekday') or '').lower()
                 last_checked = todo.get('last_checked_date')
                 due_date_str = str(todo.get('due_date') or '')
 
                 if last_checked == today:
                     continue
+                if due_date_str > tomorrow:
+                    continue
 
-                if frequency == 'daily':
-                    todo['due_date'] = today
-                elif frequency == 'weekly':
-                    if weekday == today_weekday:
-                        todo['due_date'] = today
-                    elif weekday == tomorrow_weekday:
-                        todo['due_date'] = tomorrow
-                    else:
-                        continue
-                else:
-                    if not due_date_str or due_date_str > tomorrow:
-                        continue
-                    todo['due_date'] = due_date_str
-
-                due_date_str = str(todo['due_date'])
-                if due_date_str < today:
+                if due_date_str and due_date_str < today:
                     grouped_todos["overdue"].append(todo)
                 else:
                     grouped_todos["open"].append(todo)
