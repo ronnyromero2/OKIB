@@ -144,11 +144,6 @@ input[type="checkbox"] {
   <h1>🧠 Dein persönlicher KI-Berater</h1>
 
 <div class="section" style="text-align: left;">
-  <h2>Deine heutigen Routinen:</h2>
-  <div id="routinen" style="text-align: left;">Wird geladen...</div>
-</div>
-  
-<div class="section" style="text-align: left;">
   <h2>Deine To-Dos:</h2>
   <div id="todos" style="text-align: left;">Wird geladen...</div>
 </div>
@@ -218,7 +213,7 @@ function toggleErkenntnisse() {
     alert("✅ Prioritäten gespeichert");
   }
 
-async function loadRoutines() {
+async function loadRoutines_DISABLED() {
   const routinenBox = document.getElementById("routinen");
   routinenBox.innerHTML = "Lade Routinen...";
   try {
@@ -274,7 +269,7 @@ async function loadRoutines() {
                 // 🎯 SPEZIALFALL: Nur bei Gestern-Routinen die gecheckt werden, Reload
                 if (routine.display_date === 'gestern' && isChecked) {
                   // Gestern-Routine wurde erledigt → soll verschwinden
-                  setTimeout(() => loadRoutines(), 200);
+                  setTimeout(() => loadRoutines_DISABLED(), 200);
                 }
                 // Für alle anderen Fälle: KEIN Reload!
                 
@@ -360,7 +355,7 @@ async function loadRoutines() {
   }
 }
 
-async function updateRoutineStatus(routineId, isChecked) {
+async function updateRoutineStatus_DISABLED(routineId, isChecked) {
   try {
     const response = await fetch(`${API_URL}/routines/update`, {
       method: "POST",
@@ -764,7 +759,6 @@ async function updateTodoStatus(todoId, isCompleted) {
 }
   
   window.addEventListener('DOMContentLoaded', async () => {
-    loadRoutines();
     ladeZiele();
     loadTodos();
     await zeigeAutomatischenBericht();
