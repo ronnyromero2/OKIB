@@ -667,14 +667,15 @@ async function loadTodos() {
 
         const priorityEmoji = isOverdue ? '💀 ' : (todo.priority === 'high' ? '🔴 ' : '');
 
+        const isUrgent = todo.priority === 'high' || isOverdue;
         let itemColor = '';
         let fontWeight = '';
         let blinkClass = '';
         if (isOverdue) { itemColor = 'color: #8b5555;'; fontWeight = 'font-weight: bold;'; }
-        else if (isDueToday && isAfterNoon) { blinkClass = 'blink-today'; fontWeight = 'font-weight: bold;'; }
-        else if (isDueToday) { itemColor = 'color: red;'; fontWeight = 'font-weight: bold;'; }
-        else if (todo.due_date === tomorrow) itemColor = 'color: orange;';
-        else if (todo.due_date === dayAfterTomorrow) itemColor = 'color: yellow;';
+        else if (isUrgent && isDueToday && isAfterNoon) { blinkClass = 'blink-today'; fontWeight = 'font-weight: bold;'; }
+        else if (isUrgent && isDueToday) { itemColor = 'color: red;'; fontWeight = 'font-weight: bold;'; }
+        else if (isUrgent && todo.due_date === tomorrow) itemColor = 'color: orange;';
+        else if (isUrgent && todo.due_date === dayAfterTomorrow) itemColor = 'color: yellow;';
 
         let dueDateHtml = '';
         if (todo.due_date) {
