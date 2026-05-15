@@ -518,6 +518,7 @@ async def start_interaction(user_id: str):
         overdue_todos_data = supabase.table("todos") \
             .select("title, due_date, priority") \
             .eq("user_id", user_id) \
+            .eq("is_recurring", False) \
             .lt("due_date", today_date) \
             .not_.in_("status", ["completed", "archived", "skipped"]) \
             .order("due_date", desc=False) \
@@ -881,7 +882,7 @@ async def chat(user_id: str, chat_input: ChatInput):
             if result is None:
                 return {"response": "Ich konnte kein passendes To-Do zum Löschen finden.", "created_todo": False}
             if result == "__unclear__":
-                todos = supabase.table("todos").select("title").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(10).execute().data
+                todos = supabase.table("todos").select("title").eq("user_id", user_id).eq("is_recurring", False).eq("status", "open").order("id", desc=True).limit(10).execute().data
                 todo_list = "\n".join([f"- {t['title']}" for t in todos])
                 question = f"Welches To-Do soll gelöscht werden?\n{todo_list}"
                 await _save_conversation_entry(user_id, user_message, question, "")
@@ -1010,8 +1011,8 @@ async def chat(user_id: str, chat_input: ChatInput):
         todos_text = "Keine To-Dos definiert."
         try:
             today_date = datetime.datetime.now().strftime("%Y-%m-%d")
-            open_todos = supabase.table("todos").select("title, priority, due_date, category, status").eq("user_id", user_id).in_("status", ["open", "in_progress"]).limit(10).execute().data
-            overdue_todos = supabase.table("todos").select("title, priority, due_date, category").eq("user_id", user_id).lt("due_date", today_date).not_.in_("status", ["completed", "archived", "skipped"]).execute().data
+            open_todos = supabase.table("todos").select("title, priority, due_date, category, status").eq("user_id", user_id).eq("is_recurring", False).in_("status", ["open", "in_progress"]).limit(10).execute().data
+            overdue_todos = supabase.table("todos").select("title, priority, due_date, category").eq("user_id", user_id).eq("is_recurring", False).lt("due_date", today_date).not_.in_("status", ["completed", "archived", "skipped"]).execute().data
             
             if open_todos or overdue_todos:
                 todos_parts = []
@@ -1184,7 +1185,7 @@ def detect_intent(user_message: str, recent_history: list) -> str:
     return response.choices[0].message.content.strip().lower()
 
 async def update_latest_todo(user_id: str, user_message: str, last_ai_response: str):
-    todos = supabase.table("todos").select("id, title, due_date, priority").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(5).execute().data
+    todos = supabase.table("todos").select("id, title, due_date, priority").eq("user_id", user_id).eq("is_recurring", False).eq("status", "open").order("id", desc=True).limit(5).execute().data
     if not todos:
         return None, {}
     today = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -1232,7 +1233,7 @@ async def archive_profile_entries(user_id: str, user_message: str):
     return archived_names
 
 async def delete_todo_from_chat(user_id: str, user_message: str, last_ai_response: str):
-    todos = supabase.table("todos").select("id, title").eq("user_id", user_id).eq("status", "open").order("id", desc=True).limit(10).execute().data
+    todos = supabase.table("todos").select("id, title").eq("user_id", user_id).eq("is_recurring", False).eq("status", "open").order("id", desc=True).limit(10).execute().data
     if not todos:
         return None
     todos_text = "\n".join([f"ID {t['id']}: '{t['title']}'" for t in todos])
