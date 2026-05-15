@@ -942,14 +942,16 @@ async def chat(user_id: str, chat_input: ChatInput):
         wochenbericht_text = "Kein Wochenbericht verfügbar."
         try:
             latest_weekly_report = supabase.table("long_term_memory") \
-                .select("inhalt") \
+                .select("inhalt, timestamp") \
                 .eq("user_id", user_id) \
                 .eq("thema", "Wochenrückblick") \
                 .order("timestamp", desc=True) \
                 .limit(1) \
                 .execute()
             if latest_weekly_report.data:
-                wochenbericht_text = latest_weekly_report.data[0]['inhalt']
+                wr = latest_weekly_report.data[0]
+                wr_date = wr['timestamp'][:10] if wr.get('timestamp') else 'unbekannt'
+                wochenbericht_text = f"[Erstellt am {wr_date}]\n{wr['inhalt']}"
         except Exception as e:
             print(f"Fehler beim Abrufen des Wochenberichts: {e}")
 
@@ -957,14 +959,16 @@ async def chat(user_id: str, chat_input: ChatInput):
         monatsbericht_text = "Kein Monatsbericht verfügbar."
         try:
             latest_monthly_report = supabase.table("long_term_memory") \
-                .select("inhalt") \
+                .select("inhalt, timestamp") \
                 .eq("user_id", user_id) \
                 .eq("thema", "Monatsrückblick") \
                 .order("timestamp", desc=True) \
                 .limit(1) \
                 .execute()
             if latest_monthly_report.data:
-                monatsbericht_text = latest_monthly_report.data[0]['inhalt']
+                mr = latest_monthly_report.data[0]
+                mr_date = mr['timestamp'][:10] if mr.get('timestamp') else 'unbekannt'
+                monatsbericht_text = f"[Erstellt am {mr_date}]\n{mr['inhalt']}"
         except Exception as e:
             print(f"Fehler beim Abrufen des Monatsberichts: {e}")
 
@@ -1079,10 +1083,10 @@ async def chat(user_id: str, chat_input: ChatInput):
         Langzeitgedächtnis / Wichtige Erkenntnisse:
         {memory_text}
 
-        Aktueller Wochenbericht:
+        Letzter Wochenbericht (historisch, kein aktueller Stand):
         {wochenbericht_text}
-        
-        Aktueller Monatsbericht:
+
+        Letzter Monatsbericht (historisch, kein aktueller Stand):
         {monatsbericht_text}
         
         Aktuelle Ziele:
