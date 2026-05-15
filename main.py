@@ -324,24 +324,29 @@ def calculate_next_due_date(recurrence_type: str, recurrence_day: int = None, la
 
 def create_recurring_todo_instance(original_todo, user_id: str):
     """Erstellt eine neue Instanz eines wiederkehrenden To-Dos"""
-    next_due = calculate_next_due_date(
-        original_todo['recurrence_type'], 
+    next_due = get_next_due_date(
+        original_todo.get('recurrence_type', 'daily'),
+        original_todo.get('recurrence_weekday'),
         original_todo.get('recurrence_day')
     )
-    
+
     if next_due:
         new_todo = {
             "user_id": user_id,
             "title": original_todo['title'],
-            "description": original_todo['description'],
-            "priority": original_todo['priority'],
+            "description": original_todo.get('description', ''),
+            "priority": original_todo.get('priority', 'medium'),
             "due_date": next_due,
-            "category": original_todo['category'],
+            "category": original_todo.get('category', 'routine'),
             "status": "open",
             "completed": False,
             "is_recurring": True,
-            "recurrence_type": original_todo['recurrence_type'],
+            "recurrence_type": original_todo.get('recurrence_type'),
             "recurrence_day": original_todo.get('recurrence_day'),
+            "recurrence_weekday": original_todo.get('recurrence_weekday'),
+            "missed_count": 0,
+            "missed_dates": [],
+            "last_checked_date": None,
             "parent_todo_id": original_todo['id'],
             "created_at": datetime.datetime.utcnow().isoformat() + 'Z'
         }
@@ -2103,15 +2108,12 @@ def get_todos(user_id: str, status: str = None, category: str = None):
                 continue
 
             if todo.get('is_recurring'):
-                last_checked = todo.get('last_checked_date')
                 due_date_str = str(todo.get('due_date') or '')
-
-                if last_checked == today:
-                    continue
                 if due_date_str > tomorrow:
                     continue
-
-                if due_date_str and due_date_str < today:
+                if todo_status == 'skipped':
+                    grouped_todos["skipped"].append(todo)
+                elif due_date_str and due_date_str < today:
                     grouped_todos["overdue"].append(todo)
                 else:
                     grouped_todos["open"].append(todo)
@@ -2168,27 +2170,15 @@ def update_todo_completion(update: TodoUpdate, user_id: str):
         
         todo = todo_data[0]
         
-        if update.completed and todo.get('is_recurring'):
-            next_due = get_next_due_date(
-                todo.get('recurrence_type', 'daily'),
-                todo.get('recurrence_weekday'),
-                todo.get('recurrence_day')
-            )
-            supabase.table("todos").update({
-                "due_date": next_due,
-                "last_checked_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-                "status": "open",
-                "completed": False,
-                "completed_at": None
-            }).eq("id", todo_id).eq("user_id", user_id).execute()
-            return {"status": "success"}
-
         update_data = {
             "completed": update.completed,
             "status": "completed" if update.completed else "open",
             "completed_at": datetime.datetime.utcnow().isoformat() + 'Z' if update.completed else None
         }
         supabase.table("todos").update(update_data).eq("id", todo_id).eq("user_id", user_id).execute()
+
+        if update.completed and todo.get('is_recurring'):
+            create_recurring_todo_instance(todo, user_id)
         
         return {"status": "success"}
         
@@ -2225,13 +2215,7 @@ def skip_todo(user_id: str, body: dict):
         if body.get("unskip"):
             supabase.table("todos").update({"status": "open", "completed": False}).eq("id", todo_id).eq("user_id", user_id).execute()
         else:
-            todo_data = supabase.table("todos").select("is_recurring, recurrence_type, recurrence_weekday, recurrence_day").eq("id", todo_id).eq("user_id", user_id).execute().data
-            if todo_data and todo_data[0].get('is_recurring'):
-                t = todo_data[0]
-                next_due = get_next_due_date(t.get('recurrence_type', 'daily'), t.get('recurrence_weekday'), t.get('recurrence_day'))
-                supabase.table("todos").update({"due_date": next_due, "last_checked_date": datetime.datetime.now().strftime("%Y-%m-%d")}).eq("id", todo_id).eq("user_id", user_id).execute()
-            else:
-                supabase.table("todos").update({"status": "skipped", "completed": False}).eq("id", todo_id).eq("user_id", user_id).execute()
+            supabase.table("todos").update({"status": "skipped", "completed": False}).eq("id", todo_id).eq("user_id", user_id).execute()
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
