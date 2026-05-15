@@ -331,6 +331,10 @@ def create_recurring_todo_instance(original_todo, user_id: str):
     )
 
     if next_due:
+        existing = supabase.table("todos").select("id").eq("user_id", user_id).eq("title", original_todo['title']).eq("is_recurring", True).eq("due_date", next_due).not_.in_("status", ["completed", "archived"]).execute().data
+        if existing:
+            return None
+
         new_todo = {
             "user_id": user_id,
             "title": original_todo['title'],
@@ -350,7 +354,7 @@ def create_recurring_todo_instance(original_todo, user_id: str):
             "parent_todo_id": original_todo['id'],
             "created_at": datetime.datetime.utcnow().isoformat() + 'Z'
         }
-        
+
         try:
             result = supabase.table("todos").insert(new_todo).execute()
             return result.data[0] if result.data else None
