@@ -646,6 +646,9 @@ async function loadTodos() {
           
           try {
             await updateTodoStatus(todo.id, isChecked);
+            if (todo.is_recurring && isChecked) {
+              setTimeout(() => loadTodos(), 400);
+            }
           } catch (error) {
             checkbox.checked = !isChecked;
             todoDiv.classList.toggle("done", !isChecked);
@@ -721,6 +724,10 @@ async function loadTodos() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ id: todo.id })
                 });
+                if (todo.is_recurring) {
+                  setTimeout(() => loadTodos(), 400);
+                  return;
+                }
                 todoDiv.classList.add("skipped");
                 checkbox.disabled = true;
                 skipBtn.title = "Zurücksetzen";

@@ -1345,6 +1345,39 @@ def add_months(dt: datetime.datetime, months: int) -> datetime.datetime:
     last_day = calendar.monthrange(year, month)[1]
     return dt.replace(year=year, month=month, day=min(dt.day, last_day))
 
+def get_next_due_date(frequency: str, recurrence_weekday: str = None, recurrence_day: int = None) -> str:
+    now = datetime.datetime.now()
+    weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    if frequency == 'daily':
+        return (now + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    elif frequency == 'weekly':
+        if recurrence_weekday and recurrence_weekday.lower() in weekdays:
+            target = weekdays.index(recurrence_weekday.lower())
+            days_ahead = (target - now.weekday() + 7) % 7 or 7
+            return (now + datetime.timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+        return (now + datetime.timedelta(days=7)).strftime("%Y-%m-%d")
+    elif frequency == 'monthly':
+        nxt = add_months(now, 1)
+        day = recurrence_day or now.day
+        return nxt.replace(day=min(day, calendar.monthrange(nxt.year, nxt.month)[1])).strftime("%Y-%m-%d")
+    elif frequency == 'biweekly':
+        return (now + datetime.timedelta(weeks=2)).strftime("%Y-%m-%d")
+    elif frequency == 'triweekly':
+        return (now + datetime.timedelta(weeks=3)).strftime("%Y-%m-%d")
+    elif frequency == 'fourweekly':
+        return (now + datetime.timedelta(weeks=4)).strftime("%Y-%m-%d")
+    elif frequency == 'quarterly':
+        return (now + datetime.timedelta(days=91)).strftime("%Y-%m-%d")
+    elif frequency == 'biannual':
+        return (now + datetime.timedelta(days=183)).strftime("%Y-%m-%d")
+    m = re.match(r'^every_(\d+)_months$', frequency)
+    if m:
+        return add_months(now, int(m.group(1))).strftime("%Y-%m-%d")
+    m = re.match(r'^every_(\d+)_days$', frequency)
+    if m:
+        return (now + datetime.timedelta(days=int(m.group(1)))).strftime("%Y-%m-%d")
+    return (now + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+
 def get_frequency_text(frequency: str) -> str:
     if frequency in FREQUENCY_TEXT:
         return FREQUENCY_TEXT[frequency]
@@ -2044,16 +2077,15 @@ def create_profile(profile_data: ProfileData, user_id: str):
 def get_todos(user_id: str, status: str = None, category: str = None):
     """Alle To-Dos eines Users abrufen mit optionalen Filtern"""
     try:
-        query = supabase.table("todos").select("*").eq("user_id", user_id).eq("is_recurring", False)
+        query = supabase.table("todos").select("*").eq("user_id", user_id)
 
         if status:
             query = query.eq("status", status)
         if category:
             query = query.eq("category", category)
-            
+
         todos = query.order("created_at", desc=True).execute().data
-        
-        # Gruppiere nach Status für bessere Übersicht
+
         grouped_todos = {
             "open": [],
             "in_progress": [],
@@ -2063,21 +2095,53 @@ def get_todos(user_id: str, status: str = None, category: str = None):
         }
 
         today = datetime.datetime.now().strftime("%Y-%m-%d")
+        tomorrow = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        today_weekday = datetime.datetime.now().strftime("%A").lower()
+        tomorrow_weekday = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%A").lower()
 
         for todo in todos:
             todo_status = todo.get('status', 'open')
-            due_date = todo.get('due_date')
+            if todo_status in ['completed', 'archived']:
+                continue
 
-            if todo_status == 'skipped':
-                grouped_todos["skipped"].append(todo)
-            elif due_date and due_date < today and todo_status not in ['completed', 'archived']:
-                grouped_todos["overdue"].append(todo)
-            else:
-                if todo_status in grouped_todos:
-                    grouped_todos[todo_status].append(todo)
+            if todo.get('is_recurring'):
+                frequency = todo.get('recurrence_type', 'daily')
+                weekday = (todo.get('recurrence_weekday') or '').lower()
+                last_checked = todo.get('last_checked_date')
+                due_date_str = str(todo.get('due_date') or '')
+
+                if last_checked == today:
+                    continue
+
+                if frequency == 'daily':
+                    todo['due_date'] = today
+                elif frequency == 'weekly':
+                    if weekday == today_weekday:
+                        todo['due_date'] = today
+                    elif weekday == tomorrow_weekday:
+                        todo['due_date'] = tomorrow
+                    else:
+                        continue
+                else:
+                    if not due_date_str or due_date_str > tomorrow:
+                        continue
+                    todo['due_date'] = due_date_str
+
+                due_date_str = str(todo['due_date'])
+                if due_date_str < today:
+                    grouped_todos["overdue"].append(todo)
                 else:
                     grouped_todos["open"].append(todo)
-        
+                continue
+
+            due_date = todo.get('due_date')
+            if todo_status == 'skipped':
+                grouped_todos["skipped"].append(todo)
+            elif due_date and str(due_date) < today and todo_status not in ['completed', 'archived']:
+                grouped_todos["overdue"].append(todo)
+            else:
+                grouped_todos[todo_status if todo_status in grouped_todos else "open"].append(todo)
+
         return {"todos": grouped_todos, "total": len(todos)}
         
     except Exception as e:
@@ -2121,18 +2185,27 @@ def update_todo_completion(update: TodoUpdate, user_id: str):
         
         todo = todo_data[0]
         
-        # Update des aktuellen To-Dos
+        if update.completed and todo.get('is_recurring'):
+            next_due = get_next_due_date(
+                todo.get('recurrence_type', 'daily'),
+                todo.get('recurrence_weekday'),
+                todo.get('recurrence_day')
+            )
+            supabase.table("todos").update({
+                "due_date": next_due,
+                "last_checked_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                "status": "open",
+                "completed": False,
+                "completed_at": None
+            }).eq("id", todo_id).eq("user_id", user_id).execute()
+            return {"status": "success"}
+
         update_data = {
             "completed": update.completed,
             "status": "completed" if update.completed else "open",
             "completed_at": datetime.datetime.utcnow().isoformat() + 'Z' if update.completed else None
         }
-        
         supabase.table("todos").update(update_data).eq("id", todo_id).eq("user_id", user_id).execute()
-        
-        # Wenn To-Do als erledigt markiert und wiederkehrend ist, erstelle neue Instanz
-        if update.completed and todo.get('is_recurring') and todo.get('recurrence_type'):
-            create_recurring_todo_instance(todo, user_id)
         
         return {"status": "success"}
         
@@ -2165,10 +2238,17 @@ def update_todo_status(update: TodoStatusUpdate, user_id: str):
 @app.post("/todos/skip/{user_id}")
 def skip_todo(user_id: str, body: dict):
     try:
+        todo_id = str(body["id"])
         if body.get("unskip"):
-            supabase.table("todos").update({"status": "open", "completed": False}).eq("id", str(body["id"])).eq("user_id", user_id).execute()
+            supabase.table("todos").update({"status": "open", "completed": False}).eq("id", todo_id).eq("user_id", user_id).execute()
         else:
-            supabase.table("todos").update({"status": "skipped", "completed": False}).eq("id", str(body["id"])).eq("user_id", user_id).execute()
+            todo_data = supabase.table("todos").select("is_recurring, recurrence_type, recurrence_weekday, recurrence_day").eq("id", todo_id).eq("user_id", user_id).execute().data
+            if todo_data and todo_data[0].get('is_recurring'):
+                t = todo_data[0]
+                next_due = get_next_due_date(t.get('recurrence_type', 'daily'), t.get('recurrence_weekday'), t.get('recurrence_day'))
+                supabase.table("todos").update({"due_date": next_due, "last_checked_date": datetime.datetime.now().strftime("%Y-%m-%d")}).eq("id", todo_id).eq("user_id", user_id).execute()
+            else:
+                supabase.table("todos").update({"status": "skipped", "completed": False}).eq("id", todo_id).eq("user_id", user_id).execute()
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
