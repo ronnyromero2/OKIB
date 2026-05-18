@@ -713,7 +713,7 @@ async function loadTodos() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ id: todo.id, completed: true, user_id: USER_ID })
                 });
-                todoDiv.remove();
+                todoDiv.classList.add("done");
               } else if (nowSkipped) {
                 await fetch(`${API_URL}/todos/skip/${USER_ID}`, {
                   method: "POST",
