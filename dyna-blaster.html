@@ -2,70 +2,195 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dyna Blaster</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             background: #1a1a2e;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             min-height: 100vh;
             font-family: 'Courier New', monospace;
             color: #fff;
             user-select: none;
+            overflow: hidden;
+            touch-action: none;
         }
-        h1 { font-size: 2em; margin-bottom: 10px; color: #f0c040; text-shadow: 2px 2px 4px #000; }
+        h1 { font-size: 1.4em; margin: 6px 0 4px; color: #f0c040; text-shadow: 2px 2px 4px #000; }
         #hud {
             display: flex;
-            gap: 20px;
-            margin-bottom: 10px;
-            font-size: 1em;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 0.75em;
             flex-wrap: wrap;
             justify-content: center;
         }
         #hud span {
             background: #16213e;
-            padding: 5px 12px;
+            padding: 3px 8px;
             border-radius: 5px;
             border: 1px solid #0f3460;
         }
-        #gameCanvas { border: 3px solid #0f3460; display: block; }
-        #message { margin-top: 12px; font-size: 1.4em; height: 2em; color: #f0c040; }
-        #controls { margin-top: 8px; font-size: 0.8em; color: #aaa; text-align: center; }
+        #canvasWrap {
+            position: relative;
+            line-height: 0;
+        }
+        #gameCanvas { display: block; border: 2px solid #0f3460; }
+        #message {
+            margin: 4px 0;
+            font-size: 1em;
+            height: 1.5em;
+            color: #f0c040;
+            text-align: center;
+        }
+
+        /* ---- Touch controls ---- */
+        #touchControls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 8px 16px;
+            max-width: 500px;
+        }
+
+        /* D-Pad */
+        #dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 56px);
+            grid-template-rows: repeat(3, 56px);
+            gap: 4px;
+        }
+        .dpad-btn {
+            width: 56px;
+            height: 56px;
+            background: rgba(255,255,255,0.12);
+            border: 2px solid rgba(255,255,255,0.25);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            cursor: pointer;
+            color: #fff;
+            active-opacity: 0.5;
+            transition: background 0.08s;
+        }
+        .dpad-btn:active, .dpad-btn.pressed {
+            background: rgba(255,255,255,0.32);
+            border-color: #f0c040;
+        }
+        .dpad-center { background: rgba(255,255,255,0.05); border-color: transparent; pointer-events: none; }
+
+        /* Right side buttons */
+        #rightBtns {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        #bombBtn {
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle at 35% 35%, #cc4400, #7a0000);
+            border: 3px solid #ff6622;
+            border-radius: 50%;
+            font-size: 32px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(200,50,0,0.5);
+            transition: transform 0.08s, box-shadow 0.08s;
+        }
+        #bombBtn:active, #bombBtn.pressed {
+            transform: scale(0.92);
+            box-shadow: 0 2px 6px rgba(200,50,0,0.4);
+        }
+        #restartBtn {
+            width: 54px;
+            height: 54px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+        #restartBtn:active { background: rgba(255,255,255,0.25); }
+
+        /* Hide keyboard hint on touch devices */
+        #controls { margin-top: 4px; font-size: 0.7em; color: #777; text-align: center; }
+        @media (hover: none) { #controls { display: none; } }
     </style>
 </head>
 <body>
 <h1>💣 DYNA BLASTER</h1>
 <div id="hud">
-    <span>❤️ Leben: <span id="lives">3</span></span>
-    <span>💣 Bomben: <span id="bombs">1</span></span>
-    <span>🔥 Reichweite: <span id="range">2</span></span>
-    <span>⭐ Punkte: <span id="score">0</span></span>
-    <span>👹 Feinde: <span id="enemyCount">4</span></span>
+    <span>❤️ <span id="lives">3</span></span>
+    <span>💣 <span id="bombs">1</span></span>
+    <span>🔥 <span id="range">2</span></span>
+    <span>⭐ <span id="score">0</span></span>
+    <span>👹 <span id="enemyCount">4</span></span>
 </div>
-<canvas id="gameCanvas"></canvas>
+<div id="canvasWrap">
+    <canvas id="gameCanvas"></canvas>
+</div>
 <div id="message"></div>
+
+<div id="touchControls">
+    <!-- D-Pad -->
+    <div id="dpad">
+        <div></div>
+        <div class="dpad-btn" id="btnUp">▲</div>
+        <div></div>
+        <div class="dpad-btn" id="btnLeft">◀</div>
+        <div class="dpad-btn dpad-center"></div>
+        <div class="dpad-btn" id="btnRight">▶</div>
+        <div></div>
+        <div class="dpad-btn" id="btnDown">▼</div>
+        <div></div>
+    </div>
+
+    <!-- Bomb + Restart -->
+    <div id="rightBtns">
+        <div id="bombBtn">💣</div>
+        <div id="restartBtn">🔄</div>
+    </div>
+</div>
+
 <div id="controls">WASD / Pfeiltasten = Bewegen | Leertaste = Bombe | R = Neustart</div>
 
 <script>
-const CELL = 46;
-const COLS = 15;
-const ROWS = 13;
-const W = COLS * CELL;
-const H = ROWS * CELL;
+// ---- Canvas sizing ----
+const COLS = 15, ROWS = 13;
+let CELL;
 
 const canvas = document.getElementById('gameCanvas');
-canvas.width = W;
-canvas.height = H;
 const ctx = canvas.getContext('2d');
+
+function computeCell() {
+    const maxW = Math.min(window.innerWidth, 700);
+    // Reserve space for controls + hud + title
+    const maxH = window.innerHeight - 220;
+    CELL = Math.floor(Math.min(maxW / COLS, maxH / ROWS));
+    CELL = Math.max(CELL, 24);
+    canvas.width  = COLS * CELL;
+    canvas.height = ROWS * CELL;
+}
+computeCell();
+window.addEventListener('resize', () => { computeCell(); });
 
 const EMPTY = 0, WALL = 1, BLOCK = 2;
 const PU_BOMB = 'bomb', PU_RANGE = 'range', PU_SPEED = 'speed';
 
-let gs; // game state
+let gs;
 
 function initGame() {
     document.getElementById('message').textContent = '';
@@ -106,7 +231,6 @@ function createGrid() {
             } else if (r % 2 === 0 && c % 2 === 0) {
                 g[r][c] = WALL;
             } else {
-                // Safe corridors at player start corners
                 const safe = (r <= 2 && c <= 2) || (r <= 2 && c >= COLS-3) ||
                              (r >= ROWS-3 && c <= 2) || (r >= ROWS-3 && c >= COLS-3);
                 g[r][c] = safe ? EMPTY : (Math.random() < 0.65 ? BLOCK : EMPTY);
@@ -123,20 +247,17 @@ function spawnEnemies() {
         {x: 1,      y: ROWS-2, color: '#e89343'},
         {x: Math.floor(COLS/2), y: Math.floor(ROWS/2), color: '#9343e8'},
     ];
-    pos.forEach(p => {
-        gs.enemies.push({
-            x: p.x, y: p.y,
-            px: p.x * CELL, py: p.y * CELL,
-            speed: 1.4 + Math.random() * 0.6,
-            dir: Math.floor(Math.random() * 4),
-            moveTimer: Math.random() * 0.5,
-            dead: false,
-            color: p.color,
-        });
-    });
+    pos.forEach(p => gs.enemies.push({
+        x: p.x, y: p.y,
+        px: p.x * CELL, py: p.y * CELL,
+        speed: 1.4 + Math.random() * 0.6,
+        dir: Math.floor(Math.random() * 4),
+        moveTimer: Math.random() * 0.5,
+        dead: false, color: p.color,
+    }));
 }
 
-// --- Input ---
+// ---- Keyboard input ----
 const keys = {};
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
@@ -145,38 +266,66 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// --- Collision ---
-function cellBlocked(col, row, excludeBombForPlayer) {
+// ---- Touch input ----
+function bindDpadBtn(id, code) {
+    const el = document.getElementById(id);
+    const press   = e => { e.preventDefault(); keys[code] = true;  el.classList.add('pressed'); };
+    const release = e => { e.preventDefault(); keys[code] = false; el.classList.remove('pressed'); };
+    el.addEventListener('touchstart',  press,   {passive: false});
+    el.addEventListener('touchend',    release, {passive: false});
+    el.addEventListener('touchcancel', release, {passive: false});
+    // mouse fallback for desktop testing
+    el.addEventListener('mousedown', press);
+    el.addEventListener('mouseup',   release);
+    el.addEventListener('mouseleave', release);
+}
+bindDpadBtn('btnUp',    'ArrowUp');
+bindDpadBtn('btnDown',  'ArrowDown');
+bindDpadBtn('btnLeft',  'ArrowLeft');
+bindDpadBtn('btnRight', 'ArrowRight');
+
+const bombBtn = document.getElementById('bombBtn');
+const bombPress = e => { e.preventDefault(); if (!gs.gameOver) { placeBomb(); bombBtn.classList.add('pressed'); } };
+const bombRelease = e => { e.preventDefault(); bombBtn.classList.remove('pressed'); };
+bombBtn.addEventListener('touchstart',  bombPress,   {passive: false});
+bombBtn.addEventListener('touchend',    bombRelease, {passive: false});
+bombBtn.addEventListener('touchcancel', bombRelease, {passive: false});
+bombBtn.addEventListener('mousedown', bombPress);
+bombBtn.addEventListener('mouseup',   bombRelease);
+
+const restartBtn = document.getElementById('restartBtn');
+restartBtn.addEventListener('touchstart', e => { e.preventDefault(); initGame(); }, {passive: false});
+restartBtn.addEventListener('click', () => initGame());
+
+// ---- Collision ----
+function cellBlocked(col, row) {
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return true;
     if (gs.grid[row][col] === WALL || gs.grid[row][col] === BLOCK) return true;
-    for (const b of gs.bombs) {
+    for (const b of gs.bombs)
         if (b.col === col && b.row === row && !b.playerWasHere) return true;
-    }
     return false;
 }
 
 function canMove(px, py, margin) {
-    const corners = [
+    const pts = [
         [px + margin, py + margin],
         [px + CELL - margin, py + margin],
         [px + margin, py + CELL - margin],
         [px + CELL - margin, py + CELL - margin],
     ];
-    for (const [cx, cy] of corners) {
+    for (const [cx, cy] of pts)
         if (cellBlocked(Math.floor(cx / CELL), Math.floor(cy / CELL))) return false;
-    }
     return true;
 }
 
-// --- Player ---
+// ---- Player ----
 function movePlayer(dt) {
     const p = gs.player;
     if (p.dead || gs.gameOver) return;
-
     let dx = 0, dy = 0;
     if (keys['ArrowLeft']  || keys['KeyA']) dx = -1;
     else if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
-    if (keys['ArrowUp']   || keys['KeyW']) dy = -1;
+    if (keys['ArrowUp']    || keys['KeyW']) dy = -1;
     else if (keys['ArrowDown']  || keys['KeyS']) dy = 1;
 
     const spd = p.speed * dt * 60;
@@ -187,17 +336,15 @@ function movePlayer(dt) {
     p.x = Math.floor((p.px + CELL / 2) / CELL);
     p.y = Math.floor((p.py + CELL / 2) / CELL);
 
-    // Release bomb-blocking once player stepped off
-    for (const b of gs.bombs) {
+    for (const b of gs.bombs)
         if (b.playerWasHere && (b.col !== p.x || b.row !== p.y)) b.playerWasHere = false;
-    }
 }
 
 function updatePlayer(dt) {
     if (gs.player.invincible > 0) gs.player.invincible -= dt;
 }
 
-// --- Bombs ---
+// ---- Bombs ----
 function placeBomb() {
     const p = gs.player;
     if (p.activeBombs >= p.bombCount) return;
@@ -209,27 +356,24 @@ function placeBomb() {
 
 function updateBombs(dt) {
     for (const b of gs.bombs) b.timer -= dt;
-    const exploding = gs.bombs.filter(b => b.timer <= 0);
-    exploding.forEach(explodeBomb);
+    gs.bombs.filter(b => b.timer <= 0).forEach(explodeBomb);
 }
 
 function explodeBomb(bomb) {
     gs.bombs = gs.bombs.filter(b => b !== bomb);
     gs.player.activeBombs = Math.max(0, gs.player.activeBombs - 1);
 
-    const cells = [{c: bomb.col, r: bomb.row, t: 'center'}];
+    const cells = [{c: bomb.col, r: bomb.row}];
     gs.grid[bomb.row][bomb.col] = EMPTY;
 
-    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-    for (const [dc, dr] of dirs) {
+    for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         for (let i = 1; i <= bomb.range; i++) {
-            const c = bomb.col + dc * i;
-            const r = bomb.row + dr * i;
+            const c = bomb.col + dc * i, r = bomb.row + dr * i;
             if (c < 0 || c >= COLS || r < 0 || r >= ROWS) break;
             if (gs.grid[r][c] === WALL) break;
             if (gs.grid[r][c] === BLOCK) {
                 gs.grid[r][c] = EMPTY;
-                cells.push({c, r, t: 'end'});
+                cells.push({c, r});
                 if (Math.random() < 0.3) {
                     const types = [PU_BOMB, PU_RANGE, PU_SPEED];
                     gs.powerups.push({ col: c, row: r, type: types[Math.floor(Math.random() * 3)] });
@@ -237,13 +381,12 @@ function explodeBomb(bomb) {
                 spawnParticles(c * CELL + CELL/2, r * CELL + CELL/2, '#c86420', 8);
                 break;
             }
-            cells.push({c, r, t: i === bomb.range ? 'end' : 'mid'});
+            cells.push({c, r});
             const chain = gs.bombs.find(b => b.col === c && b.row === r);
             if (chain) chain.timer = 0.01;
         }
     }
-
-    for (const {c, r, t} of cells) gs.explosions.push({col: c, row: r, timer: 0.75, type: t});
+    for (const {c, r} of cells) gs.explosions.push({col: c, row: r, timer: 0.75});
     spawnParticles(bomb.col * CELL + CELL/2, bomb.row * CELL + CELL/2, '#ff8800', 14);
 }
 
@@ -251,24 +394,21 @@ function updateExplosions(dt) {
     gs.explosions = gs.explosions.filter(e => { e.timer -= dt; return e.timer > 0; });
 }
 
-// --- Hit detection ---
+// ---- Hit detection ----
 function checkHits() {
     const p = gs.player;
-    if (!p.dead && p.invincible <= 0) {
-        for (const e of gs.explosions) {
+    if (!p.dead && p.invincible <= 0)
+        for (const e of gs.explosions)
             if (p.x === e.col && p.y === e.row) { playerHit(); break; }
-        }
-    }
+
     for (const enemy of gs.enemies) {
         if (enemy.dead) continue;
-        for (const e of gs.explosions) {
+        for (const e of gs.explosions)
             if (enemy.x === e.col && enemy.y === e.row) {
                 enemy.dead = true;
                 gs.player.score += 100;
                 spawnParticles(enemy.px + CELL/2, enemy.py + CELL/2, enemy.color, 16);
             }
-        }
-        // Touch kill
         if (!p.dead && p.invincible <= 0) {
             const dx = (enemy.px + CELL/2) - (p.px + CELL/2);
             const dy = (enemy.py + CELL/2) - (p.py + CELL/2);
@@ -280,7 +420,7 @@ function checkHits() {
     if (gs.enemies.length === 0 && !gs.won && !gs.gameOver) {
         gs.won = true;
         gs.player.score += 500;
-        document.getElementById('message').textContent = '🏆 SIEG! Alle Feinde besiegt! R = Neustart';
+        document.getElementById('message').textContent = '🏆 SIEG! Alle Feinde besiegt!';
     }
     updateHUD();
 }
@@ -294,7 +434,7 @@ function playerHit() {
     if (p.lives <= 0) {
         p.dead = true;
         gs.gameOver = true;
-        document.getElementById('message').textContent = '💀 GAME OVER! R = Neustart';
+        document.getElementById('message').textContent = '💀 GAME OVER! 🔄 Neustart';
     } else {
         p.invincible = 2.5;
         p.px = CELL; p.py = CELL;
@@ -302,7 +442,7 @@ function playerHit() {
     }
 }
 
-// --- Enemies ---
+// ---- Enemies ----
 function updateEnemies(dt) {
     const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
     for (const en of gs.enemies) {
@@ -321,9 +461,8 @@ function updateEnemies(dt) {
             }
             if (!moved) en.dir = Math.floor(Math.random() * 4);
         }
-        const tx = en.x * CELL, ty = en.y * CELL;
-        en.px += (tx - en.px) * Math.min(1, dt * 9);
-        en.py += (ty - en.py) * Math.min(1, dt * 9);
+        en.px += (en.x * CELL - en.px) * Math.min(1, dt * 9);
+        en.py += (en.y * CELL - en.py) * Math.min(1, dt * 9);
     }
 }
 
@@ -336,24 +475,22 @@ function shuffleDirs(preferred) {
     return [preferred, ...others];
 }
 
-// --- Powerups ---
+// ---- Powerups ----
 function checkPowerups() {
     const p = gs.player;
     gs.powerups = gs.powerups.filter(pu => {
-        if (pu.col === p.x && pu.row === p.y) {
-            if (pu.type === PU_BOMB)  p.bombCount++;
-            else if (pu.type === PU_RANGE) p.bombRange++;
-            else p.speed = Math.min(p.speed + 0.5, 6);
-            p.score += 50;
-            spawnParticles(pu.col * CELL + CELL/2, pu.row * CELL + CELL/2, '#ffd700', 10);
-            updateHUD();
-            return false;
-        }
-        return true;
+        if (pu.col !== p.x || pu.row !== p.y) return true;
+        if (pu.type === PU_BOMB)       p.bombCount++;
+        else if (pu.type === PU_RANGE) p.bombRange++;
+        else p.speed = Math.min(p.speed + 0.5, 6);
+        p.score += 50;
+        spawnParticles(pu.col * CELL + CELL/2, pu.row * CELL + CELL/2, '#ffd700', 10);
+        updateHUD();
+        return false;
     });
 }
 
-// --- Particles ---
+// ---- Particles ----
 function spawnParticles(x, y, color, n) {
     for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2;
@@ -379,33 +516,26 @@ function updateHUD() {
     document.getElementById('enemyCount').textContent = gs.enemies.length;
 }
 
-// --- Drawing ---
+// ---- Drawing ----
 function drawGrid() {
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             const x = c * CELL, y = r * CELL;
             const cell = gs.grid[r][c];
             if (cell === WALL) {
-                ctx.fillStyle = '#3a3a4c';
-                ctx.fillRect(x, y, CELL, CELL);
-                ctx.fillStyle = '#4e4e62';
-                ctx.fillRect(x+2, y+2, CELL-4, CELL-4);
-                ctx.fillStyle = '#2a2a3a';
-                ctx.fillRect(x, y, CELL, 2);
-                ctx.fillRect(x, y, 2, CELL);
-                ctx.fillStyle = '#5a5a70';
-                ctx.fillRect(x+CELL-2, y, 2, CELL);
-                ctx.fillRect(x, y+CELL-2, CELL, 2);
+                ctx.fillStyle = '#3a3a4c'; ctx.fillRect(x, y, CELL, CELL);
+                ctx.fillStyle = '#4e4e62'; ctx.fillRect(x+2, y+2, CELL-4, CELL-4);
+                ctx.fillStyle = '#2a2a3a'; ctx.fillRect(x, y, CELL, 2); ctx.fillRect(x, y, 2, CELL);
+                ctx.fillStyle = '#5a5a70'; ctx.fillRect(x+CELL-2, y, 2, CELL); ctx.fillRect(x, y+CELL-2, CELL, 2);
             } else if (cell === BLOCK) {
+                ctx.fillStyle = '#4a2a08'; ctx.fillRect(x, y, CELL, CELL);
+                ctx.fillStyle = '#7a5018'; ctx.fillRect(x+2, y+2, CELL-4, CELL-4);
                 ctx.fillStyle = '#4a2a08';
-                ctx.fillRect(x, y, CELL, CELL);
-                ctx.fillStyle = '#7a5018';
-                ctx.fillRect(x+2, y+2, CELL-4, CELL-4);
-                ctx.fillStyle = '#4a2a08';
-                ctx.fillRect(x+2, y+Math.floor(CELL/2)-1, CELL-4, 2);
-                ctx.fillRect(x+Math.floor(CELL/2)-1, y+2, 2, Math.floor(CELL/2)-3);
-                ctx.fillRect(x+2, y+Math.floor(CELL/2)+1, Math.floor(CELL/4), Math.floor(CELL/2)-3);
-                ctx.fillRect(x+Math.floor(CELL*3/4), y+Math.floor(CELL/2)+1, Math.floor(CELL/4)-2, Math.floor(CELL/2)-3);
+                const m = Math.floor(CELL/2);
+                ctx.fillRect(x+2, y+m-1, CELL-4, 2);
+                ctx.fillRect(x+m-1, y+2, 2, m-3);
+                ctx.fillRect(x+2, y+m+1, Math.floor(CELL/4), m-3);
+                ctx.fillRect(x+Math.floor(CELL*3/4), y+m+1, Math.floor(CELL/4)-2, m-3);
             } else {
                 ctx.fillStyle = (r+c) % 2 === 0 ? '#2e6626' : '#2b6024';
                 ctx.fillRect(x, y, CELL, CELL);
@@ -430,33 +560,19 @@ function drawExplosions() {
 function drawBombs() {
     for (const b of gs.bombs) {
         const x = b.col * CELL + CELL/2, y = b.row * CELL + CELL/2;
-        const pulse = 0.88 + Math.sin(b.timer * 9) * 0.1;
-        const r = CELL * 0.36 * pulse;
-
+        const r = CELL * 0.36 * (0.88 + Math.sin(b.timer * 9) * 0.1);
         const g = ctx.createRadialGradient(x-r*0.3, y-r*0.3, r*0.1, x, y, r);
-        g.addColorStop(0, '#555');
-        g.addColorStop(1, '#111');
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = g;
-        ctx.fill();
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Fuse
+        g.addColorStop(0, '#555'); g.addColorStop(1, '#111');
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+        ctx.fillStyle = g; ctx.fill();
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5; ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(x + r*0.4, y - r*0.7);
         ctx.quadraticCurveTo(x + r*0.9, y - r*1.2, x + r*0.6, y - r*1.7);
-        ctx.strokeStyle = '#888';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        // Spark
+        ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.stroke();
         if (Math.sin(b.timer * 18) > -0.3 || b.timer < 0.8) {
-            ctx.beginPath();
-            ctx.arc(x + r*0.6, y - r*1.7, 3.5, 0, Math.PI * 2);
-            ctx.fillStyle = b.timer < 0.8 ? '#f00' : '#ff0';
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(x + r*0.6, y - r*1.7, 3.5, 0, Math.PI*2);
+            ctx.fillStyle = b.timer < 0.8 ? '#f00' : '#ff0'; ctx.fill();
         }
     }
 }
@@ -465,18 +581,12 @@ function drawPowerups() {
     for (const pu of gs.powerups) {
         const x = pu.col * CELL + CELL/2, y = pu.row * CELL + CELL/2;
         const bob = Math.sin(gs.frame * 0.07) * 3;
-        ctx.save();
-        ctx.translate(x, y + bob);
-        ctx.beginPath();
-        ctx.arc(0, 0, CELL*0.33, 0, Math.PI*2);
+        ctx.save(); ctx.translate(x, y + bob);
+        ctx.beginPath(); ctx.arc(0, 0, CELL*0.33, 0, Math.PI*2);
         ctx.fillStyle = pu.type === PU_BOMB ? '#cc4400' : pu.type === PU_RANGE ? '#cc8800' : '#0066cc';
-        ctx.fill();
-        ctx.strokeStyle = '#fff4';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.fill(); ctx.strokeStyle = '#fff4'; ctx.lineWidth = 2; ctx.stroke();
         ctx.font = `${Math.round(CELL*0.36)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(pu.type === PU_BOMB ? '💣' : pu.type === PU_RANGE ? '🔥' : '⚡', 0, 1);
         ctx.restore();
     }
@@ -487,103 +597,42 @@ function drawPlayer() {
     if (p.dead) return;
     if (p.invincible > 0 && Math.floor(p.invincible * 10) % 2 === 0) return;
     const x = p.px + CELL/2, y = p.py + CELL/2;
-    ctx.save();
-    ctx.translate(x, y);
-
-    // Shadow
+    ctx.save(); ctx.translate(x, y);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(0, 14, 10, 4, 0, 0, Math.PI*2);
-    ctx.fill();
-
-    // Body
-    ctx.beginPath();
-    ctx.arc(0, 5, CELL*0.3, 0, Math.PI*2);
-    ctx.fillStyle = '#2255cc';
-    ctx.fill();
-    ctx.strokeStyle = '#1133aa';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Head
-    ctx.beginPath();
-    ctx.arc(0, -7, CELL*0.24, 0, Math.PI*2);
-    ctx.fillStyle = '#ffcc99';
-    ctx.fill();
-    ctx.strokeStyle = '#cc9966';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Eyes
+    ctx.beginPath(); ctx.ellipse(0, 14, 10, 4, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 5, CELL*0.3, 0, Math.PI*2);
+    ctx.fillStyle = '#2255cc'; ctx.fill(); ctx.strokeStyle = '#1133aa'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -7, CELL*0.24, 0, Math.PI*2);
+    ctx.fillStyle = '#ffcc99'; ctx.fill(); ctx.strokeStyle = '#cc9966'; ctx.lineWidth = 1; ctx.stroke();
     ctx.fillStyle = '#222';
-    ctx.beginPath();
-    ctx.arc(-5, -9, 2.5, 0, Math.PI*2);
-    ctx.arc(5, -9, 2.5, 0, Math.PI*2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(-5, -9, 2.5, 0, Math.PI*2); ctx.arc(5, -9, 2.5, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(-4, -10, 1, 0, Math.PI*2);
-    ctx.arc(6, -10, 1, 0, Math.PI*2);
-    ctx.fill();
-
-    // Hat brim
+    ctx.beginPath(); ctx.arc(-4, -10, 1, 0, Math.PI*2); ctx.arc(6, -10, 1, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#cc2222';
-    ctx.beginPath();
-    ctx.ellipse(0, -16, 11, 3.5, 0, 0, Math.PI*2);
-    ctx.fill();
-    // Hat top
+    ctx.beginPath(); ctx.ellipse(0, -16, 11, 3.5, 0, 0, Math.PI*2); ctx.fill();
     ctx.fillRect(-7, -26, 14, 12);
-    ctx.fillStyle = '#ff4444';
-    ctx.fillRect(-5, -25, 10, 2);
-
+    ctx.fillStyle = '#ff4444'; ctx.fillRect(-5, -25, 10, 2);
     ctx.restore();
 }
 
 function drawEnemies() {
     for (const en of gs.enemies) {
         const x = en.px + CELL/2, y = en.py + CELL/2;
-        ctx.save();
-        ctx.translate(x, y);
-
+        ctx.save(); ctx.translate(x, y);
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.beginPath();
-        ctx.ellipse(0, 14, 10, 4, 0, 0, Math.PI*2);
-        ctx.fill();
-
-        // Body
-        ctx.beginPath();
-        ctx.arc(0, 4, CELL*0.28, 0, Math.PI*2);
-        ctx.fillStyle = en.color;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Head
-        ctx.beginPath();
-        ctx.arc(0, -8, CELL*0.25, 0, Math.PI*2);
-        ctx.fillStyle = en.color;
-        ctx.fill();
-        ctx.stroke();
-
-        // White eyes
+        ctx.beginPath(); ctx.ellipse(0, 14, 10, 4, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 4, CELL*0.28, 0, Math.PI*2);
+        ctx.fillStyle = en.color; ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -8, CELL*0.25, 0, Math.PI*2);
+        ctx.fillStyle = en.color; ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(-5, -10, 4, 0, Math.PI*2);
-        ctx.arc(5, -10, 4, 0, Math.PI*2);
-        ctx.fill();
-        // Red pupils
+        ctx.beginPath(); ctx.arc(-5, -10, 4, 0, Math.PI*2); ctx.arc(5, -10, 4, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#f00';
-        ctx.beginPath();
-        ctx.arc(-5, -10, 2, 0, Math.PI*2);
-        ctx.arc(5, -10, 2, 0, Math.PI*2);
-        ctx.fill();
-
-        // Horns
+        ctx.beginPath(); ctx.arc(-5, -10, 2, 0, Math.PI*2); ctx.arc(5, -10, 2, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#880000';
         ctx.beginPath(); ctx.moveTo(-8,-16); ctx.lineTo(-4,-25); ctx.lineTo(-1,-16); ctx.fill();
         ctx.beginPath(); ctx.moveTo(1,-16); ctx.lineTo(4,-25); ctx.lineTo(8,-16); ctx.fill();
-
         ctx.restore();
     }
 }
@@ -593,14 +642,12 @@ function drawParticles() {
         const a = p.life / p.maxLife;
         ctx.globalAlpha = a;
         ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * a, 0, Math.PI*2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * a, 0, Math.PI*2); ctx.fill();
     }
     ctx.globalAlpha = 1;
 }
 
-// --- Game loop ---
+// ---- Game loop ----
 let lastTime = 0;
 
 function loop(ts) {
@@ -616,13 +663,10 @@ function loop(ts) {
         updateEnemies(dt);
         checkHits();
         checkPowerups();
-    } else if (gs.won) {
-        // still allow particle updates
-        updateParticles(dt);
     }
-    if (!gs.won) updateParticles(dt);
+    updateParticles(dt);
 
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawGrid();
     drawPowerups();
     drawExplosions();
