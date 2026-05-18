@@ -707,7 +707,14 @@ async function loadTodos() {
           skipBtn.addEventListener("click", async () => {
             const nowSkipped = todoDiv.classList.contains("skipped");
             try {
-              if (nowSkipped) {
+              if (todo.is_recurring) {
+                await fetch(`${API_URL}/todos/update/${USER_ID}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: todo.id, completed: true, user_id: USER_ID })
+                });
+                todoDiv.remove();
+              } else if (nowSkipped) {
                 await fetch(`${API_URL}/todos/skip/${USER_ID}`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
