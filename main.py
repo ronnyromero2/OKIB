@@ -1475,13 +1475,13 @@ async def automatischer_bericht(user_id: str = "1"):
     if bericht_typ is None:
         # Letzten Sonntag ermitteln (oder heute, falls Sonntag)
         days_since_sunday = (heute_utc.weekday() + 1) % 7
-        last_sunday = heute_utc - datetime.timedelta(days=days_since_sunday)
+        last_sunday = (heute_utc - datetime.timedelta(days=days_since_sunday)).replace(hour=0, minute=0, second=0, microsecond=0)
         monday_of_last_week = (last_sunday - datetime.timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
         existing_weekly = supabase.table("long_term_memory") \
             .select("id") \
             .eq("user_id", user_id) \
             .eq("thema", "Wochenrückblick") \
-            .gte("timestamp", monday_of_last_week.isoformat() + 'Z') \
+            .gte("timestamp", last_sunday.isoformat() + 'Z') \
             .execute().data
         if not existing_weekly:
             bericht_typ = "Wochenrückblick"
