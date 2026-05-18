@@ -266,18 +266,21 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// ---- Touch input ----
+// Prevent context menu on long press (mobile)
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// ---- Touch input (pointer events = multi-touch safe) ----
 function bindDpadBtn(id, code) {
     const el = document.getElementById(id);
-    const press   = e => { e.preventDefault(); keys[code] = true;  el.classList.add('pressed'); };
-    const release = e => { e.preventDefault(); keys[code] = false; el.classList.remove('pressed'); };
-    el.addEventListener('touchstart',  press,   {passive: false});
-    el.addEventListener('touchend',    release, {passive: false});
-    el.addEventListener('touchcancel', release, {passive: false});
-    // mouse fallback for desktop testing
-    el.addEventListener('mousedown', press);
-    el.addEventListener('mouseup',   release);
-    el.addEventListener('mouseleave', release);
+    el.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        keys[code] = true;
+        el.classList.add('pressed');
+    });
+    const up = e => { keys[code] = false; el.classList.remove('pressed'); };
+    el.addEventListener('pointerup',     up);
+    el.addEventListener('pointercancel', up);
 }
 bindDpadBtn('btnUp',    'ArrowUp');
 bindDpadBtn('btnDown',  'ArrowDown');
@@ -285,17 +288,17 @@ bindDpadBtn('btnLeft',  'ArrowLeft');
 bindDpadBtn('btnRight', 'ArrowRight');
 
 const bombBtn = document.getElementById('bombBtn');
-const bombPress = e => { e.preventDefault(); if (!gs.gameOver) { placeBomb(); bombBtn.classList.add('pressed'); } };
-const bombRelease = e => { e.preventDefault(); bombBtn.classList.remove('pressed'); };
-bombBtn.addEventListener('touchstart',  bombPress,   {passive: false});
-bombBtn.addEventListener('touchend',    bombRelease, {passive: false});
-bombBtn.addEventListener('touchcancel', bombRelease, {passive: false});
-bombBtn.addEventListener('mousedown', bombPress);
-bombBtn.addEventListener('mouseup',   bombRelease);
+bombBtn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    bombBtn.setPointerCapture(e.pointerId);
+    if (!gs.gameOver) placeBomb();
+    bombBtn.classList.add('pressed');
+});
+bombBtn.addEventListener('pointerup',     () => bombBtn.classList.remove('pressed'));
+bombBtn.addEventListener('pointercancel', () => bombBtn.classList.remove('pressed'));
 
 const restartBtn = document.getElementById('restartBtn');
-restartBtn.addEventListener('touchstart', e => { e.preventDefault(); initGame(); }, {passive: false});
-restartBtn.addEventListener('click', () => initGame());
+restartBtn.addEventListener('pointerdown', e => { e.preventDefault(); initGame(); });
 
 // ---- Collision ----
 function cellBlocked(col, row) {
@@ -318,6 +321,17 @@ function canMove(px, py, margin) {
     return true;
 }
 
+// Returns true while the player's bounding box still overlaps a bomb's cell (pixel-accurate)
+function playerOverlapsBomb(bomb) {
+    const p = gs.player;
+    const mg = 5;
+    const bx = bomb.col * CELL, by = bomb.row * CELL;
+    return !(p.px + mg  >= bx + CELL ||
+             p.px + CELL - mg <= bx  ||
+             p.py + mg  >= by + CELL ||
+             p.py + CELL - mg <= by);
+}
+
 // ---- Player ----
 function movePlayer(dt) {
     const p = gs.player;
@@ -336,8 +350,9 @@ function movePlayer(dt) {
     p.x = Math.floor((p.px + CELL / 2) / CELL);
     p.y = Math.floor((p.py + CELL / 2) / CELL);
 
+    // Only lock bomb once the player's sprite has fully left the bomb cell (pixel-accurate)
     for (const b of gs.bombs)
-        if (b.playerWasHere && (b.col !== p.x || b.row !== p.y)) b.playerWasHere = false;
+        if (b.playerWasHere && !playerOverlapsBomb(b)) b.playerWasHere = false;
 }
 
 function updatePlayer(dt) {
