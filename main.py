@@ -1691,7 +1691,7 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str, seit: str
             gespraeche_text_for_prompt = summarize_text_with_gpt(
                 gespraeche_text_for_prompt,
                 summary_length=400,
-                prompt_context="besprochene Themen, Fortschritte, Herausforderungen und Muster"
+                prompt_context="besprochene Themen, Fortschritte, Herausforderungen und Muster. Wichtig: erhalte explizit wenn der Nutzer ein Thema als vergangen eingeordnet hat (z.B. 'das war vor Jahren') oder den Berater korrigiert hat, weil dieser ein nicht mehr aktuelles Thema angesprochen hat"
             )
     else:
         gespraeche_text_for_prompt = "Es gab keine relevanten Gespräche in diesem Zeitraum."
@@ -1770,6 +1770,11 @@ async def generiere_rueckblick(zeitraum: str, tage: int, user_id: str, seit: str
     - Profil-Einträge mit "abgeschlossen" sind Vergangenheit — nicht als aktuell oder bevorstehend behandeln
     - Nur was noch in der Zukunft liegt oder gerade läuft, als aktuell formulieren
     - Wenn in den Gesprächen steht "ich habe Sorge wegen X" aber X-Datum liegt vor heute → X ist bereits passiert, formuliere entsprechend
+
+    WICHTIG — Nutzer vs. Berater:
+    - Unterscheide wer ein Thema eingebracht hat: "User:" oder "Berater:/Einstiegsfrage:"
+    - Wenn der Berater ein Thema angesprochen hat und der Nutzer daraufhin klargestellt hat, dass es nicht aktuell ist oder in der Vergangenheit liegt, halte die Einordnung des Nutzers fest — nicht die Darstellung des Beraters
+    - Beispiel: statt "Es wurde über X gesprochen" → "Nutzer stellte klar, dass X abgeschlossen ist und kein aktuelles Thema darstellt"
     """
     uebergeordnet_abschnitt = f"\n\n    Übergeordneter Kontext (höhere Berichtsebene):\n    {uebergeordnet_text}" if uebergeordnet_text else ""
     user = f"""
