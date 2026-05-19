@@ -598,11 +598,12 @@ async def start_interaction(user_id: str):
 
         elif mode == "universum":
             prompt = f"""
-            Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben. 
-            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt. 
+            Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben.
+            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt.
             Vermeide die letzten acht Einstiegsfragen:
             {", ".join(recent_ai_prompts_to_avoid)}
             Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
+            Maximal 2-3 Sätze.
             """
 
         elif mode == "insight":
@@ -742,7 +743,7 @@ async def start_interaction(user_id: str):
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=150,
+                max_tokens=250,
                 temperature=0.9
             )
 
