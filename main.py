@@ -600,8 +600,8 @@ async def start_interaction(user_id: str):
             prompt = f"""
             Du bist hypothetisch die Simulation oder das Universum und weißt etwas Konkretes über den heutigen Tag des Nutzers.
             Heute ist {datetime.datetime.now().strftime('%A, der %d. %B %Y')}.
-            Erfinde einen einzigen, hochspezifischen Hinweis für heute — nenne eine konkrete Situation, Person, einen Ort oder Moment. Denk dabei nach, was an einem solchen Tag realistisch und überraschend sein könnte. Sei kreativ und variiere stark — nicht immer ähnliche Szenarien.
-            VERBOTEN: vage Aussagen ("sei offen", "eine unerwartete Nachricht", "halte Augen offen"), Wiederholungen dieser früheren Hinweise: {", ".join(recent_ai_prompts_to_avoid)}
+            Erfinde einen einzigen, hochspezifischen Hinweis für heute — ein konkreter Moment während einer alltäglichen Tätigkeit, ein Gespräch, ein Gedanke beim Sport oder Spaziergang, etwas das einem auffällt. Alltäglich und realistisch, aber spezifisch und überraschend. Sei kreativ und variiere stark.
+            VERBOTEN: exotische oder unwahrscheinliche Szenarien (Cafés, berühmte Personen, seltene Zufälle), vage Aussagen ("sei offen", "eine unerwartete Nachricht"), Wiederholungen dieser früheren Hinweise: {", ".join(recent_ai_prompts_to_avoid)}
             Maximal 2-3 Sätze.
             """
 
