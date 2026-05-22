@@ -598,11 +598,10 @@ async def start_interaction(user_id: str):
 
         elif mode == "universum":
             prompt = f"""
-            Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben.
-            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt.
-            Vermeide die letzten acht Einstiegsfragen:
-            {", ".join(recent_ai_prompts_to_avoid)}
-            Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
+            Du bist hypothetisch die Simulation oder das Universum und weißt etwas Konkretes über den heutigen Tag des Nutzers.
+            Heute ist {datetime.datetime.now().strftime('%A, der %d. %B %Y')}.
+            Erfinde einen einzigen, hochspezifischen Hinweis für heute — nenne eine konkrete Situation, Person, einen Ort oder Moment. Denk dabei nach, was an einem solchen Tag realistisch und überraschend sein könnte. Sei kreativ und variiere stark — nicht immer ähnliche Szenarien.
+            VERBOTEN: vage Aussagen ("sei offen", "eine unerwartete Nachricht", "halte Augen offen"), Wiederholungen dieser früheren Hinweise: {", ".join(recent_ai_prompts_to_avoid)}
             Maximal 2-3 Sätze.
             """
 
