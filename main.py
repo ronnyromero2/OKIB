@@ -603,6 +603,7 @@ async def start_interaction(user_id: str):
             Heute ist {datetime.datetime.now().strftime('%A, der %d. %B %Y')}.
             Vermeide diese früheren Hinweise: {", ".join(recent_ai_prompts_to_avoid)}
             Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
+            Sei kreativ, überraschend und spezifisch — variiere stark, kein Wiederholungsmuster.
             Maximal 2-3 Sätze.
             """
 
