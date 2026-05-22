@@ -557,7 +557,7 @@ async def start_interaction(user_id: str):
         else:
             # Normaler Zufalls-Modus
             roll2 = random.random()
-            if roll2 < 0.05:
+            if roll2 < 1.0:  # TEMP: 100% universum zum Testen
                 mode = "universum"
             elif roll2 < 0.15:
                 mode = "insight"
