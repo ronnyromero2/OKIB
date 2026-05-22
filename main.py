@@ -253,7 +253,7 @@ async def get_recent_entry_questions(user_id: str):
         .eq("user_id", user_id) \
         .eq("user_input", "") \
         .order("timestamp", desc=True) \
-        .limit(8) \
+        .limit(20) \
         .execute()
     
     questions = [q["ai_prompt"] for q in recent_prompts.data if q["ai_prompt"]]
@@ -592,7 +592,7 @@ async def start_interaction(user_id: str):
             {overdue_todos_context}
 
             Sprich EINES davon direkt an — frag knapp und konkret warum es noch nicht erledigt ist und was jetzt den nächsten Schritt blockiert.
-            Maximal 1-2 Sätze. Nicht wiederholen was schon in den letzten Fragen stand:
+            Maximal 1-2 Sätze. VERBOTEN — diese Themen wurden kürzlich bereits angesprochen, wähle etwas völlig anderes:
             {", ".join(recent_ai_prompts_to_avoid)}
             """
 
@@ -622,7 +622,7 @@ async def start_interaction(user_id: str):
                 Inhalt: "{insight['inhalt']}"
                 
                 Greife diese Erkenntnis heute auf. Frag nach, wie es damit steht, ob sie sich bestätigt hat oder ob sich etwas verändert hat.
-                Maximal 1-2 Sätze. Nicht wiederholen was in den letzten Fragen schon stand:
+                Maximal 1-2 Sätze. VERBOTEN — diese Themen wurden kürzlich bereits angesprochen, wähle etwas völlig anderes:
                 {", ".join(recent_ai_prompts_to_avoid)}
                 """
             else:
@@ -669,7 +669,7 @@ async def start_interaction(user_id: str):
                 - Hast du X inzwischen gemacht?
                 - Bist du wirklich zufrieden mit X?
                 - Was war bei X anders als erwartet?
-                Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
+                Maximal 1 Satz. VERBOTEN — diese Themen wurden kürzlich bereits angesprochen, wähle etwas völlig anderes:
                 {", ".join(recent_ai_prompts_to_avoid)}
                 """
             else:
@@ -681,7 +681,7 @@ async def start_interaction(user_id: str):
             {goals_context}
             
             Wähle EIN konkretes Ziel aus und frage direkt nach dem aktuellen Stand — kurz und präzise, maximal 1 Satz.
-            Nicht wiederholen was schon in den letzten Fragen stand:
+            VERBOTEN — diese Themen wurden kürzlich bereits angesprochen, wähle etwas völlig anderes:
             {", ".join(recent_ai_prompts_to_avoid)}
             """
 
@@ -691,7 +691,7 @@ async def start_interaction(user_id: str):
             {routines_overview_context}
 
             Greife EINE Routine auf und stelle eine konkrete Frage dazu. Wenn "Verpasst" einen Wert >= 3 hat, frage nach dem Grund. Wenn "Verpasst" 1-2 ist, sprich es NICHT als "oft verpasst" an — frage stattdessen wie es läuft. Wenn alle gut laufen, frage was die Routine so leicht macht.
-            Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
+            Maximal 1 Satz. VERBOTEN — diese Themen wurden kürzlich bereits angesprochen, wähle etwas völlig anderes:
             {", ".join(recent_ai_prompts_to_avoid)}
             """
 
@@ -699,7 +699,7 @@ async def start_interaction(user_id: str):
             prompt = f"""
             Du bist ein direkter, provokanter Mentor. Stelle dem Nutzer eine unbequeme, herausfordernde These oder Frage 
             basierend auf dem was du über ihn weißt. Ziel ist produktive Selbstreflexion, nicht Beleidigung.
-            Maximal 1 Satz. Nicht wiederholen was schon in den letzten Fragen stand:
+            Maximal 1 Satz. VERBOTEN — diese Themen wurden kürzlich bereits angesprochen, wähle etwas völlig anderes:
             {", ".join(recent_ai_prompts_to_avoid)}
             
             Was du über den Nutzer weißt:
