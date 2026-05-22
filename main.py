@@ -605,6 +605,7 @@ async def start_interaction(user_id: str):
             Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
             Sei kreativ, überraschend und spezifisch — variiere stark, kein Wiederholungsmuster.
             Das Szenario soll für jeden an diesem Wochentag plausibel sein — keine erfundenen Orte oder Aktivitäten (Buchhandlung, Café, Park) die du nicht kennen kannst.
+            Sage nicht voraus wie sich der Nutzer dabei fühlen wird und gib keine Empfehlung was er daraus machen soll.
             Maximal 2-3 Sätze.
             """
 
