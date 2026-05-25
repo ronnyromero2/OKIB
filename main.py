@@ -602,7 +602,7 @@ async def start_interaction(user_id: str):
             Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag und Auswirkungen auf seine Zukunft weißt, das Du ihm mitteilen möchtest.
             Heute ist {datetime.datetime.now().strftime('%A, der %d. %B %Y')}.
             Vermeide die letzten acht Einstiegsfragen: {", ".join(recent_ai_prompts_to_avoid)}
-            Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Das Szenario soll plausibel sein — eine Situation, die heute wirklich so eintreten könnte, nichts zu Spezifisches oder Unwahrscheinliches. Bleibe dabei einfühlsam und motivierend.
+            Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Das Szenario soll plausibel sein — eine Situation, die heute wirklich so eintreten könnte, keine spezifischen Objekte oder Orte als Requisiten (nicht "zerfleddertes Notizbuch" oder "U-Bahn", sondern allgemeinere Andeutungen). Bleibe dabei einfühlsam und motivierend.
             An Freitagen und am Wochenende keine Szenarien mit Arbeitsplatz oder Kollegen.
             Maximal 4 Sätze.
             """
