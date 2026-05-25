@@ -274,14 +274,22 @@ async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
 
 
 async def fetch_random_website_url() -> str:
-    async with httpx.AsyncClient(timeout=8, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as http:
+    async with httpx.AsyncClient(timeout=8, follow_redirects=True, headers={"User-Agent": "OKIB/1.0"}) as http:
         try:
-            r = await http.get("https://www.reddit.com/r/InternetIsBeautiful/random.json")
+            r = await http.get("https://hacker-news.firebaseio.com/v1/topstories.json")
             if r.status_code == 200:
-                data = r.json()
-                url = data[0]["data"]["children"][0]["data"].get("url", "")
-                if url and url.startswith("http") and "reddit.com" not in url:
-                    return url
+                ids = r.json()
+                random.shuffle(ids)
+                for story_id in ids[:20]:
+                    try:
+                        r2 = await http.get(f"https://hacker-news.firebaseio.com/v1/item/{story_id}.json")
+                        if r2.status_code == 200:
+                            data = r2.json()
+                            url = data.get("url", "")
+                            if url and url.startswith("http"):
+                                return url
+                    except Exception:
+                        continue
         except Exception:
             pass
     return ""
@@ -684,7 +692,7 @@ async def start_interaction(user_id: str):
             """
 
         elif mode == "universum":
-            universum_kategorien = ["Bo", "Fr", "Kr", "Kr"]  # [We] deaktiviert bis funktionierende URL-Quelle gefunden
+            universum_kategorien = ["Bo", "Fr", "Kr", "We"]
             gewählte_kategorie = random.choice(universum_kategorien)
 
             if gewählte_kategorie == "We":
