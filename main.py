@@ -274,27 +274,16 @@ async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
 
 
 async def fetch_random_website_url() -> str:
-    async with httpx.AsyncClient(timeout=8, follow_redirects=True) as http:
-        for endpoint in [
-            "https://theuselessweb.com/api/get",
-            "https://theuselessweb.com/api/url",
-            "https://theuselessweb.com/api/page",
-        ]:
-            try:
-                r = await http.get(endpoint)
-                if r.status_code == 200:
-                    data = r.text.strip()
-                    if data.startswith("http"):
-                        return data
-                    try:
-                        j = r.json()
-                        url = j.get("url") or j.get("link") or j.get("site")
-                        if url:
-                            return url
-                    except Exception:
-                        pass
-            except Exception:
-                continue
+    async with httpx.AsyncClient(timeout=8, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as http:
+        try:
+            r = await http.get("https://www.reddit.com/r/InternetIsBeautiful/random.json")
+            if r.status_code == 200:
+                data = r.json()
+                url = data[0]["data"]["children"][0]["data"].get("url", "")
+                if url and url.startswith("http") and "reddit.com" not in url:
+                    return url
+        except Exception:
+            pass
     return ""
 
 
@@ -706,26 +695,38 @@ async def start_interaction(user_id: str):
                     gewählte_kategorie = random.choice(["Bo", "Fr", "Kr"])
 
             if gewählte_kategorie != "We":
-                stil_map = {
-                    "Bo": "Direkt & konkret: ein klarer Hinweis auf eine Richtung oder Entscheidung",
-                    "Fr": "Als Frage: eine einzige, ruhige Frage die heute relevant ist",
-                    "Kr": "Erfundener Stil — überrasche wirklich. Sei so unkonventionell und unerwartet, dass der Nutzer sich fragt, wo das herkommt. Alles ist erlaubt außer den anderen Stilen.",
-                }
-                wiki_concepts, wiki_urls = await fetch_random_wikipedia_concepts(3)
-                random_number = random.randint(1, 99999)
-                universum_seed = await generate_universum_seed(wiki_concepts, random_number)
                 wochentag = datetime.datetime.now().strftime('%A')
-                prompt = f"""
-                Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-                Heute ist {wochentag}. Der Nutzer arbeitet freitags nicht. Nenne den Wochentag nicht explizit in der Botschaft.
-                Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
-                Verwende heute ausschließlich diesen Stil: {stil_map[gewählte_kategorie]}
-                Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
-                Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
-                Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
-                Beende die Ausgabe immer mit [{gewählte_kategorie}] auf einer neuen Zeile.
-                Maximal 3-4 Sätze.
-                """
+
+                if gewählte_kategorie == "Kr":
+                    wiki_concepts, wiki_urls = await fetch_random_wikipedia_concepts(3)
+                    random_number = random.randint(1, 99999)
+                    universum_seed = await generate_universum_seed(wiki_concepts, random_number)
+                    prompt = f"""
+                    Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
+                    Heute ist {wochentag}. Der Nutzer arbeitet freitags nicht. Nenne den Wochentag nicht explizit in der Botschaft.
+                    Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
+                    Stil: Kreativ und unkonventionell — überrasche. Variiere zwischen subtil ungewöhnlich und absurd. Nicht immer maximale Verrücktheit.
+                    Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
+                    Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
+                    Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
+                    Beende die Ausgabe immer mit [Kr] auf einer neuen Zeile.
+                    Maximal 3-4 Sätze.
+                    """
+                else:
+                    stil_map = {
+                        "Bo": "Direkt & konkret: ein klarer Hinweis auf eine Richtung oder Entscheidung",
+                        "Fr": "Als Frage: eine einzige, ruhige Frage die heute relevant ist",
+                    }
+                    prompt = f"""
+                    Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
+                    Heute ist {wochentag}. Der Nutzer arbeitet freitags nicht. Nenne den Wochentag nicht explizit in der Botschaft.
+                    Verwende heute ausschließlich diesen Stil: {stil_map[gewählte_kategorie]}
+                    Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
+                    Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
+                    Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
+                    Beende die Ausgabe immer mit [{gewählte_kategorie}] auf einer neuen Zeile.
+                    Maximal 2-3 Sätze.
+                    """
 
         elif mode == "insight":
             insights = supabase.table("long_term_memory") \
