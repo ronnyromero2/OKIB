@@ -599,14 +599,12 @@ async def start_interaction(user_id: str):
         elif mode == "universum":
             prompt = f"""
             Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben.
-            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt.
+            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt, das Du ihm mitteilen .
             Heute ist {datetime.datetime.now().strftime('%A, der %d. %B %Y')}.
-            Vermeide diese früheren Hinweise: {", ".join(recent_ai_prompts_to_avoid)}
+            Vermeide die letzten acht Einstiegsfragen: {", ".join(recent_ai_prompts_to_avoid)}
             Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
-            Sei kreativ, überraschend und spezifisch — variiere stark, kein Wiederholungsmuster.
-            Das Szenario soll für jeden an diesem Wochentag plausibel sein — keine erfundenen Orte oder Aktivitäten (Buchhandlung, Café, Park) die du nicht kennen kannst.
-            Sage nicht voraus wie sich der Nutzer dabei fühlen wird und gib keine Empfehlung was er daraus machen soll.
-            Maximal 2-3 Sätze.
+            An Freitagen und am Wochenende keine Szenarien mit Arbeitsplatz oder Kollegen.
+            Maximal 4 Sätze.
             """
 
         elif mode == "insight":
