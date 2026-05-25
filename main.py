@@ -13,6 +13,7 @@ import random
 import json
 import re
 import calendar
+import httpx
 
 load_dotenv()
 
@@ -245,6 +246,52 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
     except Exception as e:
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
         return "Eine Zusammenfassung konnte nicht erstellt werden."
+
+async def fetch_random_wikipedia_concepts(count: int = 3) -> list:
+    concepts = []
+    async with httpx.AsyncClient(timeout=5) as http:
+        attempts = 0
+        while len(concepts) < count and attempts < count * 4:
+            attempts += 1
+            try:
+                r = await http.get("https://de.wikipedia.org/api/rest_v1/page/random/summary")
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                # Ortsartikel ausfiltern (haben Koordinaten)
+                if data.get("coordinates"):
+                    continue
+                title = data.get("title", "")
+                extract = data.get("extract", "")
+                if title:
+                    concepts.append(f"{title}: {extract[:80]}" if extract else title)
+            except Exception:
+                continue
+    return concepts
+
+
+async def generate_universum_seed(wiki_concepts: list, random_number: int) -> str:
+    konzepte_text = "\n".join(wiki_concepts) if wiki_concepts else "Unbekanntes Konzept"
+    seed_prompt = f"""Du bekommst folgende zufällige Wikipedia-Konzepte:
+{konzepte_text}
+
+Und eine zufällige Zahl: {random_number}
+
+Führe folgende Schritte durch:
+1. Kombiniere die Konzepte mit der Zahl auf eine überraschende Weise und interpretiere das Ergebnis in einem Satz.
+2. Finde das genaue Gegenteil davon.
+3. Konkretisiere dieses Gegenteil in ein lebendiges, spezifisches Bild (ein Satz — wie eine Szene, ein Phänomen, ein Objekt, ein Moment).
+
+Gib nur das finale konkrete Bild aus — keine Erklärungen, keine Schritte."""
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": seed_prompt}],
+        max_tokens=80,
+        temperature=1.5
+    )
+    return response.choices[0].message.content.strip()
+
 
 #Abrufen der letzten 8 unbeantworteten Einstiegsfragen
 async def get_recent_entry_questions(user_id: str):
@@ -623,8 +670,12 @@ async def start_interaction(user_id: str):
                 "Erfundener Stil — überrasche wirklich. Sei so unkonventionell und unerwartet, dass der Nutzer sich fragt, wo das herkommt. Alles ist erlaubt außer den anderen beiden Stilen."
             ]
             gewählter_stil = random.choice(universum_stile)
+            wiki_concepts = await fetch_random_wikipedia_concepts(3)
+            random_number = random.randint(1, 99999)
+            universum_seed = await generate_universum_seed(wiki_concepts, random_number)
             prompt = f"""
             Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
+            Ausgangspunkt für die Botschaft: {universum_seed}
             Achte auf den Wochentag und eventuelle Feiertage — der Nutzer arbeitet freitags nicht. Nenne das Datum nicht in der Botschaft.
             Verwende heute ausschließlich diesen Stil: {gewählter_stil}
             Unabhängig vom Stil muss die Botschaft einen konkreten Kern haben — einen echten Hinweis oder Anstoß für heute.
