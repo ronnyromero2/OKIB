@@ -684,7 +684,7 @@ async def start_interaction(user_id: str):
             """
 
         elif mode == "universum":
-            universum_kategorien = ["Bo", "Fr", "Kr", "We"]
+            universum_kategorien = ["Bo", "Fr", "Kr", "Kr"]  # [We] deaktiviert bis funktionierende URL-Quelle gefunden
             gewählte_kategorie = random.choice(universum_kategorien)
 
             if gewählte_kategorie == "We":
