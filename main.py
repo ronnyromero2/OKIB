@@ -255,7 +255,20 @@ async def get_recent_entry_questions(user_id: str):
         .order("timestamp", desc=True) \
         .limit(20) \
         .execute()
-    
+
+    questions = [q["ai_prompt"] for q in recent_prompts.data if q["ai_prompt"]]
+    return questions
+
+async def get_recent_universum_questions(user_id: str):
+    recent_prompts = supabase.table("conversation_history") \
+        .select("ai_prompt") \
+        .eq("user_id", user_id) \
+        .eq("user_input", "") \
+        .eq("mode", "universum") \
+        .order("timestamp", desc=True) \
+        .limit(10) \
+        .execute()
+
     questions = [q["ai_prompt"] for q in recent_prompts.data if q["ai_prompt"]]
     return questions
 
@@ -416,6 +429,13 @@ async def start_interaction(user_id: str):
         recent_ai_prompts_to_avoid_raw = await get_recent_entry_questions(user_id)
         recent_ai_prompts_to_avoid = [
             str(p) for p in recent_ai_prompts_to_avoid_raw
+            if p is not None and str(p).strip() != ""
+        ]
+
+        # Letzte Universum-Botschaften separat abrufen
+        recent_universum_raw = await get_recent_universum_questions(user_id)
+        recent_universum_to_avoid = [
+            str(p) for p in recent_universum_raw
             if p is not None and str(p).strip() != ""
         ]
 
@@ -598,13 +618,13 @@ async def start_interaction(user_id: str):
 
         elif mode == "universum":
             prompt = f"""
-            Du hast hypothetisch einen Kontakt zur Simulation oder dem Universum und möchtest dem Nutzer heute einen konkreten Hinweis von der Simulation oder dem Universum geben.
-            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag und Auswirkungen auf seine Zukunft weißt, das Du ihm mitteilen möchtest.
+            Du bist Empfänger zwischen dem Nutzer und der Simulation oder dem Universum. Heute kommt ein Signal durch — wie ein Radiosignal, das mal klar, mal fragmentiert ankommt, und du übersetzt es so gut du kannst.
             Heute ist {datetime.datetime.now().strftime('%A, der %d. %B %Y')}.
-            Vermeide die letzten acht Einstiegsfragen: {", ".join(recent_ai_prompts_to_avoid)}
-            Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Das Szenario soll plausibel sein — eine Situation, die heute wirklich so eintreten könnte, keine spezifischen Objekte oder Orte als Requisiten (nicht "zerfleddertes Notizbuch" oder "U-Bahn", sondern allgemeinere Andeutungen). Bleibe dabei einfühlsam und motivierend.
-            An Freitagen und am Wochenende keine Szenarien mit Arbeitsplatz oder Kollegen.
-            Maximal 4 Sätze.
+            Das Signal deutet auf etwas Konkretes hin: eine Richtung, eine Entscheidung, etwas das heute zählt. Gib einen spürbaren Hinweis — nicht zu direkt, aber nicht zu vage. Variiere stark in Stil und Form: mal eine Frage, mal ein Fragment, mal eine ruhige Aussage.
+            Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
+            An Freitagen und am Wochenende keine Arbeitsplatz-Szenarien.
+            Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
+            Maximal 3 Sätze.
             """
 
         elif mode == "insight":
@@ -759,6 +779,7 @@ async def start_interaction(user_id: str):
                     "user_input": "",
                     "ai_response": "",
                     "ai_prompt": frage,
+                    "mode": mode,
                     "timestamp": datetime.datetime.utcnow().isoformat()
                 }).execute()
             except Exception as e:
