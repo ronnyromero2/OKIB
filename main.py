@@ -620,15 +620,15 @@ async def start_interaction(user_id: str):
             universum_stile = [
                 "Direkt & konkret: ein klarer Hinweis auf eine Richtung oder Entscheidung",
                 "Als Frage: eine einzige, ruhige Frage die heute relevant ist",
-                "Poetisch: ein Bild oder Fragment — aber mit einem spürbaren konkreten Kern",
-                "Erfundener kreativer Stil — sei so kreativ wie möglich, auch Gibberish erlaubt, aber mit einer leisen konkreten Andeutung darin"
+                "Erfundener Stil — überrasche wirklich. Sei so unkonventionell und unerwartet, dass der Nutzer sich fragt, wo das herkommt. Alles ist erlaubt außer den anderen beiden Stilen."
             ]
             gewählter_stil = random.choice(universum_stile)
             prompt = f"""
             Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-            Heute ist {datetime.datetime.now().strftime('%A, der %d. %B %Y')}. Achte auf den Wochentag und eventuelle Feiertage — der Nutzer arbeitet freitags nicht.
+            Achte auf den Wochentag und eventuelle Feiertage — der Nutzer arbeitet freitags nicht. Nenne das Datum nicht in der Botschaft.
             Verwende heute ausschließlich diesen Stil: {gewählter_stil}
-            Unabhängig vom Stil muss die Botschaft einen konkreten Kern haben — einen echten Hinweis oder Anstoß für heute, kein reines Poesie-Bild.
+            Unabhängig vom Stil muss die Botschaft einen konkreten Kern haben — einen echten Hinweis oder Anstoß für heute.
+            Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
             Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
             Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
             Maximal 3-4 Sätze.
