@@ -703,7 +703,7 @@ async def start_interaction(user_id: str):
                 if random_url:
                     direct_frage = f"{random_url} [We]"
                 else:
-                    gewählte_kategorie = "Bo"
+                    gewählte_kategorie = random.choice(["Bo", "Fr", "Kr"])
 
             if gewählte_kategorie != "We":
                 stil_map = {
@@ -714,12 +714,12 @@ async def start_interaction(user_id: str):
                 wiki_concepts, wiki_urls = await fetch_random_wikipedia_concepts(3)
                 random_number = random.randint(1, 99999)
                 universum_seed = await generate_universum_seed(wiki_concepts, random_number)
+                wochentag = datetime.datetime.now().strftime('%A')
                 prompt = f"""
                 Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-                Ausgangspunkt für die Botschaft: {universum_seed}
-                Achte auf den Wochentag und eventuelle Feiertage — der Nutzer arbeitet freitags nicht. Nenne das Datum nicht in der Botschaft.
+                Heute ist {wochentag}. Der Nutzer arbeitet freitags nicht. Nenne den Wochentag nicht explizit in der Botschaft.
+                Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
                 Verwende heute ausschließlich diesen Stil: {stil_map[gewählte_kategorie]}
-                Unabhängig vom Stil muss die Botschaft einen konkreten Kern haben — einen echten Hinweis oder Anstoß für heute.
                 Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
                 Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
                 Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
