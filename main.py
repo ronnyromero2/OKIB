@@ -247,8 +247,9 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
         return "Eine Zusammenfassung konnte nicht erstellt werden."
 
-async def fetch_random_wikipedia_concepts(count: int = 3) -> list:
+async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
     concepts = []
+    urls = []
     async with httpx.AsyncClient(timeout=5) as http:
         attempts = 0
         while len(concepts) < count and attempts < count * 4:
@@ -258,16 +259,43 @@ async def fetch_random_wikipedia_concepts(count: int = 3) -> list:
                 if r.status_code != 200:
                     continue
                 data = r.json()
-                # Ortsartikel ausfiltern (haben Koordinaten)
                 if data.get("coordinates"):
                     continue
                 title = data.get("title", "")
                 extract = data.get("extract", "")
+                page_url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
                 if title:
                     concepts.append(f"{title}: {extract[:80]}" if extract else title)
+                    if page_url:
+                        urls.append(page_url)
             except Exception:
                 continue
-    return concepts
+    return concepts, urls
+
+
+async def fetch_random_website_url() -> str:
+    async with httpx.AsyncClient(timeout=8, follow_redirects=True) as http:
+        for endpoint in [
+            "https://theuselessweb.com/api/get",
+            "https://theuselessweb.com/api/url",
+            "https://theuselessweb.com/api/page",
+        ]:
+            try:
+                r = await http.get(endpoint)
+                if r.status_code == 200:
+                    data = r.text.strip()
+                    if data.startswith("http"):
+                        return data
+                    try:
+                        j = r.json()
+                        url = j.get("url") or j.get("link") or j.get("site")
+                        if url:
+                            return url
+                    except Exception:
+                        pass
+            except Exception:
+                continue
+    return ""
 
 
 async def generate_universum_seed(wiki_concepts: list, random_number: int) -> str:
@@ -278,9 +306,10 @@ async def generate_universum_seed(wiki_concepts: list, random_number: int) -> st
 Und eine zufällige Zahl: {random_number}
 
 Führe folgende Schritte durch:
-1. Kombiniere die Konzepte mit der Zahl auf eine überraschende Weise und interpretiere das Ergebnis in einem Satz.
-2. Finde das genaue Gegenteil davon.
-3. Konkretisiere dieses Gegenteil in ein lebendiges, spezifisches Bild (ein Satz — wie eine Szene, ein Phänomen, ein Objekt, ein Moment).
+1. Erfinde zusätzlich 2-3 eigene völlig absurde, unzusammenhängende Konzepte aus beliebigen Bereichen.
+2. Kombiniere ALLE Konzepte (Wikipedia + deine eigenen + die Zahl) auf eine überraschende Weise und interpretiere das Ergebnis in einem Satz.
+3. Finde das genaue Gegenteil davon.
+4. Konkretisiere dieses Gegenteil in ein lebendiges, spezifisches Bild (ein Satz).
 
 Gib nur das finale konkrete Bild aus — keine Erklärungen, keine Schritte."""
 
@@ -653,6 +682,8 @@ async def start_interaction(user_id: str):
             context_for_gpt += f"\nHeute oft verpasste Routinen: {routine_context_today}"
         context_for_gpt += f"\n\nWICHTIG — Heute ist {today_date_str}. Bevor du ein Ereignis, Termin oder Vorhaben ansprichst: prüfe ob das genannte Datum vor dem heutigen Datum liegt. Wenn ja, frage NICHT nach Vorbereitung oder Plänen — sprich es höchstens als vergangene Erfahrung an."
 
+        direct_frage = None
+
         if mode == "todo_followup":
             prompt = f"""
             Du bist ein direkter persönlicher Coach. Der Nutzer hat überfällige To-Dos:
@@ -664,26 +695,37 @@ async def start_interaction(user_id: str):
             """
 
         elif mode == "universum":
-            universum_stile = [
-                "Direkt & konkret: ein klarer Hinweis auf eine Richtung oder Entscheidung",
-                "Als Frage: eine einzige, ruhige Frage die heute relevant ist",
-                "Erfundener Stil — überrasche wirklich. Sei so unkonventionell und unerwartet, dass der Nutzer sich fragt, wo das herkommt. Alles ist erlaubt außer den anderen beiden Stilen."
-            ]
-            gewählter_stil = random.choice(universum_stile)
-            wiki_concepts = await fetch_random_wikipedia_concepts(3)
-            random_number = random.randint(1, 99999)
-            universum_seed = await generate_universum_seed(wiki_concepts, random_number)
-            prompt = f"""
-            Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-            Ausgangspunkt für die Botschaft: {universum_seed}
-            Achte auf den Wochentag und eventuelle Feiertage — der Nutzer arbeitet freitags nicht. Nenne das Datum nicht in der Botschaft.
-            Verwende heute ausschließlich diesen Stil: {gewählter_stil}
-            Unabhängig vom Stil muss die Botschaft einen konkreten Kern haben — einen echten Hinweis oder Anstoß für heute.
-            Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
-            Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
-            Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
-            Maximal 3-4 Sätze.
-            """
+            universum_kategorien = ["Bo", "Fr", "Kr", "We"]
+            gewählte_kategorie = random.choice(universum_kategorien)
+
+            if gewählte_kategorie == "We":
+                random_url = await fetch_random_website_url()
+                if random_url:
+                    direct_frage = f"{random_url} [We]"
+                else:
+                    gewählte_kategorie = "Bo"
+
+            if gewählte_kategorie != "We":
+                stil_map = {
+                    "Bo": "Direkt & konkret: ein klarer Hinweis auf eine Richtung oder Entscheidung",
+                    "Fr": "Als Frage: eine einzige, ruhige Frage die heute relevant ist",
+                    "Kr": "Erfundener Stil — überrasche wirklich. Sei so unkonventionell und unerwartet, dass der Nutzer sich fragt, wo das herkommt. Alles ist erlaubt außer den anderen Stilen.",
+                }
+                wiki_concepts, wiki_urls = await fetch_random_wikipedia_concepts(3)
+                random_number = random.randint(1, 99999)
+                universum_seed = await generate_universum_seed(wiki_concepts, random_number)
+                prompt = f"""
+                Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
+                Ausgangspunkt für die Botschaft: {universum_seed}
+                Achte auf den Wochentag und eventuelle Feiertage — der Nutzer arbeitet freitags nicht. Nenne das Datum nicht in der Botschaft.
+                Verwende heute ausschließlich diesen Stil: {stil_map[gewählte_kategorie]}
+                Unabhängig vom Stil muss die Botschaft einen konkreten Kern haben — einen echten Hinweis oder Anstoß für heute.
+                Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
+                Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
+                Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
+                Beende die Ausgabe immer mit [{gewählte_kategorie}] auf einer neuen Zeile.
+                Maximal 3-4 Sätze.
+                """
 
         elif mode == "insight":
             insights = supabase.table("long_term_memory") \
@@ -817,6 +859,20 @@ async def start_interaction(user_id: str):
             Benutzerprofil: {user_profile_context}
             """
 
+
+        if direct_frage:
+            try:
+                supabase.table("conversation_history").insert({
+                    "user_id": user_id,
+                    "user_input": "",
+                    "ai_response": "",
+                    "ai_prompt": direct_frage,
+                    "mode": mode,
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as e:
+                print(f"Fehler beim Speichern der Einstiegsfrage: {e}")
+            return {"frage": direct_frage}
 
         try:
             response = client.chat.completions.create(
