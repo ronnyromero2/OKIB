@@ -711,11 +711,11 @@ async def start_interaction(user_id: str):
                     Heute ist {wochentag}. {arbeitstag_kontext} Nenne den Wochentag nicht explizit in der Botschaft.
                     Das ist Hintergrundwissen über den Nutzer — lass es in die Interpretation einfließen, ohne konkrete Details zu nennen: {user_profile_context}
                     Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
-                    Dieser Ausgangspunkt entstand aus: Wikipedia-Konzepte: [{wiki_concepts_text}], Zahl: {random_number}, plus eigene Konzepte des Modells → Kombination → Gegenteil → konkretes Bild.
                     Struktur:
                     1. Das Bild kurz wiedergeben (1-2 Sätze)
-                    2. Interpretation — was das für den Nutzer heute bedeuten könnte oder worauf er heute achten soll (1-2 Sätze)
-                    3. [TEMP] Erkläre kurz: Wikipedia-Artikel, Zahl, eigene Konzepte, wie das Gegenteil gebildet wurde
+                    2. Eine einzige, spezifische Interpretation — worauf der Nutzer heute konkret achten soll. Keine zwei Optionen, keine "oder"-Konstruktionen.
+                    3. Genau diese Zeile ausgeben (Werte ausfüllen):
+                    [TEMP] Wikipedia: [{wiki_concepts_text}] | Zahl: {random_number} | eigene Konzepte: [deine erfundenen Konzepte] | Kombination: [deine Interpretation] | Gegenteil: [das Gegenteil davon]
                     Stil: Kreativ und unkonventionell — variiere zwischen subtil ungewöhnlich und absurd. Nicht immer maximale Verrücktheit.
                     Klinge nicht wie ein KI-Assistent.
                     Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
