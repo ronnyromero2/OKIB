@@ -13,7 +13,6 @@ import random
 import json
 import re
 import calendar
-import httpx
 
 load_dotenv()
 
@@ -246,89 +245,6 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
     except Exception as e:
         print(f"Fehler beim Zusammenfassen mit GPT: {e}")
         return "Eine Zusammenfassung konnte nicht erstellt werden."
-
-async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
-    concepts = []
-    urls = []
-    skipped_locations = 0
-    last_error = ""
-    async with httpx.AsyncClient(timeout=10, headers={"User-Agent": "OKIB-App/1.0 (personal advisor app; contact: ronnyromero2@github)"}) as http:
-        attempts = 0
-        while len(concepts) < count and attempts < count * 4:
-            attempts += 1
-            try:
-                r = await http.get("https://de.wikipedia.org/api/rest_v1/page/random/summary")
-                if r.status_code != 200:
-                    last_error = f"HTTP {r.status_code}"
-                    continue
-                data = r.json()
-                if data.get("coordinates"):
-                    skipped_locations += 1
-                    continue
-                title = data.get("title", "")
-                extract = data.get("extract", "")
-                page_url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
-                if title:
-                    concepts.append(f"{title}: {extract[:80]}" if extract else title)
-                    if page_url:
-                        urls.append(page_url)
-            except httpx.TimeoutException:
-                last_error = "Timeout"
-                continue
-            except Exception as e:
-                last_error = str(e)[:50]
-                continue
-
-    if not concepts:
-        if skipped_locations > 0:
-            fail_reason = f"Alle {attempts} zufälligen Artikel waren Ortsbeschreibungen"
-        elif last_error:
-            fail_reason = f"Fehler: {last_error}"
-        else:
-            fail_reason = "Unbekannter Fehler"
-    else:
-        fail_reason = ""
-
-    return concepts, urls, fail_reason
-
-
-async def fetch_random_website_url() -> str:
-    async with httpx.AsyncClient(timeout=5) as http:
-        try:
-            r = await http.get("https://de.wikipedia.org/api/rest_v1/page/random/summary")
-            if r.status_code == 200:
-                data = r.json()
-                url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
-                if url:
-                    return url
-        except Exception:
-            pass
-    return ""
-
-
-async def generate_universum_seed(wiki_concepts: list, random_number: int) -> str:
-    konzepte_text = "\n".join(wiki_concepts) if wiki_concepts else "Unbekanntes Konzept"
-    seed_prompt = f"""Du bekommst folgende zufällige Wikipedia-Konzepte:
-{konzepte_text}
-
-Und eine zufällige Zahl: {random_number}
-
-Führe folgende Schritte durch:
-1. Erfinde zusätzlich 2-3 eigene völlig absurde, unzusammenhängende Konzepte aus beliebigen Bereichen.
-2. Kombiniere ALLE Konzepte (Wikipedia + deine eigenen + die Zahl) auf eine überraschende Weise und interpretiere das Ergebnis in einem Satz.
-3. Finde das genaue Gegenteil davon.
-4. Konkretisiere dieses Gegenteil in ein lebendiges, spezifisches Bild (ein Satz).
-
-Gib nur das finale konkrete Bild aus — keine Erklärungen, keine Schritte."""
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": seed_prompt}],
-        max_tokens=80,
-        temperature=1.5
-    )
-    return response.choices[0].message.content.strip()
-
 
 #Abrufen der letzten 8 unbeantworteten Einstiegsfragen
 async def get_recent_entry_questions(user_id: str):
@@ -661,7 +577,7 @@ async def start_interaction(user_id: str):
         else:
             # Normaler Zufalls-Modus
             roll2 = random.random()
-            if roll2 < 1.0:  # TEMP: 100% universum zum Testen
+            if roll2 < 0.05:
                 mode = "universum"
             elif roll2 < 0.15:
                 mode = "insight"
@@ -690,8 +606,6 @@ async def start_interaction(user_id: str):
             context_for_gpt += f"\nHeute oft verpasste Routinen: {routine_context_today}"
         context_for_gpt += f"\n\nWICHTIG — Heute ist {today_date_str}. Bevor du ein Ereignis, Termin oder Vorhaben ansprichst: prüfe ob das genannte Datum vor dem heutigen Datum liegt. Wenn ja, frage NICHT nach Vorbereitung oder Plänen — sprich es höchstens als vergangene Erfahrung an."
 
-        direct_frage = None
-
         if mode == "todo_followup":
             prompt = f"""
             Du bist ein direkter persönlicher Coach. Der Nutzer hat überfällige To-Dos:
@@ -703,58 +617,12 @@ async def start_interaction(user_id: str):
             """
 
         elif mode == "universum":
-            universum_kategorien = ["Kr"]  # TEMP: 100% Kr zum Testen
-            gewählte_kategorie = random.choice(universum_kategorien)
-
-            if gewählte_kategorie == "We":
-                random_url = await fetch_random_website_url()
-                if random_url:
-                    direct_frage = f"{random_url} [We]"
-                else:
-                    gewählte_kategorie = random.choice(["Bo", "Fr", "Kr"])
-
-            if gewählte_kategorie != "We":
-                now = datetime.datetime.now()
-                wochentag = now.strftime('%A')
-                wochentag_nr = now.weekday()  # 0=Mo, 4=Fr, 5=Sa, 6=So
-                ist_arbeitstag = wochentag_nr not in [4, 5, 6]  # Mo-Do sind Arbeitstage
-                arbeitstag_kontext = "Heute ist ein normaler Arbeitstag." if ist_arbeitstag else "Der Nutzer arbeitet heute nicht."
-
-                if gewählte_kategorie == "Kr":
-                    wiki_concepts, wiki_urls, wiki_fail_reason = await fetch_random_wikipedia_concepts(3)
-                    random_number = random.randint(1, 99999)
-                    universum_seed = await generate_universum_seed(wiki_concepts, random_number)
-                    wiki_concepts_text = ", ".join(wiki_concepts) if wiki_concepts else f"keine ({wiki_fail_reason})"
-                    prompt = f"""
-                    Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-                    Heute ist {wochentag}. {arbeitstag_kontext} Nenne den Wochentag nicht explizit in der Botschaft.
-                    Hintergrundwissen über den Nutzer — nur für die allgemeine Richtung, KEINE konkreten Details daraus nennen (kein Kaffee, keine Personen, keine spezifischen Aktivitäten): {user_profile_context}
-                    Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
-                    Struktur:
-                    1. Das Bild kurz wiedergeben (1-2 Sätze)
-                    2. Eine einzige, spezifische Interpretation — worauf der Nutzer heute achten soll. Kein "oder", keine zwei Szenarien, nicht zu konkret.
-                    3. Genau diese Zeile ausgeben (Platzhalter ersetzen):
-                    [TEMP] Wikipedia: {wiki_concepts_text} | Zahl: {random_number} | eigene Konzepte: HIER_EIGENE_KONZEPTE | Kombination: HIER_KOMBINATION | Gegenteil: HIER_GEGENTEIL
-                    Stil: Kreativ und unkonventionell — variiere zwischen subtil ungewöhnlich und absurd. Nicht immer maximale Verrücktheit.
-                    Klinge nicht wie ein KI-Assistent.
-                    Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
-                    Beende die Ausgabe immer mit [Kr] auf einer neuen Zeile.
-                    """
-                else:
-                    stil_map = {
-                        "Bo": "Direkt & konkret: ein klarer Hinweis auf eine Richtung oder Entscheidung",
-                        "Fr": "Als Frage: eine einzige, ruhige Frage die heute relevant ist",
-                    }
-                    prompt = f"""
-                    Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-                    Heute ist {wochentag}. {arbeitstag_kontext} Nenne den Wochentag nicht explizit in der Botschaft.
-                    Verwende heute ausschließlich diesen Stil: {stil_map[gewählte_kategorie]}
-                    Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
-                    Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
-                    Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
-                    Beende die Ausgabe immer mit [{gewählte_kategorie}] auf einer neuen Zeile.
-                    Maximal 2-3 Sätze.
-                    """
+            prompt = f"""
+            Du bist hypothetisch die Simulation oder das Universum und möchtest dem Nutzer heute einen konkreten Hinweis geben.
+            Tue so, als ob du tatsächlich Kontakt zum Universum oder zur Simulation hättest und etwas Wichtiges über seinen heutigen Tag weißt.
+            Vermeide diese früheren Universum-Botschaften: {", ".join(recent_universum_to_avoid)}
+            Sei sehr konkret und weise auf eine bestimmte Aktion, Einstellung oder ein Ereignis hin. Bleibe dabei einfühlsam und motivierend.
+            """
 
         elif mode == "insight":
             insights = supabase.table("long_term_memory") \
@@ -889,26 +757,13 @@ async def start_interaction(user_id: str):
             """
 
 
-        if direct_frage:
-            try:
-                supabase.table("conversation_history").insert({
-                    "user_id": user_id,
-                    "user_input": "",
-                    "ai_response": "",
-                    "ai_prompt": direct_frage,
-                    "mode": mode,
-                    "timestamp": datetime.datetime.utcnow().isoformat()
-                }).execute()
-            except Exception as e:
-                print(f"Fehler beim Speichern der Einstiegsfrage: {e}")
-            return {"frage": direct_frage}
-
         try:
+            api_temperature = 1.5 if mode == "universum" else 0.9
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=250,
-                temperature=0.9
+                temperature=api_temperature
             )
 
             frage = response.choices[0].message.content.strip()
