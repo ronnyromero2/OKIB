@@ -703,7 +703,7 @@ async def start_interaction(user_id: str):
             """
 
         elif mode == "universum":
-            universum_kategorien = ["Bo", "Fr", "Kr", "We"]
+            universum_kategorien = ["Kr"]  # TEMP: 100% Kr zum Testen
             gewählte_kategorie = random.choice(universum_kategorien)
 
             if gewählte_kategorie == "We":
