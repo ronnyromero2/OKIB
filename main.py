@@ -250,16 +250,20 @@ def summarize_text_with_gpt(text_to_summarize: str, summary_length: int = 200, p
 async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
     concepts = []
     urls = []
-    async with httpx.AsyncClient(timeout=5) as http:
+    skipped_locations = 0
+    last_error = ""
+    async with httpx.AsyncClient(timeout=10) as http:
         attempts = 0
         while len(concepts) < count and attempts < count * 4:
             attempts += 1
             try:
                 r = await http.get("https://de.wikipedia.org/api/rest_v1/page/random/summary")
                 if r.status_code != 200:
+                    last_error = f"HTTP {r.status_code}"
                     continue
                 data = r.json()
                 if data.get("coordinates"):
+                    skipped_locations += 1
                     continue
                 title = data.get("title", "")
                 extract = data.get("extract", "")
@@ -268,9 +272,24 @@ async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
                     concepts.append(f"{title}: {extract[:80]}" if extract else title)
                     if page_url:
                         urls.append(page_url)
-            except Exception:
+            except httpx.TimeoutException:
+                last_error = "Timeout"
                 continue
-    return concepts, urls
+            except Exception as e:
+                last_error = str(e)[:50]
+                continue
+
+    if not concepts:
+        if skipped_locations > 0:
+            fail_reason = f"Alle {attempts} zufälligen Artikel waren Ortsbeschreibungen"
+        elif last_error:
+            fail_reason = f"Fehler: {last_error}"
+        else:
+            fail_reason = "Unbekannter Fehler"
+    else:
+        fail_reason = ""
+
+    return concepts, urls, fail_reason
 
 
 async def fetch_random_website_url() -> str:
@@ -702,20 +721,20 @@ async def start_interaction(user_id: str):
                 arbeitstag_kontext = "Heute ist ein normaler Arbeitstag." if ist_arbeitstag else "Der Nutzer arbeitet heute nicht."
 
                 if gewählte_kategorie == "Kr":
-                    wiki_concepts, wiki_urls = await fetch_random_wikipedia_concepts(3)
+                    wiki_concepts, wiki_urls, wiki_fail_reason = await fetch_random_wikipedia_concepts(3)
                     random_number = random.randint(1, 99999)
                     universum_seed = await generate_universum_seed(wiki_concepts, random_number)
-                    wiki_concepts_text = ", ".join(wiki_concepts) if wiki_concepts else "keine"
+                    wiki_concepts_text = ", ".join(wiki_concepts) if wiki_concepts else f"keine ({wiki_fail_reason})"
                     prompt = f"""
                     Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
                     Heute ist {wochentag}. {arbeitstag_kontext} Nenne den Wochentag nicht explizit in der Botschaft.
-                    Das ist Hintergrundwissen über den Nutzer — lass es in die Interpretation einfließen, ohne konkrete Details zu nennen: {user_profile_context}
+                    Hintergrundwissen über den Nutzer — nur für die allgemeine Richtung, KEINE konkreten Details daraus nennen (kein Kaffee, keine Personen, keine spezifischen Aktivitäten): {user_profile_context}
                     Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
                     Struktur:
                     1. Das Bild kurz wiedergeben (1-2 Sätze)
-                    2. Eine einzige, spezifische Interpretation — worauf der Nutzer heute konkret achten soll. Keine zwei Optionen, keine "oder"-Konstruktionen.
-                    3. Genau diese Zeile ausgeben (Werte ausfüllen):
-                    [TEMP] Wikipedia: [{wiki_concepts_text}] | Zahl: {random_number} | eigene Konzepte: [deine erfundenen Konzepte] | Kombination: [deine Interpretation] | Gegenteil: [das Gegenteil davon]
+                    2. Eine einzige, spezifische Interpretation — worauf der Nutzer heute achten soll. Kein "oder", keine zwei Szenarien, nicht zu konkret.
+                    3. Genau diese Zeile ausgeben (Platzhalter ersetzen):
+                    [TEMP] Wikipedia: {wiki_concepts_text} | Zahl: {random_number} | eigene Konzepte: HIER_EIGENE_KONZEPTE | Kombination: HIER_KOMBINATION | Gegenteil: HIER_GEGENTEIL
                     Stil: Kreativ und unkonventionell — variiere zwischen subtil ungewöhnlich und absurd. Nicht immer maximale Verrücktheit.
                     Klinge nicht wie ein KI-Assistent.
                     Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
