@@ -705,18 +705,21 @@ async def start_interaction(user_id: str):
                     wiki_concepts, wiki_urls = await fetch_random_wikipedia_concepts(3)
                     random_number = random.randint(1, 99999)
                     universum_seed = await generate_universum_seed(wiki_concepts, random_number)
+                    wiki_concepts_text = ", ".join(wiki_concepts) if wiki_concepts else "keine"
                     prompt = f"""
                     Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
                     Heute ist {wochentag}. {arbeitstag_kontext} Nenne den Wochentag nicht explizit in der Botschaft.
-                    Nutzer-Kontext (verwende ihn um die Botschaft zu personalisieren): {user_profile_context}
+                    Das ist Hintergrundwissen über den Nutzer — lass es in die Interpretation einfließen, ohne konkrete Details zu nennen: {user_profile_context}
                     Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
-                    Interpretiere kurz, was diese Botschaft konkret für diesen Nutzer bedeuten könnte.
-                    Stil: Kreativ und unkonventionell — überrasche. Variiere zwischen subtil ungewöhnlich und absurd. Nicht immer maximale Verrücktheit.
-                    Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
-                    Keine Handlungsempfehlung.
+                    Dieser Ausgangspunkt entstand aus: Wikipedia-Konzepte: [{wiki_concepts_text}], Zahl: {random_number}, plus eigene Konzepte des Modells → Kombination → Gegenteil → konkretes Bild.
+                    Struktur:
+                    1. Das Bild kurz wiedergeben (1-2 Sätze)
+                    2. Interpretation — was das für den Nutzer heute bedeuten könnte oder worauf er heute achten soll (1-2 Sätze)
+                    3. [TEMP] Erkläre kurz: Wikipedia-Artikel, Zahl, eigene Konzepte, wie das Gegenteil gebildet wurde
+                    Stil: Kreativ und unkonventionell — variiere zwischen subtil ungewöhnlich und absurd. Nicht immer maximale Verrücktheit.
+                    Klinge nicht wie ein KI-Assistent.
                     Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
                     Beende die Ausgabe immer mit [Kr] auf einer neuen Zeile.
-                    Maximal 3-4 Sätze.
                     """
                 else:
                     stil_map = {
