@@ -274,22 +274,14 @@ async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
 
 
 async def fetch_random_website_url() -> str:
-    async with httpx.AsyncClient(timeout=8, follow_redirects=True, headers={"User-Agent": "OKIB/1.0"}) as http:
+    async with httpx.AsyncClient(timeout=5) as http:
         try:
-            r = await http.get("https://hacker-news.firebaseio.com/v1/topstories.json")
+            r = await http.get("https://de.wikipedia.org/api/rest_v1/page/random/summary")
             if r.status_code == 200:
-                ids = r.json()
-                random.shuffle(ids)
-                for story_id in ids[:20]:
-                    try:
-                        r2 = await http.get(f"https://hacker-news.firebaseio.com/v1/item/{story_id}.json")
-                        if r2.status_code == 200:
-                            data = r2.json()
-                            url = data.get("url", "")
-                            if url and url.startswith("http"):
-                                return url
-                    except Exception:
-                        continue
+                data = r.json()
+                url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
+                if url:
+                    return url
         except Exception:
             pass
     return ""
@@ -703,7 +695,11 @@ async def start_interaction(user_id: str):
                     gewählte_kategorie = random.choice(["Bo", "Fr", "Kr"])
 
             if gewählte_kategorie != "We":
-                wochentag = datetime.datetime.now().strftime('%A')
+                now = datetime.datetime.now()
+                wochentag = now.strftime('%A')
+                wochentag_nr = now.weekday()  # 0=Mo, 4=Fr, 5=Sa, 6=So
+                ist_arbeitstag = wochentag_nr not in [4, 5, 6]  # Mo-Do sind Arbeitstage
+                arbeitstag_kontext = "Heute ist ein normaler Arbeitstag." if ist_arbeitstag else "Der Nutzer arbeitet heute nicht."
 
                 if gewählte_kategorie == "Kr":
                     wiki_concepts, wiki_urls = await fetch_random_wikipedia_concepts(3)
@@ -711,11 +707,13 @@ async def start_interaction(user_id: str):
                     universum_seed = await generate_universum_seed(wiki_concepts, random_number)
                     prompt = f"""
                     Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-                    Heute ist {wochentag}. Der Nutzer arbeitet freitags nicht. Nenne den Wochentag nicht explizit in der Botschaft.
+                    Heute ist {wochentag}. {arbeitstag_kontext} Nenne den Wochentag nicht explizit in der Botschaft.
+                    Nutzer-Kontext (verwende ihn um die Botschaft zu personalisieren): {user_profile_context}
                     Baue die Botschaft zwingend auf diesem Ausgangspunkt auf: {universum_seed}
+                    Interpretiere kurz, was diese Botschaft konkret für diesen Nutzer bedeuten könnte.
                     Stil: Kreativ und unkonventionell — überrasche. Variiere zwischen subtil ungewöhnlich und absurd. Nicht immer maximale Verrücktheit.
                     Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
-                    Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
+                    Keine Handlungsempfehlung.
                     Vermeide diese früheren Botschaften: {", ".join(recent_universum_to_avoid)}
                     Beende die Ausgabe immer mit [Kr] auf einer neuen Zeile.
                     Maximal 3-4 Sätze.
@@ -727,7 +725,7 @@ async def start_interaction(user_id: str):
                     }
                     prompt = f"""
                     Du hast heute eine Botschaft vom Universum oder der Simulation zum Schicksal des Nutzers empfangen. Teile dem Nutzer mit, dass du sie erhalten hast, und gib sie weiter.
-                    Heute ist {wochentag}. Der Nutzer arbeitet freitags nicht. Nenne den Wochentag nicht explizit in der Botschaft.
+                    Heute ist {wochentag}. {arbeitstag_kontext} Nenne den Wochentag nicht explizit in der Botschaft.
                     Verwende heute ausschließlich diesen Stil: {stil_map[gewählte_kategorie]}
                     Klinge nicht wie ein KI-Assistent — keine Metaphern-Kaskaden, kein poetisches Schwelgen.
                     Kein erfundenes Szenario mit Orten oder Personen, keine Handlungsempfehlung.
