@@ -252,7 +252,7 @@ async def fetch_random_wikipedia_concepts(count: int = 3) -> tuple:
     urls = []
     skipped_locations = 0
     last_error = ""
-    async with httpx.AsyncClient(timeout=10) as http:
+    async with httpx.AsyncClient(timeout=10, headers={"User-Agent": "OKIB-App/1.0 (personal advisor app; contact: ronnyromero2@github)"}) as http:
         attempts = 0
         while len(concepts) < count and attempts < count * 4:
             attempts += 1
