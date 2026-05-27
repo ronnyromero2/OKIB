@@ -1074,7 +1074,7 @@ async def chat(user_id: str, chat_input: ChatInput):
             if h.get('ai_response'):
                 history_messages.append(f"Berater: {h['ai_response']}")
             if h.get('ai_prompt'):
-                history_messages.append(f"Einstiegsfrage: {h['ai_prompt']}")
+                history_messages.append(f"Berater: {h['ai_prompt']}")
 
         history_text = "\n".join(history_messages) if history_messages else "Bisher keine frühere Konversationshistorie."
         
@@ -1137,6 +1137,7 @@ async def chat(user_id: str, chat_input: ChatInput):
         - Schlage KEINE To-Dos für berufliche Themen vor (Meetings, Arbeitsprojekte, Kundentermine, Präsentationen). Nur private Themen: Gesundheit, Sport, persönliche Ziele, soziale Kontakte.
 
         Antworte maximal 3 Sätze. Deine Antworten sollen knapp, direkt, motivierend oder kritisch sein.
+        Die aktuelle Nutzer-Nachricht ist eine direkte Antwort auf die letzte Berater-Frage in der Konversationshistorie oben.
         """
 
         # Chat-Interaktion mit OpenAI
