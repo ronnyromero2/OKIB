@@ -758,7 +758,7 @@ async def start_interaction(user_id: str):
 
 
         try:
-            api_temperature = 1.5 if mode == "universum" else 0.9
+            api_temperature = 1.3 if mode == "universum" else 0.9
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
